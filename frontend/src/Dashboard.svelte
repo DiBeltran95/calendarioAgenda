@@ -65,7 +65,9 @@
   let metaData = { id: null, nombre: '', descripcion: '', monto_objetivo: 0, monto_actual: 0, fecha_objetivo: '', icono: 'savings', color: '#34E47E', completada: false };
   let presupuestoData = { id: null, categoria: 'comida', monto_limite: 0, mes: 0, anio: 0 };
 
-  const TRANSACTIONS_CATEGORIES = [
+  // Categorías de finanzas: se cargan desde la API por usuario.
+  // Se inicializan con los valores por defecto como fallback mientras carga.
+  let TRANSACTIONS_CATEGORIES = [
     { value: 'comida', label: 'Comida', icon: 'restaurant' },
     { value: 'transporte', label: 'Transporte', icon: 'directions_car' },
     { value: 'servicios', label: 'Servicios/Facturas', icon: 'receipt_long' },
@@ -75,6 +77,33 @@
     { value: 'ahorro', label: 'Ahorro/Inversión', icon: 'savings' },
     { value: 'otros', label: 'Otros', icon: 'payments' }
   ];
+
+  // Lista cruda de categorías (incluye id y es_default) para la gestión
+  let categoriasFinanzas: any[] = [];
+
+  // Estado del modal de gestión de categorías
+  let showCategoriasModal = false;
+  let nuevaCategoriaLabel = '';
+  let nuevaCategoriaIcono = 'sell';
+  let categoriaError = '';
+  let categoriaGuardando = false;
+
+  // Set de iconos disponibles para categorías personalizadas
+  const ICONOS_CATEGORIA = [
+    'sell', 'shopping_cart', 'restaurant', 'fastfood', 'local_cafe', 'directions_car',
+    'local_gas_station', 'flight', 'home', 'receipt_long', 'bolt', 'water_drop',
+    'wifi', 'phone_iphone', 'sports_esports', 'movie', 'fitness_center', 'medication',
+    'school', 'savings', 'pets', 'child_care', 'checkroom', 'card_giftcard',
+    'volunteer_activism', 'build', 'payments', 'attach_money', 'work', 'celebration'
+  ];
+
+  // Categorías actualmente en uso (transacciones o presupuestos), para bloquear su borrado
+  $: categoriasEnUso = (() => {
+    const usados = new Set<string>();
+    for (const t of transaccionesList) if (t.categoria) usados.add(t.categoria);
+    for (const p of presupuestosList) if (p.categoria) usados.add(p.categoria);
+    return usados;
+  })();
 
   // Enlace de datos del calendario
   let dashboardEvents = [];
@@ -160,8 +189,81 @@
       if (resVerificaciones.ok) verificacionesList = await resVerificaciones.json();
       if (resMetas.ok) metasList = await resMetas.json();
       if (resPresupuestos.ok) presupuestosList = await resPresupuestos.json();
+      await loadCategoriasFinanzas();
     } catch (err) {
       console.error('Error al cargar datos financieros:', err);
+    }
+  }
+
+  async function loadCategoriasFinanzas() {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/api/finanzas/categorias`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          categoriasFinanzas = data;
+          // Mapea a la forma {value, label, icon} que usan los selects/vistas
+          TRANSACTIONS_CATEGORIES = data.map((c: any) => ({ value: c.valor, label: c.label, icon: c.icono }));
+        }
+      }
+    } catch (err) {
+      console.error('Error al cargar categorías:', err);
+    }
+  }
+
+  async function crearCategoria() {
+    categoriaError = '';
+    const label = nuevaCategoriaLabel.trim();
+    if (!label) {
+      categoriaError = 'Escribe un nombre para la categoría.';
+      return;
+    }
+    categoriaGuardando = true;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/api/finanzas/categorias`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ label, icono: nuevaCategoriaIcono })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        nuevaCategoriaLabel = '';
+        nuevaCategoriaIcono = 'sell';
+        await loadCategoriasFinanzas();
+      } else {
+        categoriaError = data.message || 'No se pudo crear la categoría.';
+      }
+    } catch (err) {
+      categoriaError = 'Error de conexión con el servidor.';
+    } finally {
+      categoriaGuardando = false;
+    }
+  }
+
+  async function eliminarCategoria(cat: any) {
+    if (categoriasEnUso.has(cat.valor)) {
+      alert('No puedes eliminar esta categoría porque tiene transacciones o presupuestos asociados.');
+      return;
+    }
+    if (!confirm(`¿Eliminar la categoría "${cat.label}"?`)) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/api/finanzas/categorias/${cat.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await loadCategoriasFinanzas();
+      } else {
+        alert(data.message || 'No se pudo eliminar la categoría.');
+      }
+    } catch (err) {
+      alert('Error de conexión con el servidor.');
     }
   }
 
@@ -1071,9 +1173,7 @@
   }
 
   function handleLogout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login');
+    navigate('/select');
   }
 
   onMount(async () => {
@@ -3079,9 +3179,14 @@
 
                 {:else if activeFinanceTab === 'presupuesto'}
                     <!-- PESTAÑA PRESUPUESTO MENSUAL -->
-                    <button type="button" class="fin-add-btn" on:click={() => { const now = new Date(); presupuestoData = { id: null, categoria: 'comida', monto_limite: 0, mes: now.getMonth() + 1, anio: now.getFullYear() }; showPresupuestoModal = true; }}>
-                        <i class="material-icons">add</i> Definir Límite de Categoría
-                    </button>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button type="button" class="fin-add-btn" style="flex: 1;" on:click={() => { const now = new Date(); presupuestoData = { id: null, categoria: 'comida', monto_limite: 0, mes: now.getMonth() + 1, anio: now.getFullYear() }; showPresupuestoModal = true; }}>
+                            <i class="material-icons">add</i> Definir Límite de Categoría
+                        </button>
+                        <button type="button" class="fin-add-btn" style="background: rgba(255,255,255,0.04);" on:click={() => { showCategoriasModal = true; categoriaError = ''; }}>
+                            <i class="material-icons">category</i> Gestionar Categorías
+                        </button>
+                    </div>
 
                     <div class="budget-grid">
                         {#each TRANSACTIONS_CATEGORIES.filter(c => c.value !== 'otros') as cat}
@@ -4179,7 +4284,11 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="txCat">Categoría</label>
+                    <label for="txCat" style="display:flex; align-items:center; justify-content:space-between;">
+                        <span>Categoría</span>
+                        <!-- svelte-ignore a11y_invalid_attribute -->
+                        <a href="#" on:click|preventDefault={() => { showCategoriasModal = true; categoriaError = ''; }} style="font-size:0.72rem; color:#FFD700; text-decoration:none;">⚙ Gestionar</a>
+                    </label>
                     <select id="txCat" bind:value={transactionData.categoria} style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); margin-top: 5px;">
                         {#each TRANSACTIONS_CATEGORIES as cat}
                             <option value={cat.value}>{cat.label}</option>
@@ -4389,6 +4498,86 @@
                 </button>
             </div>
         </form>
+    </div>
+</div>
+{/if}
+
+<!-- MODAL: Gestión de Categorías de Finanzas -->
+{#if showCategoriasModal}
+<div class="modal active">
+    <div class="modal-content modal-small">
+        <div class="modal-header" style="background: linear-gradient(135deg, rgba(255,215,0,0.12), rgba(0,0,0,0)); border-bottom: 1px solid rgba(255,215,0,0.2);">
+            <h3 style="display:flex; align-items:center; gap:8px;">
+                <i class="material-icons" style="color:#FFD700;">category</i>
+                Gestionar Categorías
+            </h3>
+            <button class="modal-close" on:click={() => showCategoriasModal = false}>
+                <i class="material-icons">close</i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <!-- Formulario para crear nueva categoría -->
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px; margin-bottom: 16px;">
+                <label style="font-size: 0.8rem; color: var(--text-secondary); display:block; margin-bottom: 8px;">Nueva categoría</label>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <select bind:value={nuevaCategoriaIcono} title="Ícono" style="padding:10px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-tertiary); color:var(--text-primary); width:64px; text-align:center;">
+                        {#each ICONOS_CATEGORIA as ic}
+                            <option value={ic}>{ic}</option>
+                        {/each}
+                    </select>
+                    <div style="display:flex; align-items:center; justify-content:center; width:42px; height:42px; border-radius:8px; background:var(--bg-tertiary); border:1px solid var(--border-color); flex-shrink:0;">
+                        <i class="material-icons" style="color:#FFD700;">{nuevaCategoriaIcono}</i>
+                    </div>
+                    <input
+                        type="text"
+                        bind:value={nuevaCategoriaLabel}
+                        on:keydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); crearCategoria(); } }}
+                        placeholder="Ej: Mascotas, Viajes..."
+                        maxlength="100"
+                        style="flex:1; padding:10px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-tertiary); color:var(--text-primary);"
+                    />
+                    <button type="button" class="btn btn-primary" disabled={categoriaGuardando} on:click={crearCategoria} style="background-color:#FFD700; color:#000; flex-shrink:0;">
+                        <i class="material-icons">add</i>
+                    </button>
+                </div>
+                {#if categoriaError}
+                    <p style="color:#F44336; font-size:0.78rem; margin-top:8px;">{categoriaError}</p>
+                {/if}
+            </div>
+
+            <!-- Lista de categorías existentes -->
+            <label style="font-size: 0.8rem; color: var(--text-secondary); display:block; margin-bottom: 8px;">Tus categorías ({categoriasFinanzas.length})</label>
+            <div style="display:flex; flex-direction:column; gap:8px; max-height:340px; overflow-y:auto;">
+                {#each categoriasFinanzas as cat}
+                    {@const enUso = categoriasEnUso.has(cat.valor)}
+                    <div style="display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:8px 12px;">
+                        <i class="material-icons" style="color:#FFD700; font-size:20px;">{cat.icono}</i>
+                        <span style="flex:1; font-size:0.88rem; color:var(--text-primary);">{cat.label}</span>
+                        {#if cat.es_default}
+                            <span style="font-size:0.66rem; color:var(--text-tertiary); border:1px solid var(--border-color); border-radius:6px; padding:2px 6px;">predefinida</span>
+                        {/if}
+                        {#if enUso}
+                            <span title="No se puede eliminar: tiene registros asociados" style="display:flex; align-items:center; color:var(--text-tertiary);">
+                                <i class="material-icons" style="font-size:18px;">lock</i>
+                            </span>
+                        {:else}
+                            <button class="icon-btn" style="width:28px; height:28px;" on:click={() => eliminarCategoria(cat)} title="Eliminar categoría">
+                                <i class="material-icons" style="font-size:18px; color:var(--danger);">delete</i>
+                            </button>
+                        {/if}
+                    </div>
+                {/each}
+            </div>
+
+            <p style="font-size:0.74rem; color:var(--text-secondary); background:rgba(255,215,0,0.06); border:1px solid rgba(255,215,0,0.15); border-radius:8px; padding:8px 12px; display:flex; align-items:flex-start; gap:8px; margin-top:14px;">
+                <i class="material-icons" style="font-size:16px; color:#FFD700; flex-shrink:0; margin-top:1px;">lightbulb</i>
+                Las categorías con registros asociados (transacciones o presupuestos) no se pueden eliminar para proteger tu historial.
+            </p>
+
+            <div class="modal-actions" style="margin-top:16px;">
+                <button type="button" class="btn btn-secondary" on:click={() => showCategoriasModal = false}>Cerrar</button>
+            </div>
+        </div>
     </div>
 </div>
 {/if}

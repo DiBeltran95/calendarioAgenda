@@ -38,6 +38,40 @@ function hashPassword(password: string): string {
     return crypto.createHash('sha256').update(password).digest('hex');
 }
 
+// --- Categorías de finanzas: defaults y utilidades ---
+const DEFAULT_FINANCE_CATEGORIES = [
+    { valor: 'comida', label: 'Comida', icono: 'restaurant' },
+    { valor: 'transporte', label: 'Transporte', icono: 'directions_car' },
+    { valor: 'servicios', label: 'Servicios/Facturas', icono: 'receipt_long' },
+    { valor: 'entretenimiento', label: 'Entretenimiento/Ocio', icono: 'sports_esports' },
+    { valor: 'salud', label: 'Salud/Bienestar', icono: 'medication' },
+    { valor: 'educacion', label: 'Educación', icono: 'school' },
+    { valor: 'ahorro', label: 'Ahorro/Inversión', icono: 'savings' },
+    { valor: 'otros', label: 'Otros', icono: 'payments' }
+];
+
+// Convierte un nombre legible en un slug seguro y único por usuario
+function slugifyCategoria(label: string): string {
+    return label
+        .toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '') // elimina acentos
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 50);
+}
+
+// Inserta las categorías por defecto la primera vez que el usuario accede al módulo
+async function ensureDefaultCategories(conn: any, userId: number): Promise<void> {
+    const [rows]: any = await conn.execute('SELECT COUNT(*) as cnt FROM finanzas_categorias WHERE user_id = ?', [userId]);
+    if (rows[0].cnt > 0) return;
+    for (const c of DEFAULT_FINANCE_CATEGORIES) {
+        await conn.execute(
+            'INSERT IGNORE INTO finanzas_categorias (user_id, valor, label, icono, es_default) VALUES (?, ?, ?, ?, TRUE)',
+            [userId, c.valor, c.label, c.icono]
+        );
+    }
+}
+
 async function sendWhatsAppVerificationCode(whatsapp: string, code: string): Promise<boolean> {
     try {
         const cleanedJid = whatsapp.replace(/\D/g, '');
@@ -1505,6 +1539,97 @@ server.delete('/api/finanzas/presupuestos/:id', { preValidation: [(server as any
     }
 });
 
+// --- CATEGORÍAS DE FINANZAS PERSONALIZABLES ---
+
+// Lista las categorías del usuario (sembrando las por defecto en el primer acceso)
+server.get('/api/finanzas/categorias', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
+    const conn = await pool.getConnection();
+    try {
+        const userId = request.user.id;
+        await ensureDefaultCategories(conn, userId);
+        const [rows] = await conn.execute(
+            'SELECT id, valor, label, icono, es_default FROM finanzas_categorias WHERE user_id = ? ORDER BY es_default DESC, label ASC',
+            [userId]
+        );
+        return reply.send(rows);
+    } catch (err) {
+        server.log.error(err);
+        return reply.status(500).send({ message: 'Error al obtener categorías' });
+    } finally {
+        conn.release();
+    }
+});
+
+// Crea una categoría personalizada
+server.post('/api/finanzas/categorias', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
+    try {
+        const userId = request.user.id;
+        const { label, icono } = request.body || {};
+        if (!label || !String(label).trim()) {
+            return reply.status(400).send({ message: 'El nombre de la categoría es obligatorio' });
+        }
+        const cleanLabel = String(label).trim().slice(0, 100);
+        const valor = slugifyCategoria(cleanLabel);
+        if (!valor) {
+            return reply.status(400).send({ message: 'El nombre de la categoría no es válido' });
+        }
+        const cleanIcono = (icono && String(icono).trim()) ? String(icono).trim().slice(0, 50) : 'sell';
+        const [result]: any = await pool.execute(
+            'INSERT INTO finanzas_categorias (user_id, valor, label, icono, es_default) VALUES (?, ?, ?, ?, FALSE)',
+            [userId, valor, cleanLabel, cleanIcono]
+        );
+        return reply.status(201).send({ id: result.insertId, valor, label: cleanLabel, icono: cleanIcono, es_default: 0 });
+    } catch (err: any) {
+        if (err.code === 'ER_DUP_ENTRY') {
+            return reply.status(409).send({ message: 'Ya tienes una categoría con ese nombre' });
+        }
+        server.log.error(err);
+        return reply.status(500).send({ message: 'Error al crear la categoría' });
+    }
+});
+
+// Elimina una categoría solo si no tiene transacciones ni presupuestos asociados
+server.delete('/api/finanzas/categorias/:id', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
+    const conn = await pool.getConnection();
+    try {
+        const userId = request.user.id;
+        const { id } = request.params;
+
+        const [catRows]: any = await conn.execute(
+            'SELECT valor FROM finanzas_categorias WHERE id = ? AND user_id = ?',
+            [id, userId]
+        );
+        if (catRows.length === 0) {
+            return reply.status(404).send({ message: 'Categoría no encontrada' });
+        }
+        const valor = catRows[0].valor;
+
+        const [txRows]: any = await conn.execute(
+            'SELECT COUNT(*) as cnt FROM finanzas_transacciones WHERE user_id = ? AND categoria = ?',
+            [userId, valor]
+        );
+        const [presRows]: any = await conn.execute(
+            'SELECT COUNT(*) as cnt FROM finanzas_presupuestos WHERE user_id = ? AND categoria = ?',
+            [userId, valor]
+        );
+        const usos = Number(txRows[0].cnt) + Number(presRows[0].cnt);
+        if (usos > 0) {
+            return reply.status(409).send({
+                message: `No puedes eliminar esta categoría porque tiene ${usos} registro(s) asociado(s).`,
+                usos
+            });
+        }
+
+        await conn.execute('DELETE FROM finanzas_categorias WHERE id = ? AND user_id = ?', [id, userId]);
+        return reply.send({ message: 'Categoría eliminada exitosamente' });
+    } catch (err) {
+        server.log.error(err);
+        return reply.status(500).send({ message: 'Error al eliminar la categoría' });
+    } finally {
+        conn.release();
+    }
+});
+
 // --- ENDPOINTS DE BÚSQUEDA Y EXCEL REPLICADOS Y PROTEGIDOS ---
 
 // Proxy POST que envía la consulta al servicio externo
@@ -1811,6 +1936,26 @@ async function runMigrations() {
         if (err.code !== 'ER_DUP_FIELDNAME') {
             server.log.error('Error adding transaccion_id column:', err);
         }
+    }
+
+    // Tabla de categorías de finanzas personalizables por usuario
+    try {
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS finanzas_categorias (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                valor VARCHAR(50) NOT NULL,
+                label VARCHAR(100) NOT NULL,
+                icono VARCHAR(50) DEFAULT 'sell',
+                es_default BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+                UNIQUE KEY unique_user_categoria (user_id, valor)
+            )
+        `);
+        server.log.info('Ensured finanzas_categorias table exists');
+    } catch (err: any) {
+        server.log.error('Error creating finanzas_categorias table:', err);
     }
 }
 

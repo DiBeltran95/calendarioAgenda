@@ -3,17 +3,19 @@
   import Login from './Login.svelte';
   import Register from './Register.svelte';
   import Dashboard from './Dashboard.svelte';
+  import ModuleSelector from './ModuleSelector.svelte';
   import Confirmar from './lib/components/Confirmar.svelte';
   import { onMount } from 'svelte';
 
   onMount(() => {
     const token = localStorage.getItem('token');
-    
-    // Redirect logic on load
+
     if (!$currentRoute.startsWith('/confirmar/')) {
       if ($currentRoute === '/' || $currentRoute === '/login') {
-        if (token) navigate('/dashboard');
+        if (token) navigate('/select');
         else navigate('/login');
+      } else if (($currentRoute === '/select' || $currentRoute === '/dashboard') && !token) {
+        navigate('/login');
       }
     }
   });
@@ -23,6 +25,8 @@
   <Login />
 {:else if $currentRoute === '/register'}
   <Register />
+{:else if $currentRoute === '/select'}
+  <ModuleSelector />
 {:else if $currentRoute === '/dashboard'}
   <Dashboard />
 {:else if $currentRoute.startsWith('/confirmar/')}

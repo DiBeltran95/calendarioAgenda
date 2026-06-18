@@ -195,6 +195,18 @@ async function setupDatabase() {
             FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
             UNIQUE KEY unique_presupuesto (user_id, categoria, mes, anio)
         );
+
+        CREATE TABLE IF NOT EXISTS finanzas_categorias (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            valor VARCHAR(50) NOT NULL,
+            label VARCHAR(100) NOT NULL,
+            icono VARCHAR(50) DEFAULT 'sell',
+            es_default BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+            UNIQUE KEY unique_user_categoria (user_id, valor)
+        );
     `;
 
     console.log('Executing schema...');

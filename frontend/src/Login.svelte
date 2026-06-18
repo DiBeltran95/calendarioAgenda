@@ -24,7 +24,7 @@
       if (res.ok && data.token) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        navigate('/dashboard');
+        navigate('/select');
       } else if (res.status === 403 && data.verification_required) {
         localStorage.setItem('verification_email', data.email);
         navigate('/register');
