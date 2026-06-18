@@ -57,3 +57,12 @@ npm run dev
 - Integración de días Festivos con la API de `date.nager.at`.
 - Integración con tabla `dias_importantes` del backend.
 - Lógica 1:1 del ciclo menstrual con el Filtro Femenino.
+
+
+
+CRON     -> soportediego.comfaca@gmail.com
+BACKEND   -> dibeltran05@gmail.com 
+FRONTEND   -> vapcaqueta@gmail.com
+
+
+
