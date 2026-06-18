@@ -3181,67 +3181,6 @@
                 {:else if activeFinanceTab === 'presupuesto'}
                     <!-- PESTAÑA PRESUPUESTO + CATEGORÍAS (inline) -->
 
-                    <!-- Sección: Mis Categorías -->
-                    <div style="margin-bottom: 18px;">
-                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-                            <span style="font-size:0.78rem; font-weight:700; color:var(--text-secondary); letter-spacing:0.06em; text-transform:uppercase;">Mis Categorías</span>
-                            <span style="font-size:0.72rem; color:var(--text-tertiary);">{categoriasFinanzas.length} categorías</span>
-                        </div>
-
-                        <!-- Lista de categorías existentes -->
-                        <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
-                            {#each categoriasFinanzas as cat}
-                                {@const enUso = categoriasEnUso.has(cat.valor)}
-                                <div style="display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:8px 12px;">
-                                    <i class="material-icons" style="color:#FFA726; font-size:18px;">{cat.icono}</i>
-                                    <span style="flex:1; font-size:0.85rem; color:var(--text-primary);">{cat.label}</span>
-                                    {#if cat.es_default}
-                                        <span style="font-size:0.65rem; color:var(--text-tertiary); border:1px solid var(--border-color); border-radius:5px; padding:2px 6px;">predefinida</span>
-                                    {/if}
-                                    {#if enUso}
-                                        <span title="Tiene registros asociados, no se puede eliminar" style="display:flex; align-items:center; color:var(--text-tertiary);">
-                                            <i class="material-icons" style="font-size:16px;">lock</i>
-                                        </span>
-                                    {:else}
-                                        <button class="icon-btn" style="width:26px; height:26px;" on:click={() => eliminarCategoria(cat)} title="Eliminar categoría">
-                                            <i class="material-icons" style="font-size:16px; color:var(--danger);">delete</i>
-                                        </button>
-                                    {/if}
-                                </div>
-                            {/each}
-                        </div>
-
-                        <!-- Formulario nueva categoría -->
-                        <div style="background:rgba(255,167,38,0.04); border:1px dashed rgba(255,167,38,0.25); border-radius:10px; padding:10px;">
-                            <label style="font-size:0.74rem; color:var(--text-secondary); display:block; margin-bottom:8px;">➕ Nueva categoría personalizada</label>
-                            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                                <select bind:value={nuevaCategoriaIcono} style="padding:8px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-tertiary); color:var(--text-primary); min-width:130px;">
-                                    {#each ICONOS_CATEGORIA as ic}
-                                        <option value={ic.value}>{ic.label}</option>
-                                    {/each}
-                                </select>
-                                <div style="display:flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:8px; background:var(--bg-tertiary); border:1px solid var(--border-color); flex-shrink:0;">
-                                    <i class="material-icons" style="color:#FFA726; font-size:20px;">{nuevaCategoriaIcono}</i>
-                                </div>
-                                <input
-                                    type="text"
-                                    bind:value={nuevaCategoriaLabel}
-                                    on:keydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); crearCategoria(); } }}
-                                    placeholder="Nombre, ej: Mascotas, Viajes..."
-                                    maxlength="100"
-                                    style="flex:1; min-width:120px; padding:8px 10px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-tertiary); color:var(--text-primary);"
-                                />
-                                <button type="button" disabled={categoriaGuardando} on:click={crearCategoria}
-                                    style="padding:8px 14px; border-radius:8px; background:#FFA726; color:#000; font-weight:700; border:none; cursor:pointer; font-size:0.82rem; display:flex; align-items:center; gap:4px;">
-                                    <i class="material-icons" style="font-size:16px;">add</i> Agregar
-                                </button>
-                            </div>
-                            {#if categoriaError}
-                                <p style="color:#F44336; font-size:0.76rem; margin-top:6px;">{categoriaError}</p>
-                            {/if}
-                        </div>
-                    </div>
-
                     <!-- Divisor -->
                     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
                         <div style="flex:1; height:1px; background:var(--divider-color);"></div>
@@ -3331,6 +3270,73 @@
                                 {/if}
                             </div>
                         {/each}
+                    </div>
+
+                    <!-- Divisor -->
+                    <div style="display:flex; align-items:center; gap:10px; margin:18px 0 14px;">
+                        <div style="flex:1; height:1px; background:var(--divider-color);"></div>
+                        <span style="font-size:0.78rem; font-weight:700; color:var(--text-secondary); letter-spacing:0.06em; text-transform:uppercase;">Mis Categorías</span>
+                        <div style="flex:1; height:1px; background:var(--divider-color);"></div>
+                    </div>
+
+                    <!-- Sección: Mis Categorías -->
+                    <div style="margin-bottom: 18px;">
+                        <div style="display:flex; align-items:center; justify-content:flex-end; margin-bottom:10px;">
+                            <span style="font-size:0.72rem; color:var(--text-tertiary);">{categoriasFinanzas.length} categorías</span>
+                        </div>
+
+                        <!-- Lista de categorías existentes -->
+                        <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
+                            {#each categoriasFinanzas as cat}
+                                {@const enUso = categoriasEnUso.has(cat.valor)}
+                                <div style="display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:8px 12px;">
+                                    <i class="material-icons" style="color:#FFA726; font-size:18px;">{cat.icono}</i>
+                                    <span style="flex:1; font-size:0.85rem; color:var(--text-primary);">{cat.label}</span>
+                                    {#if cat.es_default}
+                                        <span style="font-size:0.65rem; color:var(--text-tertiary); border:1px solid var(--border-color); border-radius:5px; padding:2px 6px;">predefinida</span>
+                                    {/if}
+                                    {#if enUso}
+                                        <span title="Tiene registros asociados, no se puede eliminar" style="display:flex; align-items:center; color:var(--text-tertiary);">
+                                            <i class="material-icons" style="font-size:16px;">lock</i>
+                                        </span>
+                                    {:else}
+                                        <button class="icon-btn" style="width:26px; height:26px;" on:click={() => eliminarCategoria(cat)} title="Eliminar categoría">
+                                            <i class="material-icons" style="font-size:16px; color:var(--danger);">delete</i>
+                                        </button>
+                                    {/if}
+                                </div>
+                            {/each}
+                        </div>
+
+                        <!-- Formulario nueva categoría -->
+                        <div style="background:rgba(255,167,38,0.04); border:1px dashed rgba(255,167,38,0.25); border-radius:10px; padding:10px;">
+                            <label style="font-size:0.74rem; color:var(--text-secondary); display:block; margin-bottom:8px;">➕ Nueva categoría personalizada</label>
+                            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                <select bind:value={nuevaCategoriaIcono} style="padding:8px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-tertiary); color:var(--text-primary); min-width:130px;">
+                                    {#each ICONOS_CATEGORIA as ic}
+                                        <option value={ic.value}>{ic.label}</option>
+                                    {/each}
+                                </select>
+                                <div style="display:flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:8px; background:var(--bg-tertiary); border:1px solid var(--border-color); flex-shrink:0;">
+                                    <i class="material-icons" style="color:#FFA726; font-size:20px;">{nuevaCategoriaIcono}</i>
+                                </div>
+                                <input
+                                    type="text"
+                                    bind:value={nuevaCategoriaLabel}
+                                    on:keydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); crearCategoria(); } }}
+                                    placeholder="Nombre, ej: Mascotas, Viajes..."
+                                    maxlength="100"
+                                    style="flex:1; min-width:120px; padding:8px 10px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-tertiary); color:var(--text-primary);"
+                                />
+                                <button type="button" disabled={categoriaGuardando} on:click={crearCategoria}
+                                    style="padding:8px 14px; border-radius:8px; background:#FFA726; color:#000; font-weight:700; border:none; cursor:pointer; font-size:0.82rem; display:flex; align-items:center; gap:4px;">
+                                    <i class="material-icons" style="font-size:16px;">add</i> Agregar
+                                </button>
+                            </div>
+                            {#if categoriaError}
+                                <p style="color:#F44336; font-size:0.76rem; margin-top:6px;">{categoriaError}</p>
+                            {/if}
+                        </div>
                     </div>
 
                 {:else if activeFinanceTab === 'historial'}
