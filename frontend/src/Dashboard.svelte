@@ -943,6 +943,50 @@
     return list;
   })();
 
+  // --- REGLA 50/30/20 (Necesidades / Deseos / Ahorro) ---
+  // Clasificación automática de categorías por su slug. Las desconocidas caen en "Deseos".
+  const NECESIDADES_SLUGS = [
+    'comida', 'mercado', 'transporte', 'servicios', 'salud', 'medicina', 'medicamentos',
+    'educacion', 'arriendo', 'alquiler', 'vivienda', 'hogar', 'home', 'agua', 'luz',
+    'gas', 'internet', 'electricidad', 'transporte_publico', 'gasolina'
+  ];
+  const AHORRO_SLUGS = ['ahorro', 'ahorros', 'inversion', 'inversiones'];
+
+  function classify503020(slug: string): 'necesidades' | 'deseos' | 'ahorro' {
+    const s = (slug || '').toLowerCase();
+    if (AHORRO_SLUGS.includes(s)) return 'ahorro';
+    if (NECESIDADES_SLUGS.includes(s)) return 'necesidades';
+    return 'deseos';
+  }
+
+  $: regla503020 = (() => {
+    const income = totalMonthlyIncomes;
+    let needs = 0, wants = 0;
+    for (const t of monthlyTransactions) {
+      if (t.tipo !== 'gasto') continue;
+      const bucket = classify503020(t.categoria);
+      const amt = Number(t.monto);
+      if (bucket === 'necesidades') needs += amt;
+      else if (bucket === 'deseos') wants += amt;
+      // 'ahorro' no suma a gastos: queda dentro del bloque de ahorro
+    }
+    // Todo lo que no son necesidades ni deseos cuenta como ahorro/abono a deuda
+    const savings = income - needs - wants;
+    const base = income > 0 ? income : 0;
+    const pct = (v: number) => base > 0 ? (v / base) * 100 : 0;
+    // Estado de cada bloque frente a su meta ideal
+    const needsStatus = needs / (base || 1) * 100 <= 50 ? 'ok' : (needs / (base || 1) * 100 <= 60 ? 'warn' : 'bad');
+    const wantsStatus = wants / (base || 1) * 100 <= 30 ? 'ok' : (wants / (base || 1) * 100 <= 40 ? 'warn' : 'bad');
+    const savePctVal = pct(savings);
+    const savingsStatus = savePctVal >= 20 ? 'ok' : (savePctVal >= 10 ? 'warn' : 'bad');
+    return {
+      income, needs, wants, savings,
+      needsPct: pct(needs), wantsPct: pct(wants), savingsPct: savePctVal,
+      needsStatus, wantsStatus, savingsStatus,
+      hasData: income > 0
+    };
+  })();
+
   async function saveNote() {
     try {
       const token = localStorage.getItem('token');
@@ -2768,6 +2812,94 @@
                                 {formatPrice(totalMonthlyIncomes - totalMonthlyExpenses)}
                             </span>
                         </div>
+                    </div>
+
+                    <!-- Regla 50/30/20 -->
+                    <div style="margin-top: 15px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px;">
+                        <h4 style="color: #4FC3F7; font-size: 0.95rem; font-weight: bold; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                            <i class="material-icons">balance</i>
+                            Regla 50 / 30 / 20
+                        </h4>
+                        <p style="font-size: 0.74rem; color: var(--text-secondary); margin-bottom: 14px;">
+                            Distribución ideal de tus ingresos: 50% necesidades, 30% deseos, 20% ahorro.
+                        </p>
+
+                        {#if !regla503020.hasData}
+                            <div style="font-size: 0.82rem; color: var(--text-secondary); background: rgba(0,0,0,0.15); padding: 12px; border-radius: 8px; text-align: center;">
+                                Registra ingresos este mes para ver cómo se distribuye tu dinero.
+                            </div>
+                        {:else}
+                            <!-- Barra apilada: distribución real -->
+                            {@const segs = [
+                                { key: 'n', pct: regla503020.needsPct, color: '#29B6F6' },
+                                { key: 'w', pct: regla503020.wantsPct, color: '#FFA726' },
+                                { key: 's', pct: Math.max(0, regla503020.savingsPct), color: '#34E47E' }
+                            ]}
+                            <div style="display: flex; height: 22px; border-radius: 8px; overflow: hidden; background: rgba(244,67,54,0.15); margin-bottom: 4px;">
+                                {#each segs as seg}
+                                    {#if seg.pct > 0}
+                                        <div style="width: {Math.min(seg.pct, 100)}%; background: {seg.color}; transition: width 0.4s ease;"></div>
+                                    {/if}
+                                {/each}
+                            </div>
+                            <div style="font-size: 0.68rem; color: var(--text-tertiary); text-align: right; margin-bottom: 14px;">
+                                {#if regla503020.savings < 0}
+                                    <span style="color: #F44336;">⚠ Estás gastando más de lo que ingresas</span>
+                                {:else}
+                                    Distribución de {formatPrice(regla503020.income)} en ingresos
+                                {/if}
+                            </div>
+
+                            <!-- Filas comparativas -->
+                            {@const rows = [
+                                { label: 'Necesidades', sub: 'Vivienda, comida, servicios, salud, transporte', ideal: '50%', color: '#29B6F6', pct: regla503020.needsPct, val: regla503020.needs, status: regla503020.needsStatus },
+                                { label: 'Deseos', sub: 'Ocio, entretenimiento, antojos', ideal: '30%', color: '#FFA726', pct: regla503020.wantsPct, val: regla503020.wants, status: regla503020.wantsStatus },
+                                { label: 'Ahorro / Deuda', sub: 'Lo que no gastas + abonos a ahorro', ideal: '20%', color: '#34E47E', pct: regla503020.savingsPct, val: regla503020.savings, status: regla503020.savingsStatus }
+                            ]}
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                {#each rows as r}
+                                    <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 12px; border-left: 4px solid {r.color};">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <span style="width: 10px; height: 10px; border-radius: 50%; background: {r.color}; display: inline-block;"></span>
+                                                <span style="font-size: 0.85rem; font-weight: bold; color: var(--text-primary);">{r.label}</span>
+                                            </div>
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <span style="font-size: 0.9rem; font-weight: 800; color: {r.status === 'ok' ? '#34E47E' : r.status === 'warn' ? '#FFA726' : '#F44336'};">
+                                                    {r.pct.toFixed(0)}%
+                                                </span>
+                                                <span style="font-size: 0.7rem; color: var(--text-tertiary);">/ ideal {r.ideal}</span>
+                                                <i class="material-icons" style="font-size: 16px; color: {r.status === 'ok' ? '#34E47E' : r.status === 'warn' ? '#FFA726' : '#F44336'};">
+                                                    {r.status === 'ok' ? 'check_circle' : r.status === 'warn' ? 'warning' : 'error'}
+                                                </i>
+                                            </div>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                                            <span style="font-size: 0.7rem; color: var(--text-secondary);">{r.sub}</span>
+                                            <span style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">{formatPrice(r.val)}</span>
+                                        </div>
+                                    </div>
+                                {/each}
+                            </div>
+
+                            <!-- Diagnóstico -->
+                            <div style="margin-top: 12px; font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); background: rgba(79,195,247,0.06); border: 1px solid rgba(79,195,247,0.15); padding: 10px 12px; border-radius: 8px; display: flex; align-items: flex-start; gap: 8px;">
+                                <i class="material-icons" style="font-size: 16px; color: #4FC3F7; margin-top: 1px; flex-shrink: 0;">tips_and_updates</i>
+                                <span>
+                                    {#if regla503020.savings < 0}
+                                        Tus gastos superan tus ingresos este mes. Prioriza reducir los "deseos" y revisa si alguna "necesidad" se puede optimizar.
+                                    {:else if regla503020.savingsStatus === 'ok' && regla503020.needsStatus === 'ok'}
+                                        ¡Excelente equilibrio! Estás cumpliendo la regla 50/30/20. Mantén este ritmo y considera invertir tu ahorro.
+                                    {:else if regla503020.savingsStatus === 'bad'}
+                                        Tu ahorro está por debajo del 20% recomendado. Intenta recortar gastos en "deseos" para fortalecer tu colchón financiero.
+                                    {:else if regla503020.needsStatus === 'bad'}
+                                        Tus necesidades consumen más del 60% de tus ingresos. Esto deja poco margen; evalúa gastos fijos como vivienda o servicios.
+                                    {:else}
+                                        Vas por buen camino. Pequeños ajustes en "deseos" te acercarán al ahorro ideal del 20%.
+                                    {/if}
+                                </span>
+                            </div>
+                        {/if}
                     </div>
 
                     <!-- Caja del Experto en Economía -->
