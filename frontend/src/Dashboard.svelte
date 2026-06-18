@@ -56,6 +56,7 @@
   let showTransactionModal = false;
   let showVerifyIncomeModal = false;
   let showMetaModal = false;
+  let showPresupuestoModal = false;
 
   let accountData = { id: null, nombre: '', tipo: 'ahorros', saldo: 0, limite: 0, interes_tasa: 0, fecha_inicio: '', plazo_dias: 0 };
   let plannedIncomeData = { id: null, cuenta_id: '', descripcion: '', monto: 0, frecuencia: 'mensual', fecha_inicio: '' };
@@ -85,8 +86,6 @@
   let nuevaCategoriaIcono = 'sell';
   let categoriaError = '';
   let categoriaGuardando = false;
-  let presupuestoInlineEdit: Record<string, number> = {};
-  let presupuestoInlineActive: string | null = null;
 
   // Iconos con nombre en español
   const ICONOS_CATEGORIA = [
@@ -758,6 +757,7 @@
         body: JSON.stringify(payload)
       });
       if (res.ok) {
+        showPresupuestoModal = false;
         await refreshDashboardNotesAndHabits();
       } else {
         const data = await res.json();
@@ -767,6 +767,17 @@
       console.error(err);
       alert('Error de conexión');
     }
+  }
+
+  function editPresupuestoByCategoria(categoria: string) {
+    const budget = presupuestosList.find(p => p.categoria === categoria);
+    const now = new Date();
+    if (budget) {
+      presupuestoData = { id: budget.id, categoria: budget.categoria, monto_limite: Number(budget.monto_limite), mes: budget.mes, anio: budget.anio };
+    } else {
+      presupuestoData = { id: null, categoria, monto_limite: 0, mes: now.getMonth() + 1, anio: now.getFullYear() };
+    }
+    showPresupuestoModal = true;
   }
 
   async function deletePresupuesto(id) {
@@ -3194,7 +3205,7 @@
                             {@const bs = getBudgetStatus(cat.value, presupuestosList, monthlyTransactions)}
                             {@const dailySpent = selectedDay ? selectedDayTransactions.filter(t => t.tipo === 'gasto' && t.categoria === cat.value).reduce((sum, t) => sum + Number(t.monto), 0) : 0}
                             <!-- svelte-ignore a11y_no_static_element_interactions -->
-                            <div class="budget-card {bs.status}" style="cursor:default;">
+                            <div class="budget-card {bs.status}" on:dblclick={() => editPresupuestoByCategoria(cat.value)} style="cursor: pointer;" title="Doble clic para editar">
                                 <div class="budget-card-top">
                                     <div class="budget-cat-icon">
                                         <i class="material-icons">{cat.icon}</i>
@@ -3213,45 +3224,13 @@
                                     </span>
                                     {#if bs.limit > 0}
                                         <span class="budget-limit">/ {formatPrice(bs.limit)}</span>
+                                    {:else}
+                                        <button class="budget-set-btn" on:click={() => editPresupuestoByCategoria(cat.value)}>+ Límite</button>
                                     {/if}
                                 </div>
 
-                                <!-- Campo inline para definir/editar límite -->
-                                {#if presupuestoInlineActive === cat.value}
-                                    <div style="display:flex; gap:6px; margin-top:8px;" on:click|stopPropagation>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            placeholder="Límite mensual"
-                                            bind:value={presupuestoInlineEdit[cat.value]}
-                                            style="flex:1; padding:6px 8px; border-radius:6px; border:1px solid #FFA726; background:var(--bg-tertiary); color:var(--text-primary); font-size:0.82rem;"
-                                            on:keydown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    e.preventDefault();
-                                                    const now = new Date();
-                                                    presupuestoData = { id: bs.id, categoria: cat.value, monto_limite: presupuestoInlineEdit[cat.value] || 0, mes: now.getMonth() + 1, anio: now.getFullYear() };
-                                                    savePresupuesto();
-                                                    presupuestoInlineActive = null;
-                                                }
-                                                if (e.key === 'Escape') presupuestoInlineActive = null;
-                                            }}
-                                        />
-                                        <button on:click={() => {
-                                            const now = new Date();
-                                            presupuestoData = { id: bs.id, categoria: cat.value, monto_limite: presupuestoInlineEdit[cat.value] || 0, mes: now.getMonth() + 1, anio: now.getFullYear() };
-                                            savePresupuesto();
-                                            presupuestoInlineActive = null;
-                                        }} style="padding:4px 10px; border-radius:6px; background:#FFA726; color:#000; font-weight:700; border:none; cursor:pointer; font-size:0.78rem;">OK</button>
-                                        <button on:click={() => presupuestoInlineActive = null} style="padding:4px 8px; border-radius:6px; background:var(--bg-hover); color:var(--text-secondary); border:none; cursor:pointer; font-size:0.78rem;">✕</button>
-                                    </div>
-                                {:else}
-                                    <button class="budget-set-btn" style="margin-top:8px; width:100%;" on:click={() => { presupuestoInlineActive = cat.value; presupuestoInlineEdit[cat.value] = bs.limit || 0; }}>
-                                        {bs.limit > 0 ? '✏ Editar límite' : '+ Definir límite'}
-                                    </button>
-                                {/if}
-
                                 {#if bs.limit > 0}
-                                    <div class="budget-bar-bg" style="margin-top:8px;">
+                                    <div class="budget-bar-bg">
                                         <div class="budget-bar-fill {bs.status}" style="width: {bs.pct}%;"></div>
                                     </div>
                                     <div class="budget-pct">
@@ -4553,6 +4532,46 @@
 </div>
 {/if}
 
+<!-- MODAL: Presupuesto Mensual -->
+{#if showPresupuestoModal}
+<div class="modal active">
+    <div class="modal-content modal-small">
+        <div class="modal-header" style="background: linear-gradient(135deg, rgba(255,167,38,0.12), rgba(0,0,0,0)); border-bottom: 1px solid rgba(255,167,38,0.2);">
+            <h3 style="display:flex; align-items:center; gap:8px;">
+                <i class="material-icons" style="color:#FFA726;">pie_chart</i>
+                {presupuestoData.id ? 'Modificar Límite de Presupuesto' : 'Definir Límite de Presupuesto'}
+            </h3>
+            <button class="modal-close" on:click={() => showPresupuestoModal = false}>
+                <i class="material-icons">close</i>
+            </button>
+        </div>
+        <form class="modal-body" on:submit|preventDefault={savePresupuesto}>
+            <div class="form-group">
+                <label for="presCat"><i class="material-icons">category</i> Categoría</label>
+                <select id="presCat" bind:value={presupuestoData.categoria} style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-tertiary); color:var(--text-primary); margin-top:5px;">
+                    {#each TRANSACTIONS_CATEGORIES as cat}
+                        <option value={cat.value}>{cat.label}</option>
+                    {/each}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="presLimite"><i class="material-icons">money</i> Límite Mensual ($)</label>
+                <CurrencyInput id="presLimite" bind:value={presupuestoData.monto_limite} required={true} placeholder="Ej: 500000" />
+            </div>
+            <p style="font-size:0.78rem; color:var(--text-secondary); background:rgba(255,167,38,0.08); border:1px solid rgba(255,167,38,0.15); border-radius:8px; padding:8px 12px; display:flex; align-items:flex-start; gap:8px;">
+                <i class="material-icons" style="font-size:16px; color:#FFA726; flex-shrink:0; margin-top:1px;">lightbulb</i>
+                El sistema mostrará en tiempo real cuánto has gastado vs tu límite definido para el mes actual.
+            </p>
+            <div class="modal-actions" style="margin-top:20px;">
+                <button type="button" class="btn btn-secondary" on:click={() => showPresupuestoModal = false}>Cancelar</button>
+                <button type="submit" class="btn btn-primary" style="background: linear-gradient(135deg, #FFA726, #FF8F00); color:#000;">
+                    <i class="material-icons">save</i> Guardar Límite
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{/if}
 
 <style>
   .whatsapp-simulator {
