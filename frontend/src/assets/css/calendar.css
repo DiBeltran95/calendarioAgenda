@@ -1,0 +1,2377 @@
+/* ============================================
+   NAVEGACIÓN DEL CALENDARIO
+   ============================================ */
+.calendar-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    background-color: var(--bg-secondary);
+    border-radius: 12px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.month-year {
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    min-width: 180px;
+    text-align: center;
+}
+
+.nav-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.nav-btn:hover {
+    background-color: var(--bg-hover);
+    color: var(--wa-green);
+}
+
+.nav-btn:active {
+    transform: scale(0.9);
+}
+
+/* ============================================
+   CONTENEDOR DEL CALENDARIO
+   ============================================ */
+.calendar-container {
+    background-color: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+    animation: scaleIn 0.3s ease;
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Días de la semana */
+.calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.weekday {
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    padding: 8px 0;
+    text-transform: uppercase;
+}
+
+/* Días del mes */
+.calendar-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+
+.calendar-day {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+    background-color: var(--bg-tertiary);
+    min-height: 60px;
+    touch-action: manipulation;
+}
+
+.calendar-day:hover {
+    background-color: var(--bg-hover);
+    transform: scale(1.05);
+}
+
+.calendar-day.empty {
+    background-color: transparent;
+    cursor: default;
+}
+
+.calendar-day.empty:hover {
+    transform: none;
+}
+
+/* Hoy: círculo en el número (estilo calendarios digitales) */
+.calendar-day.today:not(.selected) {
+    background-color: var(--bg-tertiary);
+    box-shadow: none;
+}
+
+.calendar-day.today:hover:not(.selected) {
+    background-color: var(--bg-hover);
+}
+
+.calendar-day.has-events {
+    border: none;
+}
+
+/* Día seleccionado por el usuario */
+.calendar-day.selected {
+    background-color: rgba(37, 211, 102, 0.14);
+    box-shadow: inset 0 0 0 2px var(--wa-green);
+    z-index: 1;
+}
+
+.calendar-day.selected:hover {
+    background-color: rgba(37, 211, 102, 0.22);
+}
+
+/* Hoy y seleccionado al mismo tiempo */
+.calendar-day.today.selected {
+    background-color: rgba(37, 211, 102, 0.24);
+    box-shadow: inset 0 0 0 2px var(--wa-green-light), 0 0 0 1px rgba(37, 211, 102, 0.35);
+}
+
+.calendar-day.holiday {
+    background: linear-gradient(135deg, #FFEBEE, #FFCDD2);
+    border: 2px solid #EF5350;
+}
+
+.calendar-day.holiday .day-number {
+    color: #C62828;
+    font-weight: 700;
+}
+
+.calendar-day.holiday.today:not(.selected) {
+    background: linear-gradient(135deg, #FFEBEE, #FFCDD2);
+    border: 2px solid #EF5350;
+}
+
+.calendar-day.holiday.today .day-number {
+    background-color: #E53935;
+    color: #fff;
+}
+
+.calendar-day.holiday.selected {
+    box-shadow: inset 0 0 0 2px var(--wa-green), 0 0 0 1px #EF5350;
+}
+
+.day-number {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    width: 28px;
+    height: 28px;
+    line-height: 28px;
+    text-align: center;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Indicador de "hoy" — siempre visible aunque otro día esté seleccionado */
+.calendar-day.today .day-number {
+    background-color: var(--wa-green);
+    color: #fff;
+    font-weight: 700;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.calendar-day.today.selected .day-number {
+    box-shadow: 0 0 0 2px var(--bg-secondary), 0 0 0 4px var(--wa-green-light);
+}
+
+.calendar-day:focus-visible {
+    outline: 2px solid var(--wa-green-light);
+    outline-offset: 2px;
+}
+
+.event-dots {
+    display: flex;
+    gap: 3px;
+    margin-top: 4px;
+}
+
+.event-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: var(--wa-green);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.event-dot:nth-child(2) {
+    animation-delay: 0.3s;
+}
+
+.event-dot:nth-child(3) {
+    animation-delay: 0.6s;
+}
+
+.event-count {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    background-color: var(--wa-green);
+    color: #fff;
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 9px;
+    min-width: 16px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.holiday-indicator {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    font-size: 1rem;
+    line-height: 1;
+    animation: bounce 2s ease-in-out infinite;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+
+.important-indicator {
+    position: absolute;
+    bottom: 4px;
+    left: 4px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #2196F3;
+    opacity: 0.85;
+}
+
+.calendar-day.important-day {
+    /* Sutil: pequeño realce sin competir con festivos ni hoy */
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.15);
+}
+
+.birthday-indicator {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 1rem;
+    line-height: 1;
+    animation: bounce 2s ease-in-out infinite;
+    animation-delay: 0.5s;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+
+.cycle-indicator {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 1rem;
+    line-height: 1;
+    animation: bounce 2s ease-in-out infinite;
+    animation-delay: 0.2s;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-3px);
+    }
+}
+
+.calendar-day.holiday:hover .holiday-indicator {
+    animation: none;
+    transform: scale(1.2);
+}
+
+.calendar-day.has-birthdays:hover .birthday-indicator {
+    animation: none;
+    transform: scale(1.2);
+}
+
+/* Los días con cumpleaños mantienen el fondo original; solo se destaca el emoji */
+.calendar-day.has-birthdays {
+    background: inherit;
+}
+
+.calendar-day.has-birthdays.today:not(.selected) {
+    background: var(--bg-tertiary);
+}
+
+.calendar-day.has-birthdays.holiday {
+    background: linear-gradient(135deg, #FFEBEE, #FFCDD2);
+}
+
+/* ============================================
+   PRÓXIMOS EVENTOS
+   ============================================ */
+.upcoming-section {
+    background-color: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+    animation: fadeInUp 0.4s ease;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.upcoming-section h3 {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 1.125rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+}
+
+.upcoming-section h3 .material-icons {
+    color: var(--wa-green);
+    font-size: 24px;
+}
+
+.interaction-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background-color: var(--bg-tertiary);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    border-left: 3px solid var(--wa-green);
+}
+
+.interaction-hint .material-icons {
+    font-size: 18px;
+    color: var(--wa-green);
+}
+
+.interaction-hint span {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.upcoming-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ============================================
+   RESULTADOS DE BÚSQUEDA (NÚCLEO FAMILIAR)
+   ============================================ */
+.search-results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--wa-teal), var(--wa-teal-light));
+    color: #fff;
+    animation: slideInRight 0.3s ease;
+}
+
+.search-results-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.search-results-title .material-icons {
+    font-size: 26px;
+    color: var(--wa-green-light);
+}
+
+.search-results-title h4 {
+    margin: 0 0 2px 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.search-results-title p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.search-results-title p span {
+    font-weight: 600;
+}
+
+.search-role-badge {
+    padding: 4px 10px;
+    border-radius: 999px;
+    background-color: rgba(0, 0, 0, 0.2);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.search-card {
+    background-color: var(--bg-tertiary);
+    border-radius: 10px;
+    padding: 14px 14px 12px;
+    box-shadow: var(--shadow-sm);
+    border-left: 3px solid var(--wa-green);
+    animation: slideInRight 0.3s ease;
+}
+
+.search-card-main {
+    border-left-width: 4px;
+    border-left-color: var(--wa-green-light);
+}
+
+.search-card--inactive {
+    border-left-color: rgba(244, 67, 54, 0.7);
+    background: linear-gradient(135deg, rgba(244, 67, 54, 0.04), rgba(244, 67, 54, 0.08));
+}
+
+.search-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.search-card-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.search-card-title .material-icons {
+    font-size: 24px;
+    color: var(--wa-green);
+}
+
+.search-card-subtitle {
+    display: block;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-tertiary);
+    margin-bottom: 2px;
+}
+
+.search-card-title h5 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.search-card-body {
+    margin-top: 4px;
+}
+
+.search-card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 16px;
+}
+
+.search-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.search-field-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-tertiary);
+}
+
+.search-field-value {
+    font-size: 0.88rem;
+    color: var(--text-primary);
+    word-break: break-word;
+}
+
+.search-field-empty {
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+.status-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-pill--active {
+    background-color: rgba(37, 211, 102, 0.12);
+    color: var(--wa-green-light);
+}
+
+.status-pill--inactive {
+    background-color: rgba(244, 67, 54, 0.12);
+    color: #EF5350;
+}
+
+.name-results-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.name-result-item {
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--surface-2);
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    border-left: 3px solid var(--wa-green-light);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+}
+
+.name-result-item--inactive {
+    border-color: rgba(244, 67, 54, 0.5);
+    border-left-color: rgba(244, 67, 54, 0.9);
+    background: linear-gradient(135deg, rgba(244, 67, 54, 0.02), rgba(244, 67, 54, 0.08));
+}
+
+.name-result-item:hover {
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.name-result-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.name-result-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.98rem;
+    letter-spacing: 0.01em;
+}
+
+.name-result-doc {
+    font-size: 0.78rem;
+    color: var(--text-tertiary);
+    padding: 2px 8px;
+    border-radius: 999px;
+    background-color: rgba(0, 0, 0, 0.04);
+    cursor: pointer;
+}
+
+.name-result-doc:hover {
+    background-color: rgba(0, 0, 0, 0.08);
+}
+
+.name-result-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.name-result-role {
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.name-result-company {
+    padding: 2px 10px;
+    border-radius: 999px;
+    background-color: rgba(37, 211, 102, 0.12);
+    color: var(--wa-green-light);
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+
+.name-result-status {
+    display: inline-flex;
+}
+
+.name-result-extra {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.name-result-chip {
+    padding: 2px 10px;
+    border-radius: 999px;
+    background-color: rgba(0, 0, 0, 0.03);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.family-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.family-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.family-group-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+}
+
+.family-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.family-member {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+}
+
+.family-member-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.family-member-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.family-member-doc {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.family-member-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.78rem;
+}
+
+.family-member-role {
+    color: var(--text-secondary);
+}
+
+.family-member-status {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background-color: rgba(37, 211, 102, 0.08);
+    color: var(--wa-green-light);
+}
+
+.family-member--inactive {
+    border-color: rgba(244, 67, 54, 0.5);
+    background-color: rgba(244, 67, 54, 0.06);
+}
+
+.family-member--inactive .family-member-status {
+    background-color: rgba(244, 67, 54, 0.12);
+    color: #EF5350;
+}
+
+.family-empty {
+    font-size: 0.82rem;
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+/* Historial laboral (empresas) */
+.history-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.history-item {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.history-item--current {
+    border-color: rgba(37, 211, 102, 0.7);
+    background: linear-gradient(135deg, rgba(37, 211, 102, 0.08), rgba(7, 94, 84, 0.15));
+}
+
+.history-item--retired {
+    border-color: rgba(244, 67, 54, 0.5);
+    background-color: rgba(244, 67, 54, 0.04);
+}
+
+.history-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 2px;
+}
+
+.history-company {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.history-nit {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.history-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+
+.history-period {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.78rem;
+}
+
+.history-badge {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background-color: rgba(37, 211, 102, 0.15);
+    color: var(--wa-green-light);
+    font-weight: 600;
+}
+
+.history-badge--vigente {
+    background-color: rgba(3, 169, 244, 0.12);
+    color: #4FC3F7;
+}
+
+.upcoming-item {
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    background-color: var(--bg-tertiary);
+    border-radius: 8px;
+    border-left: 4px solid var(--wa-green);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.upcoming-item:hover {
+    background-color: var(--bg-hover);
+    transform: translateX(4px);
+    box-shadow: var(--shadow-md);
+}
+
+.upcoming-date {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 50px;
+    padding: 8px;
+    background-color: var(--wa-teal);
+    border-radius: 8px;
+}
+
+.upcoming-date .day {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+}
+
+.upcoming-date .month {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--wa-green-light);
+    text-transform: uppercase;
+}
+
+.upcoming-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.upcoming-title {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.upcoming-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.upcoming-meta .material-icons {
+    font-size: 16px;
+    vertical-align: middle;
+    margin-right: 4px;
+}
+
+.upcoming-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.action-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+    background-color: var(--bg-hover);
+    color: var(--wa-green);
+}
+
+.action-btn.delete:hover {
+    color: var(--danger);
+}
+
+/* ============================================
+   DÍA SELECCIONADO
+   ============================================ */
+.selected-day-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    background: linear-gradient(135deg, var(--wa-teal), var(--wa-teal-light));
+    border-radius: 8px;
+    margin-bottom: 16px;
+    animation: slideInRight 0.3s ease;
+}
+
+.selected-day-header.is-holiday {
+    background: linear-gradient(135deg, #EF5350, #E53935);
+    border: 2px solid #C62828;
+}
+
+.selected-day-header.has-birthdays {
+    background: linear-gradient(135deg, #FF9800, #FB8C00);
+    border: 2px solid #F57C00;
+}
+
+/* Encabezado azul para días importantes (no festivos) */
+.selected-day-header.has-important {
+    background: linear-gradient(135deg, #2196F3, #1976D2);
+    border: 2px solid #1565C0;
+}
+
+.holiday-name {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #fff;
+    margin: 4px 0;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.birthday-count {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #fff;
+    margin: 4px 0;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.selected-day-info h4 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    color: #fff;
+    margin: 0 0 4px 0;
+}
+
+.selected-day-info h4 .material-icons {
+    font-size: 20px;
+}
+
+.selected-day-info p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--wa-green-light);
+}
+
+.selected-day-header .icon-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.selected-day-header .icon-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.selected-day-item {
+    border-left: 4px solid var(--wa-green-light);
+}
+
+.event-time-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 70px;
+    padding: 8px;
+    background: linear-gradient(135deg, var(--wa-green), var(--wa-green-dark));
+    border-radius: 8px;
+}
+
+.event-time-badge .material-icons {
+    font-size: 20px;
+    color: #fff;
+    margin-bottom: 2px;
+}
+
+.event-time-badge span {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+/* ============================================
+   TARJETA DE INFORMACIÓN DEL FESTIVO
+   ============================================ */
+.holiday-info-card {
+    background: linear-gradient(135deg, #FFEBEE, #FCE4EC);
+    border: 2px solid #EF5350;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    animation: slideInRight 0.3s ease;
+    box-shadow: 0 2px 8px rgba(239, 83, 80, 0.2);
+}
+
+.holiday-info-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #FFCDD2;
+}
+
+.holiday-info-header .material-icons {
+    font-size: 24px;
+    color: #C62828;
+}
+
+.holiday-info-header h5 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #C62828;
+}
+
+.holiday-info-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.holiday-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.holiday-info-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #B71C1C;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.holiday-info-value {
+    font-size: 0.9375rem;
+    color: #424242;
+    line-height: 1.4;
+}
+
+.holiday-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, #EF5350, #E53935);
+    border-radius: 8px;
+    margin-top: 4px;
+}
+
+.holiday-badge .material-icons {
+    font-size: 20px;
+    color: #fff;
+}
+
+.holiday-badge span {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+/* Variante azul para días importantes reutilizando el mismo diseño que festivos */
+.important-info-card {
+    background: linear-gradient(135deg, #E3F2FD, #BBDEFB);
+    border-color: #2196F3;
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
+}
+
+.important-info-card .holiday-info-header {
+    border-bottom-color: #90CAF9;
+}
+
+.important-info-card .holiday-info-header h5 {
+    color: #1565C0;
+}
+
+.important-info-card .holiday-info-label {
+    color: #1565C0;
+}
+
+.important-info-card .holiday-info-value {
+    color: #1E88E5;
+}
+
+.important-info-card .holiday-badge.important-badge {
+    background: linear-gradient(135deg, #2196F3, #1976D2);
+    border-color: transparent;
+}
+
+.important-info-card .holiday-badge.important-badge span {
+    color: #E3F2FD;
+}
+
+/* ============================================
+   SECCIÓN DE CUMPLEAÑOS
+   ============================================ */
+.birthdays-section {
+    background: linear-gradient(135deg, #FFF3E0, #FFE0B2);
+    border: 2px solid #FF9800;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    animation: slideInRight 0.3s ease;
+}
+
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #E65100;
+    margin: 0 0 12px 0;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #FFCC80;
+}
+
+.section-title .material-icons {
+    font-size: 22px;
+    color: #F57C00;
+}
+
+.birthday-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    background-color: #fff;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border-left: 4px solid #FF9800;
+    transition: all 0.2s ease;
+    animation: slideInRight 0.3s ease;
+}
+
+.birthday-item:last-child {
+    margin-bottom: 0;
+}
+
+.birthday-item:hover {
+    transform: translateX(4px);
+    box-shadow: 0 2px 8px rgba(255, 152, 0, 0.3);
+}
+
+.birthday-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 50px;
+    height: 50px;
+    font-size: 2rem;
+    background: linear-gradient(135deg, #FF9800, #FB8C00);
+    border-radius: 50%;
+    animation: bounce 2s ease-in-out infinite;
+}
+
+.birthday-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+}
+
+.birthday-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #E65100;
+}
+
+.birthday-age {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.875rem;
+    color: #F57C00;
+    font-weight: 500;
+}
+
+.birthday-age .material-icons {
+    font-size: 16px;
+}
+
+/* ============================================
+   SECCION DE DIAS IMPORTANTES (dias_importantes)
+   ============================================ */
+.important-section {
+    background: linear-gradient(135deg, #E3F2FD, #BBDEFB);
+    border: 2px solid #2196F3;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    animation: slideInRight 0.3s ease;
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
+}
+
+.important-section .section-title {
+    color: #1565C0;
+    border-bottom-color: #90CAF9;
+}
+
+.important-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    background-color: rgba(255, 255, 255, 0.92);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border-left: 4px solid #2196F3;
+    transition: all 0.2s ease;
+    animation: slideInRight 0.3s ease;
+}
+
+.important-item:last-child {
+    margin-bottom: 0;
+}
+
+.important-item:hover {
+    transform: translateX(4px);
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+}
+
+.important-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 50px;
+    height: 50px;
+    font-size: 1.6rem;
+    background: linear-gradient(135deg, #2196F3, #1976D2);
+    color: #fff;
+    border-radius: 50%;
+}
+
+.important-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+}
+
+.important-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0D47A1;
+}
+
+.important-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.875rem;
+    color: #1565C0;
+}
+
+.important-category {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background-color: rgba(21, 101, 192, 0.12);
+    color: #1565C0;
+    font-weight: 500;
+}
+
+.important-description {
+    color: #1E88E5;
+}
+
+/* ============================================
+   MENSAJE SIN EVENTOS
+   ============================================ */
+.no-events-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+    background-color: var(--bg-tertiary);
+    border-radius: 12px;
+    border: 2px dashed var(--border-color);
+    animation: fadeIn 0.3s ease;
+}
+
+.no-events-message .material-icons {
+    font-size: 48px;
+    color: var(--text-tertiary);
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.no-events-message p {
+    margin: 0 0 20px 0;
+    font-size: 0.9375rem;
+    color: var(--text-secondary);
+}
+
+.no-events-message .btn {
+    margin-top: 8px;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 768px) {
+    .calendar-day {
+        min-height: 50px;
+    }
+
+    .day-number {
+        font-size: 0.75rem;
+    }
+
+    .event-dots {
+        margin-top: 2px;
+        gap: 2px;
+    }
+
+    .event-dot {
+        width: 4px;
+        height: 4px;
+    }
+
+    .event-count {
+        font-size: 0.6rem;
+        padding: 1px 4px;
+        min-width: 16px;
+    }
+
+    .upcoming-date {
+        min-width: 45px;
+    }
+
+    .upcoming-date .day {
+        font-size: 1.25rem;
+    }
+
+    .upcoming-meta {
+        font-size: 0.8125rem;
+    }
+
+    .selected-day-header {
+        padding: 12px;
+    }
+
+    .selected-day-info h4 {
+        font-size: 0.9375rem;
+    }
+
+    .event-time-badge {
+        min-width: 60px;
+        padding: 6px;
+    }
+
+    .event-time-badge .material-icons {
+        font-size: 18px;
+    }
+
+    .event-time-badge span {
+        font-size: 0.8125rem;
+    }
+
+    .holiday-indicator {
+        font-size: 0.875rem;
+    }
+
+    .birthday-indicator,
+    .cycle-indicator {
+        font-size: 0.875rem;
+    }
+
+    .holiday-info-card {
+        padding: 14px;
+    }
+
+    .holiday-info-header {
+        margin-bottom: 10px;
+        padding-bottom: 10px;
+    }
+
+    .holiday-info-header .material-icons {
+        font-size: 22px;
+    }
+
+    .holiday-info-header h5 {
+        font-size: 0.9375rem;
+    }
+
+    .holiday-info-value {
+        font-size: 0.875rem;
+    }
+
+    .holiday-badge {
+        padding: 6px 10px;
+    }
+
+    .no-events-message {
+        padding: 32px 16px;
+    }
+
+    .no-events-message .material-icons {
+        font-size: 40px;
+    }
+
+    .no-events-message p {
+        font-size: 0.875rem;
+    }
+
+    .interaction-hint {
+        padding: 6px 10px;
+    }
+
+    .interaction-hint .material-icons {
+        font-size: 16px;
+    }
+
+    .interaction-hint span {
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .calendar-nav {
+        padding: 12px;
+    }
+
+    .month-year {
+        font-size: 1.125rem;
+        min-width: 150px;
+    }
+
+    .calendar-container {
+        padding: 12px;
+    }
+
+    .calendar-day {
+        min-height: 45px;
+    }
+
+    .calendar-day.selected {
+        transform: none;
+    }
+
+    .day-number {
+        width: 24px;
+        height: 24px;
+        line-height: 24px;
+        font-size: 0.8125rem;
+    }
+
+    .event-count {
+        font-size: 0.5rem;
+        padding: 0 4px;
+        min-width: 14px;
+        bottom: 3px;
+        right: 3px;
+    }
+
+    .upcoming-section {
+        padding: 16px;
+    }
+
+    /* Resultados de búsqueda: tarjetas más compactas y en una sola columna */
+    .search-card {
+        padding: 12px 12px 10px;
+    }
+
+    .search-card-grid {
+        grid-template-columns: 1fr;
+        gap: 8px 0;
+    }
+
+    .upcoming-item {
+        padding: 12px;
+    }
+
+    .selected-day-header {
+        padding: 10px;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+    }
+
+    .selected-day-info h4 {
+        font-size: 0.875rem;
+    }
+
+    .selected-day-info p {
+        font-size: 0.75rem;
+    }
+
+    .selected-day-header .icon-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+    }
+
+    .event-time-badge {
+        min-width: 55px;
+        padding: 4px;
+    }
+
+    .event-time-badge .material-icons {
+        font-size: 16px;
+    }
+
+    .event-time-badge span {
+        font-size: 0.75rem;
+    }
+
+    .holiday-indicator {
+        font-size: 0.75rem;
+        top: 1px;
+        left: 1px;
+    }
+
+    .birthday-indicator,
+    .cycle-indicator {
+        font-size: 0.75rem;
+        top: 1px;
+        right: 1px;
+    }
+
+    .holiday-name {
+        font-size: 0.8125rem;
+    }
+
+    .birthday-count {
+        font-size: 0.8125rem;
+    }
+
+    .birthdays-section {
+        padding: 14px;
+    }
+
+    .section-title {
+        font-size: 0.9375rem;
+    }
+
+    .section-title .material-icons {
+        font-size: 20px;
+    }
+
+    .birthday-item {
+        padding: 10px;
+    }
+
+    .birthday-icon {
+        min-width: 45px;
+        height: 45px;
+        font-size: 1.75rem;
+    }
+
+    .birthday-name {
+        font-size: 0.9375rem;
+    }
+
+    .birthday-age {
+        font-size: 0.8125rem;
+    }
+
+    .birthday-age .material-icons {
+        font-size: 14px;
+    }
+
+    .holiday-info-card {
+        padding: 12px;
+    }
+
+    .holiday-info-header {
+        margin-bottom: 8px;
+        padding-bottom: 8px;
+    }
+
+    .holiday-info-header .material-icons {
+        font-size: 20px;
+    }
+
+    .holiday-info-header h5 {
+        font-size: 0.875rem;
+    }
+
+    .holiday-info-content {
+        gap: 10px;
+    }
+
+    .holiday-info-label {
+        font-size: 0.6875rem;
+    }
+
+    .holiday-info-value {
+        font-size: 0.8125rem;
+    }
+
+    .holiday-badge {
+        padding: 6px 8px;
+    }
+
+    .holiday-badge .material-icons {
+        font-size: 18px;
+    }
+
+    .holiday-badge span {
+        font-size: 0.8125rem;
+    }
+
+    .no-events-message {
+        padding: 28px 12px;
+    }
+
+    .no-events-message .material-icons {
+        font-size: 36px;
+    }
+
+    .no-events-message p {
+        font-size: 0.8125rem;
+        margin: 0 0 16px 0;
+    }
+
+    .interaction-hint {
+        padding: 6px 8px;
+        margin-bottom: 12px;
+    }
+
+    .interaction-hint .material-icons {
+        font-size: 14px;
+    }
+
+    .interaction-hint span {
+        font-size: 0.6875rem;
+    }
+}
+
+/* ============================================
+   SECCIÓN DE TRABAJADORES DE EMPRESA
+   ============================================ */
+
+/* Header de empresa con estadísticas */
+.empresa-header {
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.empresa-stats {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.stat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.stat-badge .material-icons {
+    font-size: 16px;
+}
+
+/* Chip de salario destacado */
+.salario-chip {
+    background-color: rgba(37, 211, 102, 0.15) !important;
+    color: var(--wa-green-light) !important;
+    font-weight: 600;
+}
+
+/* Toggle de familia */
+.family-toggle {
+    cursor: pointer;
+    padding: 6px 0 !important;
+}
+
+.family-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background-color: rgba(37, 211, 102, 0.1);
+    border-radius: 8px;
+    color: var(--wa-green-light);
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.family-toggle-btn:hover {
+    background-color: rgba(37, 211, 102, 0.2);
+}
+
+.family-toggle-btn .material-icons {
+    font-size: 18px;
+}
+
+.toggle-icon {
+    transition: transform 0.2s ease;
+}
+
+/* Sección de familia dentro del trabajador */
+.trabajador-family-section {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-color);
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Items de familia (cónyuge y beneficiarios) */
+.family-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    background-color: rgba(0, 0, 0, 0.15);
+    border-radius: 8px;
+    border-left: 3px solid var(--wa-green);
+}
+
+.family-item:last-child {
+    margin-bottom: 0;
+}
+
+.conyuge-item {
+    border-left-color: #E91E63;
+}
+
+.beneficiario-item {
+    border-left-color: #FF9800;
+}
+
+.family-item-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.conyuge-item .family-item-icon {
+    background: linear-gradient(135deg, #E91E63, #C2185B);
+}
+
+.beneficiario-item .family-item-icon {
+    background: linear-gradient(135deg, #FF9800, #F57C00);
+}
+
+.family-item-icon .material-icons {
+    font-size: 16px;
+    color: #fff;
+}
+
+.family-item-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.family-item-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.family-item-doc {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.family-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.family-badge {
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.conyuge-badge {
+    background-color: rgba(233, 30, 99, 0.15);
+    color: #F48FB1;
+}
+
+.beneficiario-badge {
+    background-color: rgba(255, 152, 0, 0.15);
+    color: #FFB74D;
+}
+
+/* Lista de trabajadores con scroll */
+.trabajadores-list {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+/* Trabajador item específico */
+.trabajador-item {
+    border-left-color: var(--wa-teal) !important;
+}
+
+/* Sección principal de trabajadores */
+.trabajadores-section {
+    background-color: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 0;
+    margin-top: 16px;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.trabajadores-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, var(--wa-teal), var(--wa-teal-light));
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.trabajadores-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #fff;
+}
+
+.trabajadores-title .material-icons {
+    font-size: 28px;
+    color: var(--wa-green-light);
+}
+
+.trabajadores-title h4 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.trabajadores-title p {
+    margin: 2px 0 0 0;
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+
+/* Botón Excel */
+.btn-excel {
+    background: linear-gradient(135deg, #217346, #1D6F42);
+    color: #fff;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(33, 115, 70, 0.3);
+}
+
+.btn-excel:hover {
+    background: linear-gradient(135deg, #1D6F42, #196339);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(33, 115, 70, 0.4);
+}
+
+.btn-excel .material-icons {
+    font-size: 18px;
+}
+
+/* Lista de trabajadores */
+.trabajadores-list {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+/* Tarjeta de trabajador */
+.trabajador-card {
+    background-color: #202C33;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #2A3942;
+    transition: all 0.2s ease;
+}
+
+.trabajador-card:hover {
+    border-color: var(--wa-green);
+    box-shadow: 0 2px 8px rgba(37, 211, 102, 0.15);
+}
+
+.trabajador-card.expanded {
+    border-color: var(--wa-green);
+    box-shadow: 0 4px 16px rgba(37, 211, 102, 0.2);
+}
+
+.trabajador-card.has-family .trabajador-main {
+    cursor: pointer;
+}
+
+.trabajador-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    gap: 12px;
+    min-height: 60px;
+    background-color: #202C33;
+}
+
+.trabajador-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.trabajador-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #075E54, #128C7E);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.trabajador-avatar .material-icons {
+    font-size: 22px;
+    color: #ffffff;
+}
+
+.trabajador-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.trabajador-nombre {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #E9EDEF;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.trabajador-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.trabajador-meta .meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.75rem;
+    color: #8696A0;
+}
+
+.trabajador-meta .meta-item .material-icons {
+    font-size: 14px;
+    color: #667781;
+}
+
+.trabajador-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.trabajador-salario {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--wa-green);
+    background-color: rgba(37, 211, 102, 0.1);
+    padding: 4px 10px;
+    border-radius: 6px;
+}
+
+.family-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    background-color: var(--bg-hover);
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+.family-count .material-icons {
+    font-size: 16px;
+}
+
+.expand-icon {
+    font-size: 24px;
+    color: var(--text-tertiary);
+    transition: transform 0.2s ease;
+}
+
+.trabajador-card.expanded .expand-icon {
+    transform: rotate(180deg);
+}
+
+/* Detalles de familia */
+.family-details {
+    background-color: rgba(0, 0, 0, 0.15);
+    border-top: 1px solid var(--border-color);
+    padding: 10px 14px;
+    animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.family-member-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background-color: var(--bg-tertiary);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    border-left: 3px solid var(--wa-green);
+    transition: all 0.2s ease;
+}
+
+.family-member-row:last-child {
+    margin-bottom: 0;
+}
+
+.family-member-row:hover {
+    background-color: var(--bg-hover);
+    transform: translateX(4px);
+}
+
+.conyuge-row {
+    border-left-color: #E91E63;
+}
+
+.beneficiario-row {
+    border-left-color: #FF9800;
+}
+
+.family-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.conyuge-icon {
+    background: linear-gradient(135deg, #E91E63, #C2185B);
+}
+
+.beneficiario-icon {
+    background: linear-gradient(135deg, #FF9800, #F57C00);
+}
+
+.family-icon .material-icons {
+    font-size: 18px;
+    color: #fff;
+}
+
+.family-member-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.family-member-info .family-member-name {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.family-member-info .family-member-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 3px;
+}
+
+.family-member-info .family-member-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.family-member-info .family-member-meta .material-icons {
+    font-size: 13px;
+    color: var(--text-tertiary);
+}
+
+.family-role-badge {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+
+.conyuge-badge {
+    background-color: rgba(233, 30, 99, 0.15);
+    color: #F48FB1;
+}
+
+.beneficiario-badge {
+    background-color: rgba(255, 152, 0, 0.15);
+    color: #FFB74D;
+}
+
+/* Mensaje sin trabajadores */
+.no-workers-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+}
+
+.no-workers-message .material-icons {
+    font-size: 48px;
+    color: var(--text-tertiary);
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.no-workers-message p {
+    margin: 0;
+    font-size: 0.9375rem;
+    color: var(--text-secondary);
+}
+
+/* Responsive para trabajadores */
+@media (max-width: 768px) {
+    .trabajadores-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .btn-excel {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .trabajador-main {
+        flex-wrap: wrap;
+    }
+
+    .trabajador-right {
+        width: 100%;
+        justify-content: flex-end;
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .trabajador-salario {
+        font-size: 0.85rem;
+    }
+
+    .empresa-stats {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 480px) {
+    .trabajadores-list {
+        padding: 8px;
+    }
+
+    .trabajador-main {
+        padding: 10px;
+    }
+
+    .trabajador-avatar {
+        width: 36px;
+        height: 36px;
+    }
+
+    .trabajador-avatar .material-icons {
+        font-size: 18px;
+    }
+
+    .trabajador-nombre {
+        font-size: 0.875rem;
+    }
+
+    .trabajador-meta .meta-item {
+        font-size: 0.7rem;
+    }
+
+    .family-member-row {
+        padding: 8px 10px;
+    }
+
+    .family-icon {
+        width: 32px;
+        height: 32px;
+    }
+
+    .family-icon .material-icons {
+        font-size: 16px;
+    }
+
+    .family-member-info .family-member-name {
+        font-size: 0.85rem;
+    }
+
+    .family-role-badge {
+        padding: 3px 8px;
+        font-size: 0.65rem;
+    }
+}
+
+/* ============================================
+   ESTILOS DE MODO FINANZAS EN EL CALENDARIO
+   ============================================ */
+.finance-indicator {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    animation: bounce 2s ease-in-out infinite;
+}
+
+.finance-indicator i {
+    font-size: 14px;
+}
+
+.finance-indicator.pending {
+    background-color: #FFA726;
+    color: #0B141A;
+}
+
+.finance-indicator.paid {
+    background-color: #34E47E;
+    color: #0B141A;
+}
+
+/* Sutiles realces para los días con finanzas */
+body.theme-finance .calendar-day.has-finance {
+    border: 1px dashed rgba(255, 215, 0, 0.3);
+    background: linear-gradient(135deg, var(--bg-tertiary), rgba(255, 215, 0, 0.05));
+}
+
+body.theme-finance .calendar-day.has-finance.has-pending-finance {
+    border: 1px dashed rgba(255, 167, 38, 0.4);
+    background: linear-gradient(135deg, var(--bg-tertiary), rgba(255, 167, 38, 0.08));
+}

@@ -1,0 +1,1193 @@
+/* ============================================
+   VARIABLES Y TEMA OSCURO WHATSAPP
+   ============================================ */
+:root {
+    /* Colores principales */
+    --wa-green: #25D366;
+    --wa-green-dark: #1DA855;
+    --wa-green-light: #34E47E;
+    --wa-teal: #075E54;
+    --wa-teal-light: #128C7E;
+    
+    /* Tema oscuro */
+    --bg-primary: #0B141A;
+    --bg-secondary: #1C2A33;
+    --bg-tertiary: #202C33;
+    --bg-hover: #2A3942;
+    
+    /* Textos */
+    --text-primary: #E9EDEF;
+    --text-secondary: #8696A0;
+    --text-tertiary: #667781;
+    
+    /* Bordes y divisores */
+    --border-color: #2A3942;
+    --divider-color: #323739;
+    
+    /* Estados */
+    --danger: #F44336;
+    --danger-dark: #D32F2F;
+    --warning: #FFA726;
+    --success: var(--wa-green);
+    
+    /* Sombras */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
+    
+    /* Fuentes */
+    --font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* ============================================
+   TEMA FEMENINO (Elegante y Profesional)
+   ============================================ */
+body.theme-female {
+    /* Colores principales - Tonos Rosados y Violetas Elegantes */
+    --wa-green: #ff4081;         /* Rosa vibrante principal */
+    --wa-green-dark: #c51162;    /* Rosa oscuro para hovers */
+    --wa-green-light: #ff79b0;   /* Rosa claro */
+    --wa-teal: #880e4f;          /* Violeta profundo para contrastes */
+    --wa-teal-light: #c2185b;    
+    
+    /* Tema oscuro con matiz púrpura sutil */
+    --bg-primary: #1a0f14;       /* Fondo principal más cálido */
+    --bg-secondary: #2d1b24;     /* Fondo de contenedores y header */
+    --bg-tertiary: #3e2432;      /* Fondos elevados (inputs, modales) */
+    --bg-hover: #4e2f40;         /* Hover cálido */
+    
+    /* Textos (más suaves que el blanco puro) */
+    --text-primary: #fce4ec;     /* Blanco rosáceo para texto principal */
+    --text-secondary: #f48fb1;   /* Rosa suave para texto secundario */
+    --text-tertiary: #f06292;    /* Rosa medio para iconos/detalles */
+    
+    /* Bordes y divisores */
+    --border-color: #5c344a;
+    --divider-color: #6d3f58;
+    
+    /* Estados */
+    --success: var(--wa-green);
+    
+    /* Sombras cálidas */
+    --shadow-sm: 0 1px 2px rgba(255, 64, 129, 0.15);
+    --shadow-md: 0 2px 8px rgba(255, 64, 129, 0.2);
+    --shadow-lg: 0 4px 16px rgba(255, 64, 129, 0.25);
+}
+
+/* Ajustes específicos para el tema femenino (sobrescribir hardcoded rgba) */
+body.theme-female .autocomplete-item.selected {
+    background-color: rgba(255, 64, 129, 0.1);
+}
+body.theme-female .autocomplete-badge {
+    background-color: rgba(255, 64, 129, 0.15);
+    color: var(--wa-green-light);
+}
+body.theme-female .calendar-day.selected {
+    background-color: rgba(255, 64, 129, 0.16);
+    box-shadow: inset 0 0 0 2px var(--wa-green);
+}
+body.theme-female .calendar-day.today.selected {
+    background-color: rgba(255, 64, 129, 0.26);
+}
+body.theme-female .status-pill--active,
+body.theme-female .name-result-company,
+body.theme-female .family-member-status,
+body.theme-female .history-badge {
+    background-color: rgba(255, 64, 129, 0.15);
+    color: var(--wa-green-light);
+}
+body.theme-female .history-item--current {
+    border-color: rgba(255, 64, 129, 0.7);
+    background: linear-gradient(135deg, rgba(255, 64, 129, 0.1), rgba(136, 14, 79, 0.2));
+}
+
+/* ============================================
+   TEMA DE FINANZAS (Verde Esmeralda y Oro)
+   ============================================ */
+body.theme-finance {
+    /* Colores principales - Tonos Verde Esmeralda y Dorado */
+    --wa-green: #FFD700;         /* Dorado/Oro para acentos */
+    --wa-green-dark: #b8860b;    /* Dorado oscuro */
+    --wa-green-light: #FFDF00;   /* Dorado claro */
+    --wa-teal: #104F31;          /* Verde esmeralda para contrastes */
+    --wa-teal-light: #166E43;    
+    
+    /* Tema oscuro con matiz verde sutil */
+    --bg-primary: #08160E;       /* Fondo principal verde muy oscuro */
+    --bg-secondary: #0F2A1C;     /* Fondo de contenedores y header */
+    --bg-tertiary: #19462F;      /* Fondos elevados (inputs, modales) */
+    --bg-hover: #225F3F;         /* Hover cálido */
+    
+    /* Textos */
+    --text-primary: #E6F7ED;     /* Blanco con tinte verde */
+    --text-secondary: #90CBA6;   /* Verde menta suave */
+    --text-tertiary: #FFD700;    /* Dorado para iconos/detalles */
+    
+    /* Bordes y divisores */
+    --border-color: #225F3F;
+    --divider-color: #2D7D54;
+    
+    /* Estados */
+    --success: #34E47E;
+    
+    /* Sombras doradas */
+    --shadow-sm: 0 1px 2px rgba(255, 215, 0, 0.15);
+    --shadow-md: 0 2px 8px rgba(255, 215, 0, 0.2);
+    --shadow-lg: 0 4px 16px rgba(255, 215, 0, 0.25);
+}
+
+/* Ajustes específicos para el tema de finanzas */
+body.theme-finance .autocomplete-item.selected {
+    background-color: rgba(255, 215, 0, 0.15);
+}
+body.theme-finance .autocomplete-badge {
+    background-color: rgba(255, 215, 0, 0.2);
+    color: var(--wa-green-light);
+}
+body.theme-finance .calendar-day.selected {
+    background-color: rgba(255, 215, 0, 0.12);
+    box-shadow: inset 0 0 0 2px var(--wa-green);
+}
+body.theme-finance .calendar-day.today.selected {
+    background-color: rgba(255, 215, 0, 0.2);
+}
+body.theme-finance .status-pill--active,
+body.theme-finance .name-result-company,
+body.theme-finance .family-member-status,
+body.theme-finance .history-badge {
+    background-color: rgba(255, 215, 0, 0.15);
+    color: var(--wa-green-light);
+}
+body.theme-finance .history-item--current {
+    border-color: rgba(255, 215, 0, 0.7);
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(16, 79, 49, 0.2));
+}
+
+/* ============================================
+   ESTILOS DEL CICLO MENSTRUAL
+   ============================================ */
+.calendar-day.cycle-period {
+    background: linear-gradient(135deg, #c2185b, #e91e63);
+    color: #fff;
+    border: none;
+    box-shadow: 0 2px 6px rgba(233, 30, 99, 0.4);
+}
+.calendar-day.cycle-period .day-number {
+    color: #fff;
+    font-weight: bold;
+}
+
+.calendar-day.cycle-predicted-period {
+    background: transparent;
+    border: 2px dashed #e91e63;
+}
+
+.calendar-day.cycle-predicted-period .day-number {
+    color: #e91e63;
+    font-weight: bold;
+}
+
+.calendar-day.cycle-fertile {
+    background: rgba(255, 105, 180, 0.2);
+    border: 2px dashed rgba(255, 105, 180, 0.8);
+}
+.calendar-day.cycle-ovulation {
+    background: linear-gradient(135deg, #ba68c8, #9c27b0);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(156, 39, 176, 0.5);
+    animation: glowOvulation 2s infinite alternate;
+}
+.calendar-day.cycle-ovulation .day-number {
+    color: #fff;
+    font-weight: bold;
+}
+
+@keyframes glowOvulation {
+    0% { box-shadow: 0 0 5px rgba(156, 39, 176, 0.4); }
+    100% { box-shadow: 0 0 15px rgba(156, 39, 176, 0.8); }
+}
+
+/* Cycle Insights Sidebar */
+.cycle-insights {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.insight-card {
+    background-color: var(--bg-tertiary);
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: var(--shadow-sm);
+    border-left: 4px solid var(--wa-green);
+    animation: slideInRight 0.3s ease;
+}
+.insight-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.insight-header .material-icons {
+    color: var(--wa-green);
+    font-size: 24px;
+}
+.insight-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.insight-desc {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+.insight-progress-bg {
+    width: 100%;
+    height: 8px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    margin-top: 12px;
+    overflow: hidden;
+}
+.insight-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #ff4081, #c2185b);
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+/* ============================================
+   RESET Y ESTILOS GLOBALES
+   ============================================ */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 16px;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    font-family: var(--font-family);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.5;
+    overflow-x: hidden;
+    min-height: 100vh;
+}
+
+/* Transiciones fluidas para cambio de tema */
+body, .header, .search-input-wrapper, .search-autocomplete, .autocomplete-item, 
+.btn, .icon-btn, .toast, .app-footer, .modal-content, .calendar-day, .event-item,
+input, select, .custom-select-trigger, .custom-select-options, .upcoming-list, .name-result-item {
+    transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+                color 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+                border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+                box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================
+   HEADER
+   ============================================ */
+.header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background-color: var(--bg-secondary);
+    box-shadow: var(--shadow-md);
+    z-index: 100;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 100%;
+    padding: 0 16px;
+    max-width: 1200px;
+    margin: 0 auto;
+    column-gap: 16px;
+    flex-wrap: nowrap;
+    position: relative;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.header-left .material-icons {
+    font-size: 28px;
+    color: var(--wa-green);
+}
+
+.header h1 {
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.header-right {
+    display: flex;
+    gap: 8px;
+    position: relative;
+    z-index: 2;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: right center;
+    max-width: 500px;
+}
+
+.header-right.hidden-by-search {
+    opacity: 0;
+    max-width: 0;
+    transform: scale(0.8) translateX(20px);
+    pointer-events: none;
+    gap: 0;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+}
+
+/* ============================================
+   BARRA DE BÚSQUEDA
+   ============================================ */
+.search-bar {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    pointer-events: none;
+    opacity: 0;
+    transform: scaleX(0.4);
+    transform-origin: left center;
+    transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.search-bar.active {
+    opacity: 1;
+    transform: scaleX(1);
+    pointer-events: auto;
+}
+
+.search-input-wrapper {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    max-width: 600px;
+    background-color: var(--bg-tertiary);
+    border-radius: 24px;
+    padding: 8px 16px;
+    gap: 12px;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.3s ease;
+}
+
+.search-input-wrapper:focus-within {
+    background-color: var(--bg-hover);
+    box-shadow: 0 0 0 2px var(--wa-green);
+}
+
+.search-icon {
+    font-size: 22px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.search-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 0.9375rem;
+    font-family: var(--font-family);
+    outline: none;
+    padding: 4px 0;
+}
+
+.search-input::placeholder {
+    color: var(--text-tertiary);
+}
+
+.search-close {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+}
+
+.search-close .material-icons {
+    font-size: 20px;
+}
+
+/* ============================================
+   AUTOCOMPLETADO DE EMPRESAS
+   ============================================ */
+.search-autocomplete {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 4px;
+    background-color: var(--bg-secondary);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    max-height: 350px;
+    overflow-y: auto;
+    z-index: 1000;
+    display: none;
+    border: 1px solid var(--border-color);
+}
+
+.search-autocomplete.active {
+    display: block;
+    animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.autocomplete-header {
+    padding: 10px 14px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.autocomplete-header .material-icons {
+    font-size: 16px;
+}
+
+.autocomplete-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.15s ease;
+}
+
+.autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.autocomplete-item:hover {
+    background-color: var(--bg-hover);
+}
+
+.autocomplete-item.selected {
+    background-color: rgba(37, 211, 102, 0.1);
+}
+
+.autocomplete-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--wa-teal), var(--wa-teal-light));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.autocomplete-icon .material-icons {
+    font-size: 20px;
+    color: #fff;
+}
+
+.autocomplete-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.autocomplete-name {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.3;
+}
+
+.autocomplete-nit {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.autocomplete-badge {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background-color: rgba(37, 211, 102, 0.15);
+    color: var(--wa-green-light);
+    flex-shrink: 0;
+}
+
+.autocomplete-loading,
+.autocomplete-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.autocomplete-loading .material-icons {
+    animation: spin 1s linear infinite;
+    margin-bottom: 8px;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ============================================
+   BOTONES
+   ============================================ */
+.icon-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+    /* Mejora la respuesta en móviles y evita que el navegador use doble-tap como zoom */
+    touch-action: manipulation;
+}
+
+.icon-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--wa-green);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.icon-btn:hover::before {
+    opacity: 0.1;
+}
+
+.icon-btn:active {
+    transform: scale(0.95);
+}
+
+.icon-btn.neon-active {
+    background: linear-gradient(135deg, rgba(255, 0, 127, 0.15), rgba(200, 0, 255, 0.15));
+    color: #fff;
+    border: 1px solid rgba(255, 0, 127, 0.8);
+    text-shadow: 0 0 8px rgba(255, 0, 127, 0.8), 0 0 16px rgba(200, 0, 255, 0.6);
+    box-shadow: 
+        0 0 10px rgba(255, 0, 127, 0.4), 
+        0 0 20px rgba(200, 0, 255, 0.2), 
+        inset 0 0 15px rgba(255, 0, 127, 0.3);
+    animation: neonPulse 2s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+    transform: scale(1.05);
+}
+
+.icon-btn.finance-active {
+    background: linear-gradient(135deg, rgba(0, 230, 118, 0.15), rgba(255, 215, 0, 0.15));
+    color: #fff;
+    border: 1px solid rgba(0, 230, 118, 0.8);
+    text-shadow: 0 0 8px rgba(0, 230, 118, 0.8), 0 0 16px rgba(255, 215, 0, 0.6);
+    box-shadow: 
+        0 0 10px rgba(0, 230, 118, 0.4), 
+        0 0 20px rgba(255, 215, 0, 0.2), 
+        inset 0 0 15px rgba(0, 230, 118, 0.3);
+    animation: financePulse 2s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+    transform: scale(1.05);
+}
+
+@keyframes financePulse {
+    0% {
+        box-shadow: 
+            0 0 8px rgba(0, 230, 118, 0.3), 
+            0 0 15px rgba(255, 215, 0, 0.2), 
+            inset 0 0 10px rgba(0, 230, 118, 0.2);
+        border-color: rgba(0, 230, 118, 0.5);
+        text-shadow: 0 0 6px rgba(0, 230, 118, 0.5), 0 0 12px rgba(255, 215, 0, 0.4);
+    }
+    100% {
+        box-shadow: 
+            0 0 15px rgba(0, 230, 118, 0.8), 
+            0 0 30px rgba(255, 215, 0, 0.6), 
+            0 0 45px rgba(0, 230, 118, 0.4),
+            inset 0 0 20px rgba(0, 230, 118, 0.5);
+        border-color: rgba(0, 230, 118, 1);
+        text-shadow: 0 0 10px rgba(0, 230, 118, 1), 0 0 20px rgba(255, 215, 0, 0.8);
+    }
+}
+
+.icon-btn.finance-active::before {
+    display: none;
+}
+
+@keyframes neonPulse {
+    0% {
+        box-shadow: 
+            0 0 8px rgba(255, 0, 127, 0.3), 
+            0 0 15px rgba(200, 0, 255, 0.2), 
+            inset 0 0 10px rgba(255, 0, 127, 0.2);
+        border-color: rgba(255, 0, 127, 0.5);
+        text-shadow: 0 0 6px rgba(255, 0, 127, 0.5), 0 0 12px rgba(200, 0, 255, 0.4);
+    }
+    100% {
+        box-shadow: 
+            0 0 15px rgba(255, 0, 127, 0.8), 
+            0 0 30px rgba(200, 0, 255, 0.6), 
+            0 0 45px rgba(255, 0, 127, 0.4),
+            inset 0 0 20px rgba(255, 0, 127, 0.5);
+        border-color: rgba(255, 0, 127, 1);
+        text-shadow: 0 0 10px rgba(255, 0, 127, 1), 0 0 20px rgba(200, 0, 255, 0.8);
+    }
+}
+
+/* Evitar que el before interfiera con el neon */
+.icon-btn.neon-active::before {
+    display: none;
+}
+
+.icon-btn .material-icons {
+    position: relative;
+    z-index: 1;
+    font-size: 24px;
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    font-family: var(--font-family);
+}
+
+.btn-primary {
+    background-color: var(--wa-green);
+    color: #fff;
+}
+
+.btn-primary:hover {
+    background-color: var(--wa-green-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+    background-color: var(--border-color);
+}
+
+.btn-danger {
+    background-color: var(--danger);
+    color: #fff;
+}
+
+.btn-danger:hover {
+    background-color: var(--danger-dark);
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
+
+/* ============================================
+   CONTENEDOR PRINCIPAL
+   ============================================ */
+.main-container {
+    margin-top: 60px;
+    padding: 20px 16px;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+    animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================
+   LOADING SPINNER
+   ============================================ */
+.loading-spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+}
+
+.loading-spinner .material-icons {
+    font-size: 40px;
+    color: var(--wa-green);
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ============================================
+   NOTIFICACIONES TOAST
+   ============================================ */
+.toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    padding: 12px 20px;
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 1000;
+    opacity: 0;
+    transition: all 0.3s ease;
+    min-width: 280px;
+    max-width: 90vw;
+}
+
+.toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+
+.toast .material-icons {
+    font-size: 24px;
+}
+
+.toast.success .material-icons {
+    color: var(--success);
+}
+
+.toast.error .material-icons {
+    color: var(--danger);
+}
+
+.toast.warning .material-icons {
+    color: var(--warning);
+}
+
+/* ============================================
+   FOOTER
+   ============================================ */
+.app-footer {
+    margin-top: 24px;
+    padding: 12px 16px 20px;
+    border-top: 1px solid var(--divider-color);
+    background-color: #101820;
+}
+
+.app-footer-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+}
+
+.app-footer-inner strong {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 768px) {
+    html {
+        font-size: 14px;
+    }
+
+    .header h1 {
+        font-size: 1.125rem;
+    }
+
+    .main-container {
+        padding: 16px 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .header-left h1 {
+        display: none;
+    }
+
+    .btn {
+        padding: 8px 16px;
+        font-size: 0.875rem;
+    }
+
+    .search-input-wrapper {
+        padding: 6px 12px;
+    }
+
+    .search-input {
+        font-size: 0.875rem;
+    }
+
+    .search-icon {
+        font-size: 20px;
+    }
+
+    /* Ajustes de header para que todos los iconos quepan sin ocultarse */
+    .header-content {
+        column-gap: 8px;
+    }
+
+    .header-right {
+        gap: 4px;
+    }
+
+    .icon-btn {
+        width: 34px;
+        height: 34px;
+    }
+
+    .icon-btn .material-icons {
+        font-size: 22px;
+    }
+
+    /* En reposo: barra más contenida */
+    .search-bar {
+        flex: 0 1 55%;
+    }
+
+    /* Al activarse: usar también el espacio del icono de búsqueda oculto */
+    .search-bar.active {
+        flex: 0 1 75%;
+    }
+}
+
+/* ============================================
+   TEMA DE NOTAS RÁPIDAS (Azul/Índigo Inteligente)
+   ============================================ */
+body.theme-notes {
+    --wa-green: #4FC3F7;
+    --wa-green-dark: #0288D1;
+    --wa-green-light: #81D4FA;
+    --wa-teal: #0D47A1;
+    --wa-teal-light: #1565C0;
+    
+    --bg-primary: #0A0F1D;
+    --bg-secondary: #121A30;
+    --bg-tertiary: #1B2644;
+    --bg-hover: #24335A;
+    
+    --text-primary: #E3F2FD;
+    --text-secondary: #90CAF9;
+    --text-tertiary: #4FC3F7;
+    
+    --border-color: #24335A;
+    --divider-color: #2C3E6B;
+    
+    --success: #4FC3F7;
+    
+    --shadow-sm: 0 1px 2px rgba(79, 195, 247, 0.15);
+    --shadow-md: 0 2px 8px rgba(79, 195, 247, 0.2);
+    --shadow-lg: 0 4px 16px rgba(79, 195, 247, 0.25);
+}
+
+body.theme-notes .autocomplete-item.selected {
+    background-color: rgba(79, 195, 247, 0.15);
+}
+body.theme-notes .autocomplete-badge {
+    background-color: rgba(79, 195, 247, 0.2);
+    color: var(--wa-green-light);
+}
+body.theme-notes .calendar-day.selected {
+    background-color: rgba(79, 195, 247, 0.14);
+    box-shadow: inset 0 0 0 2px var(--wa-green);
+}
+body.theme-notes .calendar-day.today.selected {
+    background-color: rgba(79, 195, 247, 0.22);
+}
+
+/* ============================================
+   TEMA DE HÁBITOS Y BIENESTAR (Verde Natural)
+   ============================================ */
+body.theme-habits {
+    --wa-green: #4CAF50;
+    --wa-green-dark: #388E3C;
+    --wa-green-light: #81C784;
+    --wa-teal: #1B5E20;
+    --wa-teal-light: #2E7D32;
+    
+    --bg-primary: #081209;
+    --bg-secondary: #102512;
+    --bg-tertiary: #193B1D;
+    --bg-hover: #225128;
+    
+    --text-primary: #E8F5E9;
+    --text-secondary: #A5D6A7;
+    --text-tertiary: #4CAF50;
+    
+    --border-color: #225128;
+    --divider-color: #2E6F37;
+    
+    --success: #4CAF50;
+    
+    --shadow-sm: 0 1px 2px rgba(76, 175, 80, 0.15);
+    --shadow-md: 0 2px 8px rgba(76, 175, 80, 0.2);
+    --shadow-lg: 0 4px 16px rgba(76, 175, 80, 0.25);
+}
+
+body.theme-habits .autocomplete-item.selected {
+    background-color: rgba(76, 175, 80, 0.15);
+}
+body.theme-habits .autocomplete-badge {
+    background-color: rgba(76, 175, 80, 0.2);
+    color: var(--wa-green-light);
+}
+body.theme-habits .calendar-day.selected {
+    background-color: rgba(76, 175, 80, 0.14);
+    box-shadow: inset 0 0 0 2px var(--wa-green);
+}
+body.theme-habits .calendar-day.today.selected {
+    background-color: rgba(76, 175, 80, 0.22);
+}
+
+/* Active Mode Buttons Styles */
+.icon-btn.notes-active {
+    background: linear-gradient(135deg, rgba(79, 195, 247, 0.15), rgba(0, 145, 234, 0.15));
+    color: #fff;
+    border: 1px solid rgba(79, 195, 247, 0.8);
+    text-shadow: 0 0 8px rgba(79, 195, 247, 0.8), 0 0 16px rgba(0, 145, 234, 0.6);
+    box-shadow: 
+        0 0 10px rgba(79, 195, 247, 0.4), 
+        0 0 20px rgba(0, 145, 234, 0.2), 
+        inset 0 0 15px rgba(79, 195, 247, 0.3);
+    animation: notesPulse 2s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+    transform: scale(1.05);
+}
+
+@keyframes notesPulse {
+    0% {
+        box-shadow: 
+            0 0 8px rgba(79, 195, 247, 0.3), 
+            0 0 15px rgba(0, 145, 234, 0.2), 
+            inset 0 0 10px rgba(79, 195, 247, 0.2);
+        border-color: rgba(79, 195, 247, 0.5);
+    }
+    100% {
+        box-shadow: 
+            0 0 15px rgba(79, 195, 247, 0.8), 
+            0 0 30px rgba(0, 145, 234, 0.6), 
+            inset 0 0 20px rgba(79, 195, 247, 0.5);
+        border-color: rgba(79, 195, 247, 1);
+    }
+}
+
+.icon-btn.habits-active {
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.15), rgba(46, 125, 50, 0.15));
+    color: #fff;
+    border: 1px solid rgba(76, 175, 80, 0.8);
+    text-shadow: 0 0 8px rgba(76, 175, 80, 0.8), 0 0 16px rgba(46, 125, 50, 0.6);
+    box-shadow: 
+        0 0 10px rgba(76, 175, 80, 0.4), 
+        0 0 20px rgba(46, 125, 50, 0.2), 
+        inset 0 0 15px rgba(76, 175, 80, 0.3);
+    animation: habitsPulse 2s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+    transform: scale(1.05);
+}
+
+@keyframes habitsPulse {
+    0% {
+        box-shadow: 
+            0 0 8px rgba(76, 175, 80, 0.3), 
+            0 0 15px rgba(46, 125, 50, 0.2), 
+            inset 0 0 10px rgba(76, 175, 80, 0.2);
+        border-color: rgba(76, 175, 80, 0.5);
+    }
+    100% {
+        box-shadow: 
+            0 0 15px rgba(76, 175, 80, 0.8), 
+            0 0 30px rgba(46, 125, 50, 0.6), 
+            inset 0 0 20px rgba(76, 175, 80, 0.5);
+        border-color: rgba(76, 175, 80, 1);
+    }
+}
+
+.icon-btn.notes-active::before,
+.icon-btn.habits-active::before {
+    display: none;
+}
+
+/* Indicators in Calendar */
+.calendar-day.has-note {
+    box-shadow: 0 0 0 1.5px rgba(79, 195, 247, 0.4);
+}
+.notes-indicator {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    animation: bounce 2.5s ease-in-out infinite;
+}
+
+.calendar-day.habit-day {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.calendar-day.habit-heat-0 {
+    background-color: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+}
+.calendar-day.habit-heat-1 {
+    background-color: rgba(76, 175, 80, 0.15);
+    border: 1px dashed rgba(76, 175, 80, 0.4);
+}
+.calendar-day.habit-heat-2 {
+    background-color: rgba(76, 175, 80, 0.35);
+    border: 1px solid rgba(76, 175, 80, 0.5);
+}
+.calendar-day.habit-heat-3 {
+    background-color: rgba(76, 175, 80, 0.6);
+    border: 1px solid rgba(76, 175, 80, 0.8);
+}
+.calendar-day.habit-heat-4 {
+    background: linear-gradient(135deg, #4CAF50, #2E7D32);
+    color: #fff !important;
+    border: none;
+    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.4);
+}
+.calendar-day.habit-heat-4 .day-number {
+    color: #fff !important;
+    font-weight: bold;
+}
+.habit-indicator-badge {
+    position: absolute;
+    bottom: 2px;
+    font-size: 0.65rem;
+    background-color: rgba(0, 0, 0, 0.45);
+    color: #fff;
+    padding: 1px 4px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+/* Cycle Insights Sidebar */
+.cycle-insights {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.insight-card {
+    background-color: var(--bg-tertiary);
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: var(--shadow-sm);
+    border-left: 4px solid var(--wa-green);
+    animation: slideInRight 0.3s ease;
+}
+.insight-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.insight-header .material-icons {
+    color: var(--wa-green);
+    font-size: 24px;
+}
+.insight-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.insight-desc {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+.insight-progress-bg {
+    width: 100%;
+    height: 8px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    margin-top: 12px;
+    overflow: hidden;
+}
+.insight-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #ff4081, #c2185b);
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+@keyframes slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+}

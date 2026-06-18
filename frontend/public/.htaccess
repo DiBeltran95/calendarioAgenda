@@ -1,0 +1,12 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Archivos estáticos reales (JS, CSS, imágenes)
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+
+  # SPA: /login, /dashboard, /confirmar/xxx → index.html
+  RewriteRule . /index.html [L]
+</IfModule>
