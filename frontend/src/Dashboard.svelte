@@ -56,7 +56,6 @@
   let showTransactionModal = false;
   let showVerifyIncomeModal = false;
   let showMetaModal = false;
-  let showPresupuestoModal = false;
 
   let accountData = { id: null, nombre: '', tipo: 'ahorros', saldo: 0, limite: 0, interes_tasa: 0, fecha_inicio: '', plazo_dias: 0 };
   let plannedIncomeData = { id: null, cuenta_id: '', descripcion: '', monto: 0, frecuencia: 'mensual', fecha_inicio: '' };
@@ -81,20 +80,46 @@
   // Lista cruda de categorías (incluye id y es_default) para la gestión
   let categoriasFinanzas: any[] = [];
 
-  // Estado del modal de gestión de categorías
-  let showCategoriasModal = false;
+  // Estado de gestión de categorías (inline en el tab)
   let nuevaCategoriaLabel = '';
   let nuevaCategoriaIcono = 'sell';
   let categoriaError = '';
   let categoriaGuardando = false;
+  let presupuestoInlineEdit: Record<string, number> = {};
+  let presupuestoInlineActive: string | null = null;
 
-  // Set de iconos disponibles para categorías personalizadas
+  // Iconos con nombre en español
   const ICONOS_CATEGORIA = [
-    'sell', 'shopping_cart', 'restaurant', 'fastfood', 'local_cafe', 'directions_car',
-    'local_gas_station', 'flight', 'home', 'receipt_long', 'bolt', 'water_drop',
-    'wifi', 'phone_iphone', 'sports_esports', 'movie', 'fitness_center', 'medication',
-    'school', 'savings', 'pets', 'child_care', 'checkroom', 'card_giftcard',
-    'volunteer_activism', 'build', 'payments', 'attach_money', 'work', 'celebration'
+    { value: 'sell',               label: 'Etiqueta' },
+    { value: 'shopping_cart',      label: 'Carrito' },
+    { value: 'restaurant',         label: 'Restaurante' },
+    { value: 'fastfood',           label: 'Comida rápida' },
+    { value: 'local_cafe',         label: 'Café' },
+    { value: 'directions_car',     label: 'Carro' },
+    { value: 'local_gas_station',  label: 'Gasolina' },
+    { value: 'flight',             label: 'Vuelo' },
+    { value: 'home',               label: 'Hogar' },
+    { value: 'receipt_long',       label: 'Factura' },
+    { value: 'bolt',               label: 'Electricidad' },
+    { value: 'water_drop',         label: 'Agua' },
+    { value: 'wifi',               label: 'Internet' },
+    { value: 'phone_iphone',       label: 'Celular' },
+    { value: 'sports_esports',     label: 'Videojuegos' },
+    { value: 'movie',              label: 'Cine' },
+    { value: 'fitness_center',     label: 'Gimnasio' },
+    { value: 'medication',         label: 'Salud' },
+    { value: 'school',             label: 'Educación' },
+    { value: 'savings',            label: 'Ahorro' },
+    { value: 'pets',               label: 'Mascotas' },
+    { value: 'child_care',         label: 'Niños' },
+    { value: 'checkroom',          label: 'Ropa' },
+    { value: 'card_giftcard',      label: 'Regalo' },
+    { value: 'volunteer_activism', label: 'Donación' },
+    { value: 'build',              label: 'Reparación' },
+    { value: 'payments',           label: 'Pago' },
+    { value: 'attach_money',       label: 'Dinero' },
+    { value: 'work',               label: 'Trabajo' },
+    { value: 'celebration',        label: 'Celebración' },
   ];
 
   // Categorías actualmente en uso (transacciones o presupuestos), para bloquear su borrado
@@ -733,7 +758,6 @@
         body: JSON.stringify(payload)
       });
       if (res.ok) {
-        showPresupuestoModal = false;
         await refreshDashboardNotesAndHabits();
       } else {
         const data = await res.json();
@@ -758,29 +782,6 @@
     } catch (err) { console.error(err); }
   }
 
-  function editPresupuestoByCategoria(categoria: string) {
-    const budget = presupuestosList.find(p => p.categoria === categoria);
-    if (budget) {
-      presupuestoData = {
-        id: budget.id,
-        categoria: budget.categoria,
-        monto_limite: Number(budget.monto_limite),
-        mes: budget.mes,
-        anio: budget.anio
-      };
-      showPresupuestoModal = true;
-    } else {
-      const now = new Date();
-      presupuestoData = {
-        id: null,
-        categoria: categoria,
-        monto_limite: 0,
-        mes: now.getMonth() + 1,
-        anio: now.getFullYear()
-      };
-      showPresupuestoModal = true;
-    }
-  }
 
   function getBudgetStatus(categoria, pList = presupuestosList, mTransactions = monthlyTransactions) {
     const budget = pList.find(p => p.categoria === categoria);
@@ -3178,22 +3179,83 @@
                     {/if}
 
                 {:else if activeFinanceTab === 'presupuesto'}
-                    <!-- PESTAÑA PRESUPUESTO MENSUAL -->
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <button type="button" class="fin-add-btn" style="flex: 1;" on:click={() => { const now = new Date(); presupuestoData = { id: null, categoria: 'comida', monto_limite: 0, mes: now.getMonth() + 1, anio: now.getFullYear() }; showPresupuestoModal = true; }}>
-                            <i class="material-icons">add</i> Definir Límite de Categoría
-                        </button>
-                        <button type="button" class="fin-add-btn" style="background: rgba(255,255,255,0.04);" on:click={() => { showCategoriasModal = true; categoriaError = ''; }}>
-                            <i class="material-icons">category</i> Gestionar Categorías
-                        </button>
+                    <!-- PESTAÑA PRESUPUESTO + CATEGORÍAS (inline) -->
+
+                    <!-- Sección: Mis Categorías -->
+                    <div style="margin-bottom: 18px;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                            <span style="font-size:0.78rem; font-weight:700; color:var(--text-secondary); letter-spacing:0.06em; text-transform:uppercase;">Mis Categorías</span>
+                            <span style="font-size:0.72rem; color:var(--text-tertiary);">{categoriasFinanzas.length} categorías</span>
+                        </div>
+
+                        <!-- Lista de categorías existentes -->
+                        <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
+                            {#each categoriasFinanzas as cat}
+                                {@const enUso = categoriasEnUso.has(cat.valor)}
+                                <div style="display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:8px 12px;">
+                                    <i class="material-icons" style="color:#FFA726; font-size:18px;">{cat.icono}</i>
+                                    <span style="flex:1; font-size:0.85rem; color:var(--text-primary);">{cat.label}</span>
+                                    {#if cat.es_default}
+                                        <span style="font-size:0.65rem; color:var(--text-tertiary); border:1px solid var(--border-color); border-radius:5px; padding:2px 6px;">predefinida</span>
+                                    {/if}
+                                    {#if enUso}
+                                        <span title="Tiene registros asociados, no se puede eliminar" style="display:flex; align-items:center; color:var(--text-tertiary);">
+                                            <i class="material-icons" style="font-size:16px;">lock</i>
+                                        </span>
+                                    {:else}
+                                        <button class="icon-btn" style="width:26px; height:26px;" on:click={() => eliminarCategoria(cat)} title="Eliminar categoría">
+                                            <i class="material-icons" style="font-size:16px; color:var(--danger);">delete</i>
+                                        </button>
+                                    {/if}
+                                </div>
+                            {/each}
+                        </div>
+
+                        <!-- Formulario nueva categoría -->
+                        <div style="background:rgba(255,167,38,0.04); border:1px dashed rgba(255,167,38,0.25); border-radius:10px; padding:10px;">
+                            <label style="font-size:0.74rem; color:var(--text-secondary); display:block; margin-bottom:8px;">➕ Nueva categoría personalizada</label>
+                            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                <select bind:value={nuevaCategoriaIcono} style="padding:8px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-tertiary); color:var(--text-primary); min-width:130px;">
+                                    {#each ICONOS_CATEGORIA as ic}
+                                        <option value={ic.value}>{ic.label}</option>
+                                    {/each}
+                                </select>
+                                <div style="display:flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:8px; background:var(--bg-tertiary); border:1px solid var(--border-color); flex-shrink:0;">
+                                    <i class="material-icons" style="color:#FFA726; font-size:20px;">{nuevaCategoriaIcono}</i>
+                                </div>
+                                <input
+                                    type="text"
+                                    bind:value={nuevaCategoriaLabel}
+                                    on:keydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); crearCategoria(); } }}
+                                    placeholder="Nombre, ej: Mascotas, Viajes..."
+                                    maxlength="100"
+                                    style="flex:1; min-width:120px; padding:8px 10px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-tertiary); color:var(--text-primary);"
+                                />
+                                <button type="button" disabled={categoriaGuardando} on:click={crearCategoria}
+                                    style="padding:8px 14px; border-radius:8px; background:#FFA726; color:#000; font-weight:700; border:none; cursor:pointer; font-size:0.82rem; display:flex; align-items:center; gap:4px;">
+                                    <i class="material-icons" style="font-size:16px;">add</i> Agregar
+                                </button>
+                            </div>
+                            {#if categoriaError}
+                                <p style="color:#F44336; font-size:0.76rem; margin-top:6px;">{categoriaError}</p>
+                            {/if}
+                        </div>
                     </div>
 
+                    <!-- Divisor -->
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+                        <div style="flex:1; height:1px; background:var(--divider-color);"></div>
+                        <span style="font-size:0.78rem; font-weight:700; color:var(--text-secondary); letter-spacing:0.06em; text-transform:uppercase;">Límites Mensuales</span>
+                        <div style="flex:1; height:1px; background:var(--divider-color);"></div>
+                    </div>
+
+                    <!-- Grid de presupuestos por categoría -->
                     <div class="budget-grid">
                         {#each TRANSACTIONS_CATEGORIES.filter(c => c.value !== 'otros') as cat}
                             {@const bs = getBudgetStatus(cat.value, presupuestosList, monthlyTransactions)}
                             {@const dailySpent = selectedDay ? selectedDayTransactions.filter(t => t.tipo === 'gasto' && t.categoria === cat.value).reduce((sum, t) => sum + Number(t.monto), 0) : 0}
                             <!-- svelte-ignore a11y_no_static_element_interactions -->
-                            <div class="budget-card {bs.status}" on:dblclick={() => editPresupuestoByCategoria(cat.value)} style="cursor: pointer;" title="Doble click para editar">
+                            <div class="budget-card {bs.status}" style="cursor:default;">
                                 <div class="budget-card-top">
                                     <div class="budget-cat-icon">
                                         <i class="material-icons">{cat.icon}</i>
@@ -3207,19 +3269,50 @@
                                 </div>
 
                                 <div class="budget-amounts">
-                                    <span class="budget-spent"
-                                        style="color: {bs.status === 'danger' ? '#F44336' : bs.status === 'warning' ? '#FFA726' : 'var(--text-primary)'};">
+                                    <span class="budget-spent" style="color: {bs.status === 'danger' ? '#F44336' : bs.status === 'warning' ? '#FFA726' : 'var(--text-primary)'};">
                                         {formatPrice(bs.spent)}
                                     </span>
                                     {#if bs.limit > 0}
                                         <span class="budget-limit">/ {formatPrice(bs.limit)}</span>
-                                    {:else}
-                                        <button class="budget-set-btn" on:click={() => { const now = new Date(); presupuestoData = { id: null, categoria: cat.value, monto_limite: 0, mes: now.getMonth() + 1, anio: now.getFullYear() }; showPresupuestoModal = true; }}>+ Límite</button>
                                     {/if}
                                 </div>
 
+                                <!-- Campo inline para definir/editar límite -->
+                                {#if presupuestoInlineActive === cat.value}
+                                    <div style="display:flex; gap:6px; margin-top:8px;" on:click|stopPropagation>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            placeholder="Límite mensual"
+                                            bind:value={presupuestoInlineEdit[cat.value]}
+                                            style="flex:1; padding:6px 8px; border-radius:6px; border:1px solid #FFA726; background:var(--bg-tertiary); color:var(--text-primary); font-size:0.82rem;"
+                                            on:keydown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const now = new Date();
+                                                    presupuestoData = { id: bs.id, categoria: cat.value, monto_limite: presupuestoInlineEdit[cat.value] || 0, mes: now.getMonth() + 1, anio: now.getFullYear() };
+                                                    savePresupuesto();
+                                                    presupuestoInlineActive = null;
+                                                }
+                                                if (e.key === 'Escape') presupuestoInlineActive = null;
+                                            }}
+                                        />
+                                        <button on:click={() => {
+                                            const now = new Date();
+                                            presupuestoData = { id: bs.id, categoria: cat.value, monto_limite: presupuestoInlineEdit[cat.value] || 0, mes: now.getMonth() + 1, anio: now.getFullYear() };
+                                            savePresupuesto();
+                                            presupuestoInlineActive = null;
+                                        }} style="padding:4px 10px; border-radius:6px; background:#FFA726; color:#000; font-weight:700; border:none; cursor:pointer; font-size:0.78rem;">OK</button>
+                                        <button on:click={() => presupuestoInlineActive = null} style="padding:4px 8px; border-radius:6px; background:var(--bg-hover); color:var(--text-secondary); border:none; cursor:pointer; font-size:0.78rem;">✕</button>
+                                    </div>
+                                {:else}
+                                    <button class="budget-set-btn" style="margin-top:8px; width:100%;" on:click={() => { presupuestoInlineActive = cat.value; presupuestoInlineEdit[cat.value] = bs.limit || 0; }}>
+                                        {bs.limit > 0 ? '✏ Editar límite' : '+ Definir límite'}
+                                    </button>
+                                {/if}
+
                                 {#if bs.limit > 0}
-                                    <div class="budget-bar-bg">
+                                    <div class="budget-bar-bg" style="margin-top:8px;">
                                         <div class="budget-bar-fill {bs.status}" style="width: {bs.pct}%;"></div>
                                     </div>
                                     <div class="budget-pct">
@@ -4284,11 +4377,7 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="txCat" style="display:flex; align-items:center; justify-content:space-between;">
-                        <span>Categoría</span>
-                        <!-- svelte-ignore a11y_invalid_attribute -->
-                        <a href="#" on:click|preventDefault={() => { showCategoriasModal = true; categoriaError = ''; }} style="font-size:0.72rem; color:#FFD700; text-decoration:none;">⚙ Gestionar</a>
-                    </label>
+                    <label for="txCat">Categoría</label>
                     <select id="txCat" bind:value={transactionData.categoria} style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); margin-top: 5px;">
                         {#each TRANSACTIONS_CATEGORIES as cat}
                             <option value={cat.value}>{cat.label}</option>
@@ -4458,129 +4547,6 @@
 </div>
 {/if}
 
-<!-- MODAL: Presupuesto Mensual -->
-{#if showPresupuestoModal}
-<div class="modal active">
-    <div class="modal-content modal-small">
-        <div class="modal-header" style="background: linear-gradient(135deg, rgba(255,167,38,0.12), rgba(0,0,0,0)); border-bottom: 1px solid rgba(255,167,38,0.2);">
-            <h3 style="display:flex; align-items:center; gap:8px;">
-                <i class="material-icons" style="color:#FFA726;">pie_chart</i>
-                {presupuestoData.id ? 'Modificar Límite de Presupuesto' : 'Definir Límite de Presupuesto'}
-            </h3>
-            <button class="modal-close" on:click={() => showPresupuestoModal = false}>
-                <i class="material-icons">close</i>
-            </button>
-        </div>
-        <form class="modal-body" on:submit|preventDefault={savePresupuesto}>
-            <div class="form-group">
-                <label for="presCat"><i class="material-icons">category</i> Categoría</label>
-                <select id="presCat" bind:value={presupuestoData.categoria} style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-tertiary); color:var(--text-primary); margin-top:5px;">
-                    {#each TRANSACTIONS_CATEGORIES as cat}
-                        <option value={cat.value}>{cat.label}</option>
-                    {/each}
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="presLimite"><i class="material-icons">money</i> Límite Mensual ($)</label>
-                <CurrencyInput id="presLimite" bind:value={presupuestoData.monto_limite} required={true} placeholder="Ej: 500000" />
-            </div>
-
-            <p style="font-size:0.78rem; color:var(--text-secondary); background:rgba(255,167,38,0.08); border:1px solid rgba(255,167,38,0.15); border-radius:8px; padding:8px 12px; display:flex; align-items:flex-start; gap:8px;">
-                <i class="material-icons" style="font-size:16px; color:#FFA726; flex-shrink:0; margin-top:1px;">lightbulb</i>
-                El sistema mostrará en tiempo real cuánto has gastado vs tu límite definido para el mes actual.
-            </p>
-
-            <div class="modal-actions" style="margin-top:20px;">
-                <button type="button" class="btn btn-secondary" on:click={() => showPresupuestoModal = false}>Cancelar</button>
-                <button type="submit" class="btn btn-primary" style="background: linear-gradient(135deg, #FFA726, #FF8F00); color:#000;">
-                    <i class="material-icons">save</i> Guardar Límite
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-{/if}
-
-<!-- MODAL: Gestión de Categorías de Finanzas -->
-{#if showCategoriasModal}
-<div class="modal active">
-    <div class="modal-content modal-small">
-        <div class="modal-header" style="background: linear-gradient(135deg, rgba(255,215,0,0.12), rgba(0,0,0,0)); border-bottom: 1px solid rgba(255,215,0,0.2);">
-            <h3 style="display:flex; align-items:center; gap:8px;">
-                <i class="material-icons" style="color:#FFD700;">category</i>
-                Gestionar Categorías
-            </h3>
-            <button class="modal-close" on:click={() => showCategoriasModal = false}>
-                <i class="material-icons">close</i>
-            </button>
-        </div>
-        <div class="modal-body">
-            <!-- Formulario para crear nueva categoría -->
-            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px; margin-bottom: 16px;">
-                <label style="font-size: 0.8rem; color: var(--text-secondary); display:block; margin-bottom: 8px;">Nueva categoría</label>
-                <div style="display:flex; gap:8px; align-items:center;">
-                    <select bind:value={nuevaCategoriaIcono} title="Ícono" style="padding:10px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-tertiary); color:var(--text-primary); width:64px; text-align:center;">
-                        {#each ICONOS_CATEGORIA as ic}
-                            <option value={ic}>{ic}</option>
-                        {/each}
-                    </select>
-                    <div style="display:flex; align-items:center; justify-content:center; width:42px; height:42px; border-radius:8px; background:var(--bg-tertiary); border:1px solid var(--border-color); flex-shrink:0;">
-                        <i class="material-icons" style="color:#FFD700;">{nuevaCategoriaIcono}</i>
-                    </div>
-                    <input
-                        type="text"
-                        bind:value={nuevaCategoriaLabel}
-                        on:keydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); crearCategoria(); } }}
-                        placeholder="Ej: Mascotas, Viajes..."
-                        maxlength="100"
-                        style="flex:1; padding:10px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-tertiary); color:var(--text-primary);"
-                    />
-                    <button type="button" class="btn btn-primary" disabled={categoriaGuardando} on:click={crearCategoria} style="background-color:#FFD700; color:#000; flex-shrink:0;">
-                        <i class="material-icons">add</i>
-                    </button>
-                </div>
-                {#if categoriaError}
-                    <p style="color:#F44336; font-size:0.78rem; margin-top:8px;">{categoriaError}</p>
-                {/if}
-            </div>
-
-            <!-- Lista de categorías existentes -->
-            <label style="font-size: 0.8rem; color: var(--text-secondary); display:block; margin-bottom: 8px;">Tus categorías ({categoriasFinanzas.length})</label>
-            <div style="display:flex; flex-direction:column; gap:8px; max-height:340px; overflow-y:auto;">
-                {#each categoriasFinanzas as cat}
-                    {@const enUso = categoriasEnUso.has(cat.valor)}
-                    <div style="display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:8px 12px;">
-                        <i class="material-icons" style="color:#FFD700; font-size:20px;">{cat.icono}</i>
-                        <span style="flex:1; font-size:0.88rem; color:var(--text-primary);">{cat.label}</span>
-                        {#if cat.es_default}
-                            <span style="font-size:0.66rem; color:var(--text-tertiary); border:1px solid var(--border-color); border-radius:6px; padding:2px 6px;">predefinida</span>
-                        {/if}
-                        {#if enUso}
-                            <span title="No se puede eliminar: tiene registros asociados" style="display:flex; align-items:center; color:var(--text-tertiary);">
-                                <i class="material-icons" style="font-size:18px;">lock</i>
-                            </span>
-                        {:else}
-                            <button class="icon-btn" style="width:28px; height:28px;" on:click={() => eliminarCategoria(cat)} title="Eliminar categoría">
-                                <i class="material-icons" style="font-size:18px; color:var(--danger);">delete</i>
-                            </button>
-                        {/if}
-                    </div>
-                {/each}
-            </div>
-
-            <p style="font-size:0.74rem; color:var(--text-secondary); background:rgba(255,215,0,0.06); border:1px solid rgba(255,215,0,0.15); border-radius:8px; padding:8px 12px; display:flex; align-items:flex-start; gap:8px; margin-top:14px;">
-                <i class="material-icons" style="font-size:16px; color:#FFD700; flex-shrink:0; margin-top:1px;">lightbulb</i>
-                Las categorías con registros asociados (transacciones o presupuestos) no se pueden eliminar para proteger tu historial.
-            </p>
-
-            <div class="modal-actions" style="margin-top:16px;">
-                <button type="button" class="btn btn-secondary" on:click={() => showCategoriasModal = false}>Cerrar</button>
-            </div>
-        </div>
-    </div>
-</div>
-{/if}
 
 <style>
   .whatsapp-simulator {
