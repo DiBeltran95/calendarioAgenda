@@ -3539,7 +3539,7 @@
                     {/if}
                 {:else if activeFinanceTab === 'graficos'}
                     <!-- 7. PESTAÑA GRÁFICOS AVANZADOS -->
-                    <AdvancedAnalytics cuentas={cuentasList} transacciones={transaccionesList} />
+                    <AdvancedAnalytics cuentas={cuentasList} transacciones={transaccionesList} categorias={categoriasFinanzas} />
                 {/if}
             </div>
 

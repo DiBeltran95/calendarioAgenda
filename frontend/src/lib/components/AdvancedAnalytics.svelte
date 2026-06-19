@@ -3,11 +3,12 @@
 
   export let cuentas: any[] = [];
   export let transacciones: any[] = [];
+  export let categorias: any[] = [];
 
   let activeFilter = '30d';
 
   // ===== CATEGORY VISUAL CONFIG =====
-  const CAT: Record<string, { label: string, color: string, icon: string }> = {
+  const CAT_BASE: Record<string, { label: string, color: string, icon: string }> = {
     comida:          { label: 'Comida',          color: '#FF7043', icon: 'restaurant' },
     transporte:      { label: 'Transporte',      color: '#29B6F6', icon: 'directions_car' },
     servicios:       { label: 'Servicios',       color: '#AB47BC', icon: 'receipt_long' },
@@ -18,6 +19,22 @@
     arriendo:        { label: 'Arriendo',        color: '#8D6E63', icon: 'real_estate_agent' },
     otros:           { label: 'Otros',           color: '#78909C', icon: 'payments' }
   };
+
+  const CUSTOM_COLORS = ['#F06292','#4DD0E1','#AED581','#FFB74D','#CE93D8','#80DEEA','#FFCC02','#A5D6A7'];
+
+  $: CAT = (() => {
+    const merged = { ...CAT_BASE };
+    categorias.forEach((cat, i) => {
+      if (!merged[cat.valor]) {
+        merged[cat.valor] = {
+          label: cat.label,
+          color: CUSTOM_COLORS[i % CUSTOM_COLORS.length],
+          icon: cat.icono || 'sell'
+        };
+      }
+    });
+    return merged;
+  })();
 
   const FILTERS: [string, string, string][] = [
     ['7d',  '7D',  '7 Días'],
