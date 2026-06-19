@@ -19,15 +19,21 @@
   let selectedCategoria = 'otros';
   let costoValue = 0;
 
-  // Autoselección de categoría y cuenta cuando se cargan los datos del evento
-  $: if (eventData) {
-    if (costoValue === 0 && eventData.costo !== undefined) {
-      costoValue = Number(eventData.costo);
-    }
-    
-    // Mapeo automático de categoría de evento a categoría de finanzas
+  // Aplica los valores por defecto una sola vez al cargar el evento.
+  // (No se usa un bloque reactivo para no sobreescribir lo que el usuario seleccione manualmente.)
+  function applyDefaults() {
+    if (!eventData) return;
+
+    costoValue = Number(eventData.costo || 0);
+
+    const cats: any[] = eventData.categorias || [];
     const evCat = eventData.categoria;
-    if (['moto', 'carro', 'aceite_moto', 'mecanica'].includes(evCat)) {
+
+    // 1. Si la categoría de la compra existe entre las categorías de finanzas, usarla tal cual.
+    if (evCat && cats.some(c => c.valor === evCat)) {
+      selectedCategoria = evCat;
+    // 2. Mapeo de categorías generales de calendario hacia finanzas.
+    } else if (['moto', 'carro', 'aceite_moto', 'mecanica'].includes(evCat)) {
       selectedCategoria = 'transporte';
     } else if (['servicios', 'casa', 'arriendo'].includes(evCat)) {
       selectedCategoria = 'servicios';
@@ -36,25 +42,21 @@
     } else if (['cita_amor', 'aniversario', 'matrimonio', 'mesiversario', 'cumpleanos'].includes(evCat)) {
       selectedCategoria = 'entretenimiento';
     } else {
-      selectedCategoria = 'otros';
+      selectedCategoria = cats.some(c => c.valor === 'otros') ? 'otros' : (cats[0]?.valor || 'otros');
     }
 
-    // Autoseleccionar la primera cuenta del usuario por defecto
-    if (eventData.cuentas && eventData.cuentas.length > 0 && !selectedCuentaId) {
-      selectedCuentaId = eventData.cuentas[0].id;
+    // Cuenta por defecto: priorizar ahorros/efectivo/corriente; la tarjeta de crédito queda de última.
+    const cuentas: any[] = eventData.cuentas || [];
+    if (cuentas.length > 0) {
+      const prioridad: Record<string, number> = {
+        ahorros: 1, efectivo: 2, corriente: 3, cdt: 4, otro: 5, tarjeta_credito: 99
+      };
+      const ordenadas = [...cuentas].sort(
+        (a, b) => (prioridad[a.tipo] ?? 50) - (prioridad[b.tipo] ?? 50)
+      );
+      selectedCuentaId = ordenadas[0].id;
     }
   }
-
-  const TRANSACTIONS_CATEGORIES = [
-    { value: 'comida', label: 'Comida', icon: 'restaurant' },
-    { value: 'transporte', label: 'Transporte', icon: 'directions_car' },
-    { value: 'servicios', label: 'Servicios/Facturas', icon: 'receipt_long' },
-    { value: 'entretenimiento', label: 'Entretenimiento/Ocio', icon: 'sports_esports' },
-    { value: 'salud', label: 'Salud/Bienestar', icon: 'medication' },
-    { value: 'educacion', label: 'Educación', icon: 'school' },
-    { value: 'ahorro', label: 'Ahorro/Inversión', icon: 'savings' },
-    { value: 'otros', label: 'Otros', icon: 'payments' }
-  ];
 
   onMount(async () => {
     if (!uuid) {
@@ -72,6 +74,7 @@
       const res = await fetch(`${API_BASE_URL}/api/public/events/confirmar/${uuid}`);
       if (res.ok) {
         eventData = await res.json();
+        applyDefaults();
       } else {
         const err = await res.json().catch(() => ({}));
         errorMsg = err.message || 'El evento no existe o el enlace es inválido';
@@ -402,8 +405,8 @@
                 <div class="form-group half-width">
                   <label for="categoriaSelect">Categoría de Gasto</label>
                   <select id="categoriaSelect" bind:value={selectedCategoria} class="finance-select">
-                    {#each TRANSACTIONS_CATEGORIES as cat}
-                      <option value={cat.value}>{cat.label}</option>
+                    {#each (eventData.categorias || []) as cat}
+                      <option value={cat.valor}>{cat.label}</option>
                     {/each}
                   </select>
                 </div>

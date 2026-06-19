@@ -567,9 +567,24 @@ server.get('/api/public/events/confirmar/:uuid', async (request: any, reply: any
             [eventData.user_id]
         );
 
+        // Ensure default categories exist and fetch all of the user's finance categories
+        const conn = await pool.getConnection();
+        let categorias: any[] = [];
+        try {
+            await ensureDefaultCategories(conn, eventData.user_id);
+            const [catRows]: any = await conn.execute(
+                'SELECT id, valor, label, icono FROM finanzas_categorias WHERE user_id = ? ORDER BY es_default DESC, label ASC',
+                [eventData.user_id]
+            );
+            categorias = catRows;
+        } finally {
+            conn.release();
+        }
+
         return reply.send({
             ...eventData,
-            cuentas: accounts
+            cuentas: accounts,
+            categorias
         });
     } catch (err) {
         server.log.error(err);
