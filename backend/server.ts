@@ -1239,8 +1239,8 @@ server.post('/api/finanzas/transacciones', { preValidation: [(server as any).aut
                             occurrenceDateStr = dateToStr(new Date(targetYear, nm, Math.min(diaCorte, lastDay)));
                         }
                     } else {
-                        // Without cut-off day: keep original behaviour (event per purchase-day each month)
-                        if (numCuotas === 1) break; // single purchase without dia_corte → no event
+                        // Without cut-off day: event at purchase-day of the following month(s).
+                        // 1 cuota → 1 evento el mes siguiente; N cuotas → un evento por mes.
                         const expectedMonth = baseDate.getMonth() + i;
                         const targetMonth = expectedMonth % 12;
                         const targetYear = baseDate.getFullYear() + Math.floor(expectedMonth / 12);
