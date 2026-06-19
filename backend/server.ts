@@ -1302,6 +1302,79 @@ server.delete('/api/finanzas/transacciones/:id', { preValidation: [(server as an
     }
 });
 
+server.put('/api/finanzas/transacciones/:id', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const userId = request.user.id;
+        const { id } = request.params;
+        const { tipo, monto, descripcion, fecha, categoria, cuenta_id } = request.body as any;
+
+        const [txRows]: any = await conn.execute(
+            'SELECT * FROM finanzas_transacciones WHERE id = ? AND user_id = ?',
+            [id, userId]
+        );
+        if (txRows.length === 0) {
+            await conn.rollback();
+            return reply.status(404).send({ message: 'Transacción no encontrada' });
+        }
+        const old = txRows[0];
+
+        // Revert old effect on old account
+        if (old.cuenta_id) {
+            const [oldAccRows]: any = await conn.execute('SELECT tipo FROM finanzas_cuentas WHERE id = ? AND user_id = ?', [old.cuenta_id, userId]);
+            const oldIsCC = oldAccRows.length > 0 && oldAccRows[0].tipo === 'tarjeta_credito';
+            if (old.tipo === 'ingreso') {
+                if (oldIsCC) {
+                    await conn.execute('UPDATE finanzas_cuentas SET saldo = saldo + ? WHERE id = ? AND user_id = ?', [old.monto, old.cuenta_id, userId]);
+                } else {
+                    await conn.execute('UPDATE finanzas_cuentas SET saldo = saldo - ? WHERE id = ? AND user_id = ?', [old.monto, old.cuenta_id, userId]);
+                }
+            } else {
+                if (oldIsCC) {
+                    await conn.execute('UPDATE finanzas_cuentas SET saldo = saldo - ? WHERE id = ? AND user_id = ?', [old.monto, old.cuenta_id, userId]);
+                } else {
+                    await conn.execute('UPDATE finanzas_cuentas SET saldo = saldo + ? WHERE id = ? AND user_id = ?', [old.monto, old.cuenta_id, userId]);
+                }
+            }
+        }
+
+        // Update transaction record
+        await conn.execute(
+            'UPDATE finanzas_transacciones SET tipo = ?, monto = ?, descripcion = ?, fecha = ?, categoria = ?, cuenta_id = ? WHERE id = ? AND user_id = ?',
+            [tipo, monto, descripcion, fecha, categoria || 'otros', cuenta_id || null, id, userId]
+        );
+
+        // Apply new effect on new account
+        if (cuenta_id) {
+            const [newAccRows]: any = await conn.execute('SELECT tipo FROM finanzas_cuentas WHERE id = ? AND user_id = ?', [cuenta_id, userId]);
+            const newIsCC = newAccRows.length > 0 && newAccRows[0].tipo === 'tarjeta_credito';
+            if (tipo === 'ingreso') {
+                if (newIsCC) {
+                    await conn.execute('UPDATE finanzas_cuentas SET saldo = saldo - ? WHERE id = ? AND user_id = ?', [monto, cuenta_id, userId]);
+                } else {
+                    await conn.execute('UPDATE finanzas_cuentas SET saldo = saldo + ? WHERE id = ? AND user_id = ?', [monto, cuenta_id, userId]);
+                }
+            } else {
+                if (newIsCC) {
+                    await conn.execute('UPDATE finanzas_cuentas SET saldo = saldo + ? WHERE id = ? AND user_id = ?', [monto, cuenta_id, userId]);
+                } else {
+                    await conn.execute('UPDATE finanzas_cuentas SET saldo = saldo - ? WHERE id = ? AND user_id = ?', [monto, cuenta_id, userId]);
+                }
+            }
+        }
+
+        await conn.commit();
+        return reply.send({ message: 'Transacción actualizada' });
+    } catch (err) {
+        await conn.rollback();
+        server.log.error(err);
+        return reply.status(500).send({ message: 'Error al actualizar transacción' });
+    } finally {
+        conn.release();
+    }
+});
+
 // 4. Verificación de ingresos planificados
 server.get('/api/finanzas/verificaciones', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
     try {

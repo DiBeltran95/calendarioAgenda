@@ -10,6 +10,7 @@
   const userName: string = user.nombre ? user.nombre.split(' ')[0] : 'Usuario';
 
   onMount(() => {
+    window.scrollTo(0, 0);
     setTimeout(() => (visible = true), 50);
   });
 

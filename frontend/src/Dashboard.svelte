@@ -559,8 +559,12 @@
   async function saveTransaction() {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/api/finanzas/transacciones`, {
-        method: 'POST',
+      const isEdit = transactionData.id !== null;
+      const url = isEdit
+        ? `${API_BASE_URL}/api/finanzas/transacciones/${transactionData.id}`
+        : `${API_BASE_URL}/api/finanzas/transacciones`;
+      const res = await fetch(url, {
+        method: isEdit ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -572,11 +576,25 @@
         showTransactionModal = false;
         await refreshDashboardNotesAndHabits();
       } else {
-        alert('Error al registrar la transacción');
+        alert(isEdit ? 'Error al actualizar la transacción' : 'Error al registrar la transacción');
       }
     } catch (err) {
       console.error(err);
     }
+  }
+
+  function editTransaction(tx: any) {
+    transactionData = {
+      id: tx.id,
+      cuenta_id: tx.cuenta_id || '',
+      tipo: tx.tipo,
+      monto: tx.monto,
+      descripcion: tx.descripcion,
+      fecha: toDateOnly(tx.fecha),
+      categoria: tx.categoria || 'otros',
+      cuotas: tx.cuotas || 1
+    };
+    showTransactionModal = true;
   }
 
   async function deleteTransaction(id) {
@@ -1233,6 +1251,7 @@
   }
 
   onMount(async () => {
+    window.scrollTo(0, 0);
     const token = localStorage.getItem('token');
     if (!token) {
       navigate('/login');
@@ -3461,18 +3480,21 @@
                         {#if selectedDayTransactions.length > 0}
                             <div style="display: flex; flex-direction: column; gap: 10px; max-height: 450px; overflow-y: auto;">
                                 {#each selectedDayTransactions as tx}
-                                    <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid {tx.tipo === 'ingreso' ? '#34E47E' : '#F44336'};">
+                                    <div
+                                        on:dblclick={() => editTransaction(tx)}
+                                        title="Doble click para editar"
+                                        style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid {tx.tipo === 'ingreso' ? '#34E47E' : '#F44336'}; cursor: pointer; user-select: none;">
                                         <div>
                                             <div style="font-weight: bold; font-size: 0.85rem; color: var(--text-primary);">{tx.descripcion}</div>
                                             <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">
-                                                📅 {toDateOnly(tx.fecha)} | Cuenta: {cuentasList.find(c => c.id === tx.cuenta_id)?.nombre || 'Ninguna'}
+                                                📅 {toDateOnly(tx.fecha)} | {cuentasList.find(c => c.id === tx.cuenta_id)?.nombre || 'Sin cuenta'} | {tx.categoria || 'otros'}
                                             </div>
                                         </div>
                                         <div style="display: flex; align-items: center; gap: 10px;">
                                             <span style="font-weight: bold; font-size: 0.88rem; color: {tx.tipo === 'ingreso' ? '#34E47E' : '#F44336'};">
                                                 {tx.tipo === 'ingreso' ? '+' : '-'}{formatPrice(tx.monto)}
                                             </span>
-                                            <button class="icon-btn" style="width:24px; height:24px;" on:click={() => deleteTransaction(tx.id)} title="Eliminar">
+                                            <button class="icon-btn" style="width:24px; height:24px;" on:click|stopPropagation={() => deleteTransaction(tx.id)} title="Eliminar">
                                                 <i class="material-icons" style="font-size: 16px; color: var(--danger);">delete</i>
                                             </button>
                                         </div>
@@ -3488,18 +3510,21 @@
                         {#if transaccionesList.length > 0}
                             <div style="display: flex; flex-direction: column; gap: 10px; max-height: 450px; overflow-y: auto;">
                                 {#each transaccionesList as tx}
-                                    <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid {tx.tipo === 'ingreso' ? '#34E47E' : '#F44336'};">
+                                    <div
+                                        on:dblclick={() => editTransaction(tx)}
+                                        title="Doble click para editar"
+                                        style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid {tx.tipo === 'ingreso' ? '#34E47E' : '#F44336'}; cursor: pointer; user-select: none;">
                                         <div>
                                             <div style="font-weight: bold; font-size: 0.85rem; color: var(--text-primary);">{tx.descripcion}</div>
                                             <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">
-                                                📅 {toDateOnly(tx.fecha)} | Cuenta: {cuentasList.find(c => c.id === tx.cuenta_id)?.nombre || 'Ninguna'}
+                                                📅 {toDateOnly(tx.fecha)} | {cuentasList.find(c => c.id === tx.cuenta_id)?.nombre || 'Sin cuenta'} | {tx.categoria || 'otros'}
                                             </div>
                                         </div>
                                         <div style="display: flex; align-items: center; gap: 10px;">
                                             <span style="font-weight: bold; font-size: 0.88rem; color: {tx.tipo === 'ingreso' ? '#34E47E' : '#F44336'};">
                                                 {tx.tipo === 'ingreso' ? '+' : '-'}{formatPrice(tx.monto)}
                                             </span>
-                                            <button class="icon-btn" style="width:24px; height:24px;" on:click={() => deleteTransaction(tx.id)} title="Eliminar">
+                                            <button class="icon-btn" style="width:24px; height:24px;" on:click|stopPropagation={() => deleteTransaction(tx.id)} title="Eliminar">
                                                 <i class="material-icons" style="font-size: 16px; color: var(--danger);">delete</i>
                                             </button>
                                         </div>
@@ -4453,7 +4478,7 @@
 <div class="modal active">
     <div class="modal-content modal-small">
         <div class="modal-header">
-            <h3>Registrar Gasto / Ingreso</h3>
+            <h3>{transactionData.id ? 'Editar Transacción' : 'Registrar Gasto / Ingreso'}</h3>
             <button class="modal-close" on:click={() => showTransactionModal = false}>
                 <i class="material-icons">close</i>
             </button>
@@ -4517,7 +4542,7 @@
             <div class="modal-actions" style="margin-top: 20px;">
                 <button type="button" class="btn btn-secondary" on:click={() => showTransactionModal = false}>Cancelar</button>
                 <button type="submit" class="btn btn-primary" style="background-color: #FFD700; color: #000;">
-                    <i class="material-icons">save</i> Registrar
+                    <i class="material-icons">save</i> {transactionData.id ? 'Guardar Cambios' : 'Registrar'}
                 </button>
             </div>
         </form>
