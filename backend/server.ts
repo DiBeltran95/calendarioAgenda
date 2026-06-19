@@ -995,12 +995,13 @@ server.get('/api/finanzas/cuentas', { preValidation: [(server as any).authentica
 server.post('/api/finanzas/cuentas', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
     try {
         const userId = request.user.id;
-        const { nombre, tipo, saldo, limite, interes_tasa, fecha_inicio, plazo_dias } = request.body;
+        const { nombre, tipo, saldo, limite, interes_tasa, fecha_inicio, plazo_dias, dia_corte } = request.body;
         if (!nombre || !tipo) {
             return reply.status(400).send({ message: 'Nombre y tipo son obligatorios' });
         }
+        const diaCorteVal = (tipo === 'tarjeta_credito' && dia_corte) ? Number(dia_corte) : null;
         const [result]: any = await pool.execute(
-            'INSERT INTO finanzas_cuentas (user_id, nombre, tipo, saldo, limite, interes_tasa, fecha_inicio, plazo_dias) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO finanzas_cuentas (user_id, nombre, tipo, saldo, limite, interes_tasa, fecha_inicio, plazo_dias, dia_corte) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 userId,
                 nombre,
@@ -1009,7 +1010,8 @@ server.post('/api/finanzas/cuentas', { preValidation: [(server as any).authentic
                 limite || 0.00,
                 interes_tasa !== undefined ? Number(interes_tasa) : 0.00,
                 fecha_inicio || null,
-                plazo_dias !== undefined ? Number(plazo_dias) : 0
+                plazo_dias !== undefined ? Number(plazo_dias) : 0,
+                diaCorteVal
             ]
         );
         return reply.status(201).send({ id: result.insertId, message: 'Cuenta creada exitosamente' });
@@ -1023,12 +1025,13 @@ server.put('/api/finanzas/cuentas/:id', { preValidation: [(server as any).authen
     try {
         const userId = request.user.id;
         const { id } = request.params;
-        const { nombre, tipo, saldo, limite, interes_tasa, fecha_inicio, plazo_dias } = request.body;
+        const { nombre, tipo, saldo, limite, interes_tasa, fecha_inicio, plazo_dias, dia_corte } = request.body;
         if (!nombre || !tipo) {
             return reply.status(400).send({ message: 'Nombre y tipo son obligatorios' });
         }
+        const diaCorteVal = (tipo === 'tarjeta_credito' && dia_corte) ? Number(dia_corte) : null;
         const [result]: any = await pool.execute(
-            'UPDATE finanzas_cuentas SET nombre = ?, tipo = ?, saldo = ?, limite = ?, interes_tasa = ?, fecha_inicio = ?, plazo_dias = ? WHERE id = ? AND user_id = ?',
+            'UPDATE finanzas_cuentas SET nombre = ?, tipo = ?, saldo = ?, limite = ?, interes_tasa = ?, fecha_inicio = ?, plazo_dias = ?, dia_corte = ? WHERE id = ? AND user_id = ?',
             [
                 nombre,
                 tipo,
@@ -1037,6 +1040,7 @@ server.put('/api/finanzas/cuentas/:id', { preValidation: [(server as any).authen
                 interes_tasa !== undefined ? Number(interes_tasa) : 0.00,
                 fecha_inicio || null,
                 plazo_dias !== undefined ? Number(plazo_dias) : 0,
+                diaCorteVal,
                 id,
                 userId
             ]
@@ -1144,9 +1148,10 @@ server.post('/api/finanzas/transacciones', { preValidation: [(server as any).aut
         const txId = txResult.insertId;
 
         if (cuenta_id) {
-            // Check account type
-            const [accRows]: any = await conn.execute('SELECT tipo FROM finanzas_cuentas WHERE id = ? AND user_id = ?', [cuenta_id, userId]);
+            // Check account type and billing cut-off day
+            const [accRows]: any = await conn.execute('SELECT tipo, dia_corte FROM finanzas_cuentas WHERE id = ? AND user_id = ?', [cuenta_id, userId]);
             const isCreditCard = accRows.length > 0 && accRows[0].tipo === 'tarjeta_credito';
+            const diaCorte: number | null = accRows.length > 0 ? accRows[0].dia_corte : null;
 
             if (tipo === 'ingreso') {
                 if (isCreditCard) {
@@ -1174,11 +1179,37 @@ server.post('/api/finanzas/transacciones', { preValidation: [(server as any).aut
                 }
             }
 
-            // Generate monthly calendar events if it's a gasto on a credit card and cuotas > 1
-            if (isCreditCard && tipo === 'gasto' && numCuotas > 1) {
+            // Helper: calculates the next cut-off date on or after a given date
+            function getNextCutoffDate(fromDate: Date, diaCorteDia: number): Date {
+                const y = fromDate.getFullYear();
+                const m = fromDate.getMonth();
+                const d = fromDate.getDate();
+                // Clamp dia_corte to last day of the month
+                const lastDaySameMonth = new Date(y, m + 1, 0).getDate();
+                const cutoffSameMonth = Math.min(diaCorteDia, lastDaySameMonth);
+                if (d <= cutoffSameMonth) {
+                    return new Date(y, m, cutoffSameMonth);
+                }
+                // Purchase day is past the cut-off; go to next month
+                const nextMonth = m + 1;
+                const nextYear = y + Math.floor(nextMonth / 12);
+                const nm = nextMonth % 12;
+                const lastDayNextMonth = new Date(nextYear, nm + 1, 0).getDate();
+                return new Date(nextYear, nm, Math.min(diaCorteDia, lastDayNextMonth));
+            }
+
+            function dateToStr(dt: Date): string {
+                const y = dt.getFullYear();
+                const m = String(dt.getMonth() + 1).padStart(2, '0');
+                const d = String(dt.getDate()).padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            }
+
+            // Generate calendar events for credit card gastos
+            if (isCreditCard && tipo === 'gasto') {
                 const baseDate = new Date(fecha + 'T00:00:00');
-                
-                // Calculate precise installment amounts
+
+                // Calculate installment amounts
                 const installmentBase = Number((Number(monto) / numCuotas).toFixed(2));
                 const installments: number[] = [];
                 let totalAllocated = 0;
@@ -1193,27 +1224,38 @@ server.post('/api/finanzas/transacciones', { preValidation: [(server as any).aut
                 }
 
                 for (let i = 1; i <= numCuotas; i++) {
-                    const occurrenceDate = new Date(baseDate);
-                    const expectedMonth = baseDate.getMonth() + i;
-                    const targetMonth = expectedMonth % 12;
-                    const targetYear = baseDate.getFullYear() + Math.floor(expectedMonth / 12);
-                    const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
-                    const targetDay = Math.min(baseDate.getDate(), lastDayOfTargetMonth);
-                    occurrenceDate.setFullYear(targetYear);
-                    occurrenceDate.setMonth(targetMonth);
-                    occurrenceDate.setDate(targetDay);
+                    let occurrenceDateStr: string;
 
-                    const y = occurrenceDate.getFullYear();
-                    const m = String(occurrenceDate.getMonth() + 1).padStart(2, '0');
-                    const d = String(occurrenceDate.getDate()).padStart(2, '0');
-                    const occurrenceDateStr = `${y}-${m}-${d}`;
+                    if (diaCorte) {
+                        // With cut-off day: first event goes to next cut-off, subsequent ones to following months' cut-offs
+                        const firstCutoff = getNextCutoffDate(baseDate, diaCorte);
+                        if (i === 1) {
+                            occurrenceDateStr = dateToStr(firstCutoff);
+                        } else {
+                            const targetMonth = firstCutoff.getMonth() + (i - 1);
+                            const targetYear = firstCutoff.getFullYear() + Math.floor(targetMonth / 12);
+                            const nm = targetMonth % 12;
+                            const lastDay = new Date(targetYear, nm + 1, 0).getDate();
+                            occurrenceDateStr = dateToStr(new Date(targetYear, nm, Math.min(diaCorte, lastDay)));
+                        }
+                    } else {
+                        // Without cut-off day: keep original behaviour (event per purchase-day each month)
+                        if (numCuotas === 1) break; // single purchase without dia_corte → no event
+                        const expectedMonth = baseDate.getMonth() + i;
+                        const targetMonth = expectedMonth % 12;
+                        const targetYear = baseDate.getFullYear() + Math.floor(expectedMonth / 12);
+                        const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+                        const targetDay = Math.min(baseDate.getDate(), lastDay);
+                        occurrenceDateStr = dateToStr(new Date(targetYear, targetMonth, targetDay));
+                    }
+
+                    const labelCuota = numCuotas > 1 ? `Cuota ${i}/${numCuotas}: ` : 'Cobro tarjeta: ';
                     const uuidConfirmacion = crypto.randomUUID();
-
                     await conn.execute(
                         'INSERT INTO eventos (user_id, titulo, fecha, hora, categoria, ubicacion, repeticion, frecuencia, costo, tipo_transaccion, estado_pago, uuid_confirmacion, parent_id, tarjeta_credito_id, transaccion_id) VALUES (?, ?, ?, "08:00:00", ?, "", "unica", "unica", ?, "gasto", "pendiente", ?, NULL, ?, ?)',
                         [
                             userId,
-                            `Cuota ${i}/${numCuotas}: ${descripcion}`,
+                            `${labelCuota}${descripcion}`,
                             occurrenceDateStr,
                             categoria || 'servicios',
                             installments[i - 1],
@@ -2008,6 +2050,16 @@ async function runMigrations() {
     } catch (err: any) {
         if (err.code !== 'ER_DUP_FIELDNAME') {
             server.log.error('Error adding transaccion_id column:', err);
+        }
+    }
+
+    // Fecha de corte para tarjetas de crédito
+    try {
+        await pool.execute('ALTER TABLE finanzas_cuentas ADD COLUMN dia_corte TINYINT NULL DEFAULT NULL');
+        server.log.info('Added dia_corte column to finanzas_cuentas table');
+    } catch (err: any) {
+        if (err.code !== 'ER_DUP_FIELDNAME') {
+            server.log.error('Error adding dia_corte column:', err);
         }
     }
 

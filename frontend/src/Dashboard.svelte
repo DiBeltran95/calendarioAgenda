@@ -58,7 +58,7 @@
   let showMetaModal = false;
   let showPresupuestoModal = false;
 
-  let accountData = { id: null, nombre: '', tipo: 'ahorros', saldo: 0, limite: 0, interes_tasa: 0, fecha_inicio: '', plazo_dias: 0 };
+  let accountData = { id: null, nombre: '', tipo: 'ahorros', saldo: 0, limite: 0, interes_tasa: 0, fecha_inicio: '', plazo_dias: 0, dia_corte: null as number | null };
   let plannedIncomeData = { id: null, cuenta_id: '', descripcion: '', monto: 0, frecuencia: 'mensual', fecha_inicio: '' };
   let transactionData = { id: null, cuenta_id: '', tipo: 'gasto', monto: 0, descripcion: '', fecha: '', categoria: 'otros', cuotas: 1 };
   let verifyIncomeData = { planId: null, descripcion: '', fecha_esperada: '', fecha_real: '', monto_real: 0, cuenta_id: '' };
@@ -376,7 +376,8 @@
         ...accountData,
         interes_tasa: accountData.tipo === 'cdt' ? Number(accountData.interes_tasa || 0) : 0,
         plazo_dias: accountData.tipo === 'cdt' ? (accountData.plazo_dias ? Number(accountData.plazo_dias) : 0) : 0,
-        fecha_inicio: accountData.tipo === 'cdt' ? (accountData.fecha_inicio || getTodayLocal()) : null
+        fecha_inicio: accountData.tipo === 'cdt' ? (accountData.fecha_inicio || getTodayLocal()) : null,
+        dia_corte: accountData.tipo === 'tarjeta_credito' && accountData.dia_corte ? Number(accountData.dia_corte) : null
       };
 
       const res = await fetch(url, {
@@ -428,7 +429,8 @@
       limite: Number(cuenta.limite || 0),
       interes_tasa: Number(cuenta.interes_tasa || 0),
       fecha_inicio: cuenta.fecha_inicio ? cuenta.fecha_inicio.substring(0, 10) : '',
-      plazo_dias: Number(cuenta.plazo_dias || 0)
+      plazo_dias: Number(cuenta.plazo_dias || 0),
+      dia_corte: cuenta.dia_corte ? Number(cuenta.dia_corte) : null
     };
     showAccountModal = true;
   }
@@ -2942,7 +2944,7 @@
 
                 {:else if activeFinanceTab === 'cuentas'}
                     <!-- 2. PESTAÑA MIS CUENTAS / TARJETAS -->
-                    <button type="button" class="btn btn-secondary w-full" on:click={() => { accountData = { id: null, nombre: '', tipo: 'ahorros', saldo: 0, limite: 0, interes_tasa: 0, fecha_inicio: getTodayLocal(), plazo_dias: 0 }; showAccountModal = true; }} style="margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid rgba(255, 215, 0, 0.3); background: rgba(255, 215, 0, 0.05); color: #FFD700;">
+                    <button type="button" class="btn btn-secondary w-full" on:click={() => { accountData = { id: null, nombre: '', tipo: 'ahorros', saldo: 0, limite: 0, interes_tasa: 0, fecha_inicio: getTodayLocal(), plazo_dias: 0, dia_corte: null }; showAccountModal = true; }} style="margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid rgba(255, 215, 0, 0.3); background: rgba(255, 215, 0, 0.05); color: #FFD700;">
                         <i class="material-icons" style="font-size: 18px;">add_card</i> Agregar Tarjeta / Cuenta
                     </button>
 
@@ -3004,12 +3006,18 @@
                                         {/if}
                                     </div>
 
-                                    <!-- 3. Cupo Límite si es Tarjeta de Crédito -->
+                                    <!-- 3. Cupo Límite y Día de Corte si es Tarjeta de Crédito -->
                                     {#if c.tipo === 'tarjeta_credito'}
                                         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; color: var(--text-secondary); padding: 0 4px;">
                                             <span>Cupo Límite Autorizado:</span>
                                             <span style="font-weight: 600; color: var(--text-primary);">{formatPrice(c.limite)}</span>
                                         </div>
+                                        {#if c.dia_corte}
+                                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; color: var(--text-secondary); padding: 0 4px; margin-top: 4px;">
+                                                <span style="display: flex; align-items: center; gap: 4px;"><i class="material-icons" style="font-size: 13px; color: #FFD700;">scissors</i> Día de Corte:</span>
+                                                <span style="font-weight: 600; color: #FFD700;">Día {c.dia_corte} de cada mes</span>
+                                            </div>
+                                        {/if}
                                     {/if}
 
                                     <!-- 4. Bloque de Métricas CDT (Ocupa el 100% del Ancho) -->
@@ -4385,6 +4393,25 @@
                 <div class="form-group">
                     <label for="accLimite">Límite de Crédito / Cupo ($)</label>
                     <CurrencyInput id="accLimite" bind:value={accountData.limite} />
+                </div>
+
+                <div class="form-group" style="margin-top: 12px;">
+                    <label for="accDiaCorte" style="display: flex; align-items: center; gap: 6px;">
+                        <i class="material-icons" style="font-size: 16px; color: #FFD700;">calendar_today</i>
+                        Día de Corte (Opcional)
+                    </label>
+                    <input
+                        type="number"
+                        id="accDiaCorte"
+                        bind:value={accountData.dia_corte}
+                        min="1" max="31"
+                        placeholder="Ej: 20  →  corte cada día 20 del mes"
+                        style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); margin-top: 5px;"
+                    >
+                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 6px; line-height: 1.45;">
+                        💡 <strong style="color: var(--text-primary);">¿Qué es el día de corte?</strong> Es el día del mes en que el banco cierra el período de facturación y genera tu extracto. Si compras <em>antes</em> de ese día, el cobro aparece en el extracto de este mes; si compras <em>después</em>, se va al extracto del mes siguiente.<br>
+                        Con este dato, cada compra en esta tarjeta generará un recordatorio automático en el calendario en la fecha exacta en que ese cobro aparecerá en tu extracto.
+                    </p>
                 </div>
             {/if}
 
