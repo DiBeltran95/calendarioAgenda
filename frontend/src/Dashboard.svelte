@@ -4,6 +4,7 @@
   import Calendar from './lib/components/Calendar.svelte';
   import CurrencyInput from './lib/components/CurrencyInput.svelte';
   import AdvancedAnalytics from './lib/components/AdvancedAnalytics.svelte';
+  import OnboardingFinanzas from './lib/components/OnboardingFinanzas.svelte';
   import { API_BASE_URL } from './lib/config';
   import { getTodayLocal, toDateOnly } from './lib/dateUtils';
   
@@ -16,6 +17,33 @@
   let isNotesMode = false;
   let isHabitsMode = false;
   let userName = '';
+  let userId: number | null = null;
+
+  // --- Onboarding de finanzas ---
+  let onboardingDismissed = false;
+  let onboardingAutoChecked = false;
+  $: onboardingComplete = cuentasList.length > 0 && ingresosPlanificadosList.length > 0 && presupuestosList.length > 0;
+  $: showOnboarding = isFinanceMode && !onboardingDismissed && userId !== null;
+
+  function dismissOnboarding() {
+    onboardingDismissed = true;
+    if (userId !== null) localStorage.setItem(`onboarding_fin_${userId}`, '1');
+  }
+
+  function onboardingGoAccounts() {
+    activeFinanceTab = 'cuentas';
+    accountData = { id: null, nombre: '', tipo: 'ahorros', saldo: 0, limite: 0, interes_tasa: 0, fecha_inicio: getTodayLocal(), plazo_dias: 0, dia_corte: null };
+    showAccountModal = true;
+  }
+  function onboardingGoIncome() {
+    activeFinanceTab = 'planificador';
+    plannedIncomeData = { id: null, cuenta_id: '', descripcion: '', monto: 0, frecuencia: 'mensual', fecha_inicio: getTodayLocal() };
+    showPlannedIncomeModal = true;
+  }
+  function onboardingGoBudget() {
+    activeFinanceTab = 'presupuesto';
+    showPresupuestoModal = true;
+  }
   
   let calendarComponent;
   let selectedDay = null;
@@ -214,6 +242,16 @@
       if (resMetas.ok) metasList = await resMetas.json();
       if (resPresupuestos.ok) presupuestosList = await resPresupuestos.json();
       await loadCategoriasFinanzas();
+
+      // Usuarios que ya tienen todo configurado no deberían ver la guía de onboarding.
+      if (!onboardingAutoChecked && userId !== null) {
+        onboardingAutoChecked = true;
+        const stored = localStorage.getItem(`onboarding_fin_${userId}`);
+        if (stored === null && onboardingComplete) {
+          onboardingDismissed = true;
+          localStorage.setItem(`onboarding_fin_${userId}`, '1');
+        }
+      }
     } catch (err) {
       console.error('Error al cargar datos financieros:', err);
     }
@@ -1260,8 +1298,12 @@
     }
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     userName = user.nombre || '';
+    userId = user.id ?? null;
     canSearch = user.id === 1 || user.email === 'di.beltran@udla.edu.co';
-    
+    if (userId !== null && localStorage.getItem(`onboarding_fin_${userId}`) === '1') {
+      onboardingDismissed = true;
+    }
+
     await refreshDashboardNotesAndHabits();
   });
 
@@ -2672,6 +2714,19 @@
                 <i class="material-icons" id="interactionHintIcon" style="color: #FFD700;">touch_app</i>
                 <span id="interactionHintText">Doble click en el calendario para registrar gasto/ingreso</span>
             </div>
+
+            {#if showOnboarding}
+                <OnboardingFinanzas
+                    cuentasCount={cuentasList.length}
+                    ingresosCount={ingresosPlanificadosList.length}
+                    presupuestosCount={presupuestosList.length}
+                    {userName}
+                    on:accounts={onboardingGoAccounts}
+                    on:income={onboardingGoIncome}
+                    on:budget={onboardingGoBudget}
+                    on:dismiss={dismissOnboarding}
+                />
+            {/if}
 
             <!-- Finance Sub-tabs -->
             <div class="finance-subtabs">
