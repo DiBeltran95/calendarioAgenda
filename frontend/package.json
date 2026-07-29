@@ -6,10 +6,19 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:web": "vite build",
+    "build:apk": "vite build --mode apk",
     "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json"
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
+    "apk": "npm run build:apk && npx cap sync android",
+    "cap:add:android": "npx cap add android",
+    "cap:open": "npx cap open android",
+    "test:cycle": "tsx src/lib/cycleUtils.test.ts",
+    "test:outbox": "tsx src/lib/outbox.test.ts",
+    "test": "npm run test:cycle && npm run test:outbox"
   },
   "devDependencies": {
+    "@capacitor/cli": "^6.1.2",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@tsconfig/svelte": "^5.0.8",
     "@types/node": "^24.12.3",
@@ -18,7 +27,16 @@
     "svelte": "^5.55.5",
     "svelte-check": "^4.4.8",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.23.1",
     "typescript": "~6.0.2",
     "vite": "^8.0.12"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/roboto": "^5.3.0",
+    "framer-motion": "^12.42.0",
+    "material-icons": "^1.13.14"
   }
 }

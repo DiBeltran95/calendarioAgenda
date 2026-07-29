@@ -187,6 +187,17 @@ body.theme-finance .history-item--current {
     font-weight: bold;
 }
 
+/* Periodo que se esperaba en una fecha ya pasada y no fue registrado. */
+.calendar-day.cycle-late-period {
+    background: rgba(255, 82, 82, 0.12);
+    border: 2px dashed #ff5252;
+}
+
+.calendar-day.cycle-late-period .day-number {
+    color: #ff5252;
+    font-weight: bold;
+}
+
 .calendar-day.cycle-fertile {
     background: rgba(255, 105, 180, 0.2);
     border: 2px dashed rgba(255, 105, 180, 0.8);
@@ -1191,3 +1202,48 @@ body.theme-habits .calendar-day.today.selected {
     from { opacity: 0; transform: translateX(20px); }
     to { opacity: 1; transform: translateX(0); }
 }
+
+/* ============================================
+   ESTADO DE CONEXIÓN (modo sin internet)
+   ============================================ */
+.net-banner {
+    position: sticky;
+    top: 0;
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    font-size: 0.82rem;
+    line-height: 1.35;
+    color: #fff;
+}
+
+.net-banner .material-icons {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.net-banner__text {
+    flex: 1;
+    min-width: 0;
+}
+
+.net-banner__btn {
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #fff;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+
+.net-banner__btn:hover {
+    background: rgba(255, 255, 255, 0.28);
+}
+
+.net-banner--offline { background: #546E7A; }
+.net-banner--sync    { background: #00695C; }
+.net-banner--error   { background: #B71C1C; }

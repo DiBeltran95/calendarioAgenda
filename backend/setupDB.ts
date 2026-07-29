@@ -53,8 +53,10 @@ async function setupDatabase() {
             user_id INT NOT NULL,
             fecha_inicio DATE NOT NULL,
             observacion TEXT,
+            dias_sangrado INT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
+            FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+            UNIQUE KEY unique_user_ciclo (user_id, fecha_inicio)
         );
 
         CREATE TABLE IF NOT EXISTS notas (
@@ -207,6 +209,12 @@ async function setupDatabase() {
             FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
             UNIQUE KEY unique_user_categoria (user_id, valor)
         );
+
+        -- Índices compuestos (user_id, fecha): aceleran las consultas por mes.
+        CREATE INDEX idx_eventos_user_fecha ON eventos (user_id, fecha);
+        CREATE INDEX idx_tx_user_fecha ON finanzas_transacciones (user_id, fecha);
+        CREATE INDEX idx_notas_user_fecha ON notas (user_id, fecha);
+        CREATE INDEX idx_habitoslog_user_fecha ON habitos_log (user_id, fecha);
     `;
 
     console.log('Executing schema...');

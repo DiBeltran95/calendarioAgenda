@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getCycleDetails } from '../cycleUtils';
+  import { getCycleDetails, buildCycleStats } from '../cycleUtils';
   import { API_BASE_URL } from '../config';
+  import { leer } from '../api';
+  import { claveAnio, leerCache, escribirCache } from '../storage';
   import { getTodayLocal, toDateOnly } from '../dateUtils';
 
   export let isFemaleMode = false;
@@ -12,19 +14,22 @@
   let currentDate = new Date();
   export let currentMonth = currentDate.getMonth();
   export let currentYear = currentDate.getFullYear();
-  let daysInMonth = [];
-  let blankDays = [];
+  let daysInMonth: any[] = [];
+  let blankDays: any[] = [];
 
-  let holidays = [];
-  let importantDays = [];
-  let cycleLogs = [];
-  let notes = [];
-  let habits = [];
-  let habitLogs = [];
-  export let events = [];
-  export let cumpleanos = [];
-  export let transacciones = [];
-  export let plannedOccurrences = [];
+  // Festivos y días importantes dependen del AÑO mostrado, así que el Calendar
+  // los sigue cargando él mismo (al montar y al cambiar de año). El resto de los
+  // datos llega por props desde el bootstrap del Dashboard (una sola petición).
+  let holidays: any[] = [];
+  let importantDays: any[] = [];
+  export let cycleLogs: any[] = [];
+  export let notes: any[] = [];
+  export let habits: any[] = [];
+  export let habitLogs: any[] = [];
+  export let events: any[] = [];
+  export let cumpleanos: any[] = [];
+  export let transacciones: any[] = [];
+  export let plannedOccurrences: any[] = [];
   export let selectedDateStr: string | null = null;
 
   const months = [
@@ -33,102 +38,42 @@
   ];
 
   async function loadHolidays(year: number) {
+    // 1) Mostramos al instante desde caché local (los festivos de un año no cambian).
+    const cacheKey = claveAnio('CO', 'holidays', year);
+    const cached = leerCache<any[]>(cacheKey);
+    if (cached) holidays = cached;
+
+    // 2) Refrescamos en segundo plano con timeout, para que la API externa
+    //    nunca pueda congelar la carga del calendario.
     try {
-      const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/CO`);
-      if (res.ok) holidays = await res.json();
-      else holidays = [];
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 5000);
+      const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/CO`, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (res.ok) {
+        holidays = await res.json();
+        escribirCache(cacheKey, holidays);
+      }
     } catch (err) {
+      // Si falla o expira, conservamos lo que haya en caché.
       console.error('Error fetching holidays', err);
     }
   }
 
   async function loadImportantDays(year: number) {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/api/important-days?year=${year}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) importantDays = await res.json();
-    } catch (err) {
-      console.error('Error fetching important days', err);
-    }
+    // Se cachean por año, igual que los festivos, para que el calendario esté
+    // completo sin conexión. No dependen del usuario (el backend los devuelve
+    // iguales para todos) ni cambian dentro de un mismo año.
+    const cacheKey = claveAnio('all', 'importantDays', year);
+    const cached = leerCache<any[]>(cacheKey);
+    if (cached) importantDays = cached;
+
+    const data = await leer<any[]>(`/api/important-days?year=${year}`);
+    if (data === null) return; // sin conexión: nos quedamos con lo cacheado
+    importantDays = data;
+    escribirCache(cacheKey, data);
   }
 
-  async function loadEvents() {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/api/events`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) events = await res.json();
-    } catch (err) {
-      console.error('Error fetching events', err);
-    }
-  }
-
-  async function loadCumpleanos() {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/api/cumpleanos`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) cumpleanos = await res.json();
-    } catch (err) {
-      console.error('Error fetching cumpleanos', err);
-    }
-  }
-
-  async function loadCycles() {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/api/cycles`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        cycleLogs = await res.json();
-      } else {
-        cycleLogs = [];
-      }
-    } catch (err) {
-      console.error('Error fetching cycles', err);
-    }
-  }
-
-  async function loadNotes() {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/api/notes`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) notes = await res.json();
-    } catch (err) {
-      console.error('Error fetching notes', err);
-    }
-  }
-
-  async function loadHabits() {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/api/habits`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) habits = await res.json();
-    } catch (err) {
-      console.error('Error fetching habits', err);
-    }
-  }
-
-  async function loadHabitLogs() {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/api/habits/logs`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) habitLogs = await res.json();
-    } catch (err) {
-      console.error('Error fetching habit logs', err);
-    }
-  }
 
   function getDaysInMonth(year: number, month: number) {
     return new Date(year, month + 1, 0).getDate();
@@ -141,7 +86,11 @@
   function renderCalendar() {
     const totalDays = getDaysInMonth(currentYear, currentMonth);
     const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
-    
+
+    // El promedio del ciclo se calcula una sola vez por render y se reutiliza en
+    // las ~42 celdas, en lugar de recalcularlo (y reordenar el histórico) en cada una.
+    const cycleStats = isFemaleMode && cycleLogs.length > 0 ? buildCycleStats(cycleLogs) : null;
+
     blankDays = Array(firstDay).fill(0);
     daysInMonth = Array.from({ length: totalDays }, (_, i) => {
       const day = i + 1;
@@ -169,8 +118,8 @@
 
       let cyclePhase = null;
       let cycleDetails = null;
-      if (isFemaleMode && cycleLogs.length > 0) {
-         cycleDetails = getCycleDetails(dateStr, cycleLogs);
+      if (cycleStats) {
+         cycleDetails = getCycleDetails(dateStr, cycleStats);
          cyclePhase = cycleDetails ? cycleDetails.phaseKey : null;
       }
 
@@ -240,45 +189,40 @@
     renderCalendar();
   }
 
-  // Se re-renderiza cuando el usuario cambia el modo o finanzas o notas o hábitos
-  $: if (isFemaleMode !== undefined || isFinanceMode !== undefined || isNotesMode !== undefined || isHabitsMode !== undefined) {
+  // Re-render reactivo e incremental: la grilla se redibuja en cuanto cambia
+  // el mes/modo o llega CUALQUIER conjunto de datos. Así los cumpleaños y
+  // eventos aparecen apenas responde el backend, sin esperar a la API de
+  // festivos (externa y lenta) ni a las demás peticiones.
+  $: {
+    holidays; importantDays; events; cumpleanos; cycleLogs; notes; habits; habitLogs;
+    transacciones; plannedOccurrences; currentMonth; currentYear;
+    isFemaleMode; isFinanceMode; isNotesMode; isHabitsMode; selectedDateStr;
     renderCalendar();
   }
 
+  // Recarga sólo lo que depende del año mostrado (festivos + días importantes).
+  // El resto de los datos los refresca el Dashboard vía bootstrap y llegan por props.
   export async function refreshData() {
     await Promise.all([
       loadHolidays(currentYear),
-      loadImportantDays(currentYear),
-      loadEvents(),
-      loadCumpleanos(),
-      loadCycles(),
-      loadNotes(),
-      loadHabits(),
-      loadHabitLogs()
+      loadImportantDays(currentYear)
     ]);
-    renderCalendar();
   }
 
-  onMount(async () => {
-    await Promise.all([
-      loadHolidays(currentYear),
-      loadImportantDays(currentYear),
-      loadEvents(),
-      loadCumpleanos(),
-      loadCycles(),
-      loadNotes(),
-      loadHabits(),
-      loadHabitLogs()
-    ]);
-    renderCalendar();
+  onMount(() => {
+    // Sólo festivos (cacheados) y días importantes del año actual. Los demás
+    // datos llegan por props desde el bootstrap del Dashboard. La grilla ya se
+    // pinta de inmediato y se completa de forma reactiva al llegar cada prop.
+    loadHolidays(currentYear);
+    loadImportantDays(currentYear);
   });
   import { createEventDispatcher } from 'svelte';
   const dispatch = createEventDispatcher();
 
   let lastClickTime = 0;
-  let lastClickedDate = null;
+  let lastClickedDate: string | null = null;
   
-  function handleRobustClick(dayData) {
+  function handleRobustClick(dayData: any) {
     const currentTime = new Date().getTime();
     const timeDiff = currentTime - lastClickTime;
     
@@ -337,6 +281,7 @@
                 {!isFemaleMode && !isFinanceMode && !isNotesMode && !isHabitsMode && dayData.dayEvents.length > 0 ? 'has-events' : ''}
                 {isFemaleMode && dayData.cyclePhase === 'period' ? 'cycle-period' : ''}
                 {isFemaleMode && dayData.cyclePhase === 'predicted-period' ? 'cycle-predicted-period' : ''}
+                {isFemaleMode && dayData.cyclePhase === 'late-period' ? 'cycle-late-period' : ''}
                 {isFemaleMode && dayData.cyclePhase === 'fertile' ? 'cycle-fertile' : ''}
                 {isFemaleMode && dayData.cyclePhase === 'ovulation' ? 'cycle-ovulation' : ''}
                 {isFinanceMode && dayData.hasFinance ? 'has-finance' : ''}
@@ -362,6 +307,8 @@
                 {#if isFemaleMode}
                     {#if dayData.cyclePhase === 'period'}
                         <div class="cycle-indicator" title="Menstruación">🩸</div>
+                    {:else if dayData.cyclePhase === 'late-period'}
+                        <div class="cycle-indicator" title="Periodo con retraso">⏳</div>
                     {:else if dayData.cyclePhase === 'predicted-period'}
                         <div class="cycle-indicator" title="Periodo Previsto" style="opacity: 0.5;">🩸</div>
                     {:else if dayData.cyclePhase === 'fertile'}

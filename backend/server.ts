@@ -8,6 +8,7 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { generateExcelReport } from './lib/excelService';
+import { validarFechaCiclo, validarDiasSangrado, normalizarDiasSangrado } from './lib/cycleValidation';
 
 dotenv.config();
 
@@ -310,6 +311,126 @@ server.get('/api/events', { preValidation: [(server as any).authenticate] }, asy
     } catch (err) {
         server.log.error(err);
         return reply.status(500).send({ message: 'Error al obtener eventos' });
+    }
+});
+
+// Calcula el rango [inicio, inicioSiguienteMes) de un mes dado (mes: 1-12).
+function monthBounds(mes: number, anio: number) {
+    const start = `${anio}-${String(mes).padStart(2, '0')}-01`;
+    const ny = mes === 12 ? anio + 1 : anio;
+    const nm = mes === 12 ? 1 : mes + 1;
+    const nextStart = `${ny}-${String(nm).padStart(2, '0')}-01`;
+    return { start, nextStart };
+}
+
+// --- BOOTSTRAP (GLOBAL): datos acotados que NO dependen del mes ---
+// Se llama una sola vez por sesión. Volumen pequeño y estable por usuario.
+server.get('/api/dashboard/bootstrap', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
+    const conn = await pool.getConnection();
+    try {
+        const userId = request.user.id;
+
+        // Asegura categorías por defecto antes de consultarlas
+        await ensureDefaultCategories(conn, userId);
+
+        const [
+            [cumpleanos],
+            [cycles],
+            [habits],
+            [cuentas],
+            [ingresosPlanificados],
+            [verificaciones],
+            [metas],
+            [categorias],
+            [usadasTx],
+            [usadasPres]
+        ]: any = await Promise.all([
+            conn.execute('SELECT * FROM cumpleanos WHERE user_id = ? ORDER BY fecha ASC', [userId]),
+            conn.execute('SELECT * FROM ciclos_menstruales WHERE user_id = ? ORDER BY fecha_inicio DESC', [userId]),
+            conn.execute('SELECT * FROM habitos WHERE user_id = ? AND activo = true ORDER BY created_at ASC', [userId]),
+            conn.execute('SELECT * FROM finanzas_cuentas WHERE user_id = ? ORDER BY nombre ASC', [userId]),
+            conn.execute('SELECT * FROM finanzas_ingresos_planificados WHERE user_id = ? ORDER BY fecha_inicio ASC', [userId]),
+            conn.execute('SELECT * FROM finanzas_ingresos_verificados WHERE user_id = ?', [userId]),
+            conn.execute('SELECT * FROM finanzas_metas WHERE user_id = ? ORDER BY completada ASC, created_at DESC', [userId]),
+            conn.execute('SELECT id, valor, label, icono, es_default FROM finanzas_categorias WHERE user_id = ? ORDER BY es_default DESC, label ASC', [userId]),
+            conn.execute('SELECT DISTINCT categoria FROM finanzas_transacciones WHERE user_id = ? AND categoria IS NOT NULL', [userId]),
+            conn.execute('SELECT DISTINCT categoria FROM finanzas_presupuestos WHERE user_id = ? AND categoria IS NOT NULL', [userId])
+        ]);
+
+        // Conjunto de categorías en uso (para bloquear su borrado en la UI),
+        // calculado en servidor sin traer todo el histórico de transacciones.
+        const categoriasUsadas = Array.from(new Set([
+            ...usadasTx.map((r: any) => r.categoria),
+            ...usadasPres.map((r: any) => r.categoria)
+        ]));
+
+        return reply.send({
+            cumpleanos, cycles, habits, categoriasUsadas,
+            finanzas: { cuentas, ingresosPlanificados, verificaciones, metas, categorias }
+        });
+    } catch (err) {
+        server.log.error(err);
+        return reply.status(500).send({ message: 'Error al cargar los datos del dashboard' });
+    } finally {
+        conn.release();
+    }
+});
+
+// --- MONTH: datos de alto volumen, acotados a un solo mes ---
+// Se llama al cargar y cada vez que el usuario cambia de mes en el calendario.
+server.get('/api/dashboard/month', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
+    const conn = await pool.getConnection();
+    try {
+        const userId = request.user.id;
+        const q = request.query as any;
+        const now = new Date();
+        const mes = q.mes !== undefined ? Number(q.mes) : now.getMonth() + 1;
+        const anio = q.anio !== undefined ? Number(q.anio) : now.getFullYear();
+        const { start, nextStart } = monthBounds(mes, anio);
+
+        const [
+            [events],
+            [transacciones],
+            [notes],
+            [habitLogs],
+            [presupuestos],
+            [transferencias]
+        ]: any = await Promise.all([
+            conn.execute('SELECT * FROM eventos WHERE user_id = ? AND fecha >= ? AND fecha < ? ORDER BY fecha ASC, hora ASC', [userId, start, nextStart]),
+            conn.execute('SELECT * FROM finanzas_transacciones WHERE user_id = ? AND fecha >= ? AND fecha < ? ORDER BY fecha DESC, id DESC', [userId, start, nextStart]),
+            conn.execute('SELECT * FROM notas WHERE user_id = ? AND fecha >= ? AND fecha < ? ORDER BY fecha DESC, created_at DESC', [userId, start, nextStart]),
+            conn.execute('SELECT * FROM habitos_log WHERE user_id = ? AND fecha >= ? AND fecha < ? ORDER BY fecha DESC', [userId, start, nextStart]),
+            conn.execute('SELECT * FROM finanzas_presupuestos WHERE user_id = ? AND mes = ? AND anio = ? ORDER BY categoria ASC', [userId, mes, anio]),
+            conn.execute('SELECT * FROM finanzas_transferencias WHERE user_id = ? AND fecha >= ? AND fecha < ? ORDER BY fecha DESC, id DESC', [userId, start, nextStart])
+        ]);
+
+        return reply.send({ events, transacciones, notes, habitLogs, presupuestos, transferencias });
+    } catch (err) {
+        server.log.error(err);
+        return reply.status(500).send({ message: 'Error al cargar el mes' });
+    } finally {
+        conn.release();
+    }
+});
+
+// --- ANALYTICS: transacciones de un rango para las gráficas (carga perezosa) ---
+// Devuelve sólo los campos que usan las gráficas para minimizar el payload.
+server.get('/api/finanzas/analytics', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
+    try {
+        const userId = request.user.id;
+        const q = request.query as any;
+        let dias = q.dias !== undefined ? Math.floor(Number(q.dias)) : 30;
+        if (!Number.isFinite(dias) || dias < 1) dias = 30;
+        if (dias > 366) dias = 366; // tope de 1 año (entero saneado, seguro de interpolar)
+
+        const [rows]: any = await pool.execute(
+            `SELECT DATE_FORMAT(fecha, "%Y-%m-%d") as fecha, tipo, monto, categoria FROM finanzas_transacciones WHERE user_id = ? AND fecha >= DATE_SUB(CURDATE(), INTERVAL ${dias} DAY) ORDER BY fecha ASC`,
+            [userId]
+        );
+        return reply.send({ transacciones: rows });
+    } catch (err) {
+        server.log.error(err);
+        return reply.status(500).send({ message: 'Error al cargar analíticas' });
     }
 });
 
@@ -713,15 +834,91 @@ server.get('/api/cycles', { preValidation: [(server as any).authenticate] }, asy
 server.post('/api/cycles', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
     try {
         const userId = request.user.id;
-        const { fecha_inicio, observacion } = request.body;
-        const [result]: any = await pool.execute(
-            'INSERT INTO ciclos_menstruales (user_id, fecha_inicio, observacion) VALUES (?, ?, ?)',
-            [userId, fecha_inicio, observacion || '']
+        const { fecha_inicio, observacion, dias_sangrado } = request.body || {};
+
+        const error = validarFechaCiclo(fecha_inicio) || validarDiasSangrado(dias_sangrado);
+        if (error) return reply.status(400).send({ message: error });
+
+        const [dup]: any = await pool.execute(
+            'SELECT id FROM ciclos_menstruales WHERE user_id = ? AND fecha_inicio = ?',
+            [userId, fecha_inicio]
         );
-        return reply.send({ id: result.insertId, message: 'Ciclo registrado' });
-    } catch (err) {
+        if (dup.length > 0) {
+            return reply.status(409).send({ message: 'Ya tienes un ciclo registrado en esa fecha', id: dup[0].id });
+        }
+
+        const [result]: any = await pool.execute(
+            'INSERT INTO ciclos_menstruales (user_id, fecha_inicio, observacion, dias_sangrado) VALUES (?, ?, ?, ?)',
+            [userId, fecha_inicio, observacion || '', normalizarDiasSangrado(dias_sangrado)]
+        );
+
+        // Aviso no bloqueante: dos inicios muy seguidos suelen ser un registro
+        // por error, y el usuario debería poder corregirlo antes de confiar en
+        // la predicción. No impedimos guardarlo porque también puede ser real.
+        const [vecino]: any = await pool.execute(
+            'SELECT DATEDIFF(?, fecha_inicio) AS dias FROM ciclos_menstruales WHERE user_id = ? AND fecha_inicio < ? ORDER BY fecha_inicio DESC LIMIT 1',
+            [fecha_inicio, userId, fecha_inicio]
+        );
+        const advertencia = vecino.length > 0 && vecino[0].dias < 10
+            ? `El ciclo anterior empezó hace solo ${vecino[0].dias} día(s). Si fue un registro por error, puedes eliminarlo desde el historial.`
+            : null;
+
+        return reply.send({ id: result.insertId, message: 'Ciclo registrado', advertencia });
+    } catch (err: any) {
+        if (err.code === 'ER_DUP_ENTRY') {
+            return reply.status(409).send({ message: 'Ya tienes un ciclo registrado en esa fecha' });
+        }
         server.log.error(err);
         return reply.status(500).send({ message: 'Error al registrar ciclo' });
+    }
+});
+
+server.put('/api/cycles/:id', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
+    try {
+        const userId = request.user.id;
+        const { id } = request.params;
+        const { fecha_inicio, observacion, dias_sangrado } = request.body || {};
+
+        const error = validarFechaCiclo(fecha_inicio) || validarDiasSangrado(dias_sangrado);
+        if (error) return reply.status(400).send({ message: error });
+
+        const [dup]: any = await pool.execute(
+            'SELECT id FROM ciclos_menstruales WHERE user_id = ? AND fecha_inicio = ? AND id <> ?',
+            [userId, fecha_inicio, id]
+        );
+        if (dup.length > 0) {
+            return reply.status(409).send({ message: 'Ya tienes otro ciclo registrado en esa fecha' });
+        }
+
+        const [result]: any = await pool.execute(
+            'UPDATE ciclos_menstruales SET fecha_inicio = ?, observacion = ?, dias_sangrado = ? WHERE id = ? AND user_id = ?',
+            [fecha_inicio, observacion || '', normalizarDiasSangrado(dias_sangrado), id, userId]
+        );
+        if (result.affectedRows === 0) {
+            return reply.status(404).send({ message: 'Ciclo no encontrado' });
+        }
+        return reply.send({ message: 'Ciclo actualizado' });
+    } catch (err) {
+        server.log.error(err);
+        return reply.status(500).send({ message: 'Error al actualizar el ciclo' });
+    }
+});
+
+server.delete('/api/cycles/:id', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
+    try {
+        const userId = request.user.id;
+        const { id } = request.params;
+        const [result]: any = await pool.execute(
+            'DELETE FROM ciclos_menstruales WHERE id = ? AND user_id = ?',
+            [id, userId]
+        );
+        if (result.affectedRows === 0) {
+            return reply.status(404).send({ message: 'Ciclo no encontrado' });
+        }
+        return reply.send({ message: 'Ciclo eliminado' });
+    } catch (err) {
+        server.log.error(err);
+        return reply.status(500).send({ message: 'Error al eliminar el ciclo' });
     }
 });
 
@@ -1432,6 +1629,106 @@ server.put('/api/finanzas/transacciones/:id', { preValidation: [(server as any).
     }
 });
 
+// --- TRANSFERENCIAS ENTRE CUENTAS ---
+server.post('/api/finanzas/transferencias', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const userId = request.user.id;
+        const { cuenta_origen_id, cuenta_destino_id, monto, descripcion, fecha } = request.body as any;
+
+        if (!cuenta_origen_id || !cuenta_destino_id || !monto || !fecha) {
+            await conn.rollback();
+            return reply.status(400).send({ message: 'Campos requeridos: origen, destino, monto, fecha' });
+        }
+        if (cuenta_origen_id === cuenta_destino_id) {
+            await conn.rollback();
+            return reply.status(400).send({ message: 'Las cuentas de origen y destino deben ser diferentes' });
+        }
+
+        const montoNum = Number(monto);
+        if (isNaN(montoNum) || montoNum <= 0) {
+            await conn.rollback();
+            return reply.status(400).send({ message: 'El monto debe ser mayor a 0' });
+        }
+
+        // Obtener tipo de ambas cuentas para ajustar saldos correctamente
+        const [[origenRows], [destinoRows]]: any = await Promise.all([
+            conn.execute('SELECT tipo FROM finanzas_cuentas WHERE id = ? AND user_id = ?', [cuenta_origen_id, userId]),
+            conn.execute('SELECT tipo FROM finanzas_cuentas WHERE id = ? AND user_id = ?', [cuenta_destino_id, userId])
+        ]);
+        if (!origenRows.length || !destinoRows.length) {
+            await conn.rollback();
+            return reply.status(404).send({ message: 'Cuenta no encontrada' });
+        }
+
+        const tipoOrigen = origenRows[0].tipo;
+        const tipoDestino = destinoRows[0].tipo;
+
+        // Cuenta de crédito: saldo = deuda. Retirar de crédito aumenta deuda; recibir en crédito la reduce.
+        const origenDelta = tipoOrigen === 'tarjeta_credito' ? montoNum : -montoNum;
+        const destinoDelta = tipoDestino === 'tarjeta_credito' ? -montoNum : montoNum;
+
+        const [result]: any = await conn.execute(
+            'INSERT INTO finanzas_transferencias (user_id, cuenta_origen_id, cuenta_destino_id, monto, descripcion, fecha) VALUES (?, ?, ?, ?, ?, ?)',
+            [userId, cuenta_origen_id, cuenta_destino_id, montoNum, descripcion || '', fecha]
+        );
+
+        await Promise.all([
+            conn.execute('UPDATE finanzas_cuentas SET saldo = saldo + ? WHERE id = ? AND user_id = ?', [origenDelta, cuenta_origen_id, userId]),
+            conn.execute('UPDATE finanzas_cuentas SET saldo = saldo + ? WHERE id = ? AND user_id = ?', [destinoDelta, cuenta_destino_id, userId])
+        ]);
+
+        await conn.commit();
+        return reply.send({ id: result.insertId, message: 'Transferencia registrada' });
+    } catch (err) {
+        await conn.rollback();
+        server.log.error(err);
+        return reply.status(500).send({ message: 'Error al registrar transferencia' });
+    } finally {
+        conn.release();
+    }
+});
+
+server.delete('/api/finanzas/transferencias/:id', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const userId = request.user.id;
+        const { id } = request.params as any;
+
+        const [rows]: any = await conn.execute(
+            'SELECT ft.*, co.tipo AS tipo_origen, cd.tipo AS tipo_destino FROM finanzas_transferencias ft JOIN finanzas_cuentas co ON co.id = ft.cuenta_origen_id JOIN finanzas_cuentas cd ON cd.id = ft.cuenta_destino_id WHERE ft.id = ? AND ft.user_id = ?',
+            [id, userId]
+        );
+        if (!rows.length) {
+            await conn.rollback();
+            return reply.status(404).send({ message: 'Transferencia no encontrada' });
+        }
+
+        const t = rows[0];
+        const montoNum = Number(t.monto);
+        // Revertir: lo contrario de lo que se aplicó
+        const origenRevert = t.tipo_origen === 'tarjeta_credito' ? -montoNum : montoNum;
+        const destinoRevert = t.tipo_destino === 'tarjeta_credito' ? montoNum : -montoNum;
+
+        await conn.execute('DELETE FROM finanzas_transferencias WHERE id = ? AND user_id = ?', [id, userId]);
+        await Promise.all([
+            conn.execute('UPDATE finanzas_cuentas SET saldo = saldo + ? WHERE id = ? AND user_id = ?', [origenRevert, t.cuenta_origen_id, userId]),
+            conn.execute('UPDATE finanzas_cuentas SET saldo = saldo + ? WHERE id = ? AND user_id = ?', [destinoRevert, t.cuenta_destino_id, userId])
+        ]);
+
+        await conn.commit();
+        return reply.send({ message: 'Transferencia eliminada y saldos revertidos' });
+    } catch (err) {
+        await conn.rollback();
+        server.log.error(err);
+        return reply.status(500).send({ message: 'Error al eliminar transferencia' });
+    } finally {
+        conn.release();
+    }
+});
+
 // 4. Verificación de ingresos planificados
 server.get('/api/finanzas/verificaciones', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
     try {
@@ -2097,6 +2394,74 @@ async function runMigrations() {
     } catch (err: any) {
         server.log.error('Error creating finanzas_categorias table:', err);
     }
+
+    // Días de sangrado por ciclo. NULL = sin especificar: el cálculo cae al
+    // promedio de la usuaria (o a 5 días si aún no hay datos).
+    try {
+        await pool.execute('ALTER TABLE ciclos_menstruales ADD COLUMN dias_sangrado INT NULL');
+        server.log.info('[Ciclos] Añadida columna dias_sangrado');
+    } catch (err: any) {
+        if (err.code !== 'ER_DUP_FIELDNAME') {
+            server.log.error('[Ciclos] Error añadiendo dias_sangrado:', err);
+        }
+    }
+
+    // Un mismo día no puede ser el inicio de dos ciclos: los duplicados producen
+    // una duración de ciclo de 0 días y rompen el cálculo de fases. Se limpian
+    // los que ya existan (conservando el más antiguo) antes de crear la clave.
+    try {
+        const [dups]: any = await pool.query(
+            `SELECT c.id FROM ciclos_menstruales c
+             JOIN (
+                SELECT user_id, fecha_inicio, MIN(id) AS keep_id
+                FROM ciclos_menstruales
+                GROUP BY user_id, fecha_inicio
+                HAVING COUNT(*) > 1
+             ) d ON c.user_id = d.user_id AND c.fecha_inicio = d.fecha_inicio
+             WHERE c.id <> d.keep_id`
+        );
+        if (dups.length > 0) {
+            const ids = dups.map((r: any) => r.id);
+            await pool.query('DELETE FROM ciclos_menstruales WHERE id IN (?)', [ids]);
+            server.log.info(`[Ciclos] Eliminados ${ids.length} registros duplicados`);
+        }
+        const [uk]: any = await pool.query(
+            "SELECT COUNT(*) AS cnt FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'ciclos_menstruales' AND index_name = 'unique_user_ciclo'"
+        );
+        if (uk[0].cnt === 0) {
+            await pool.query('ALTER TABLE ciclos_menstruales ADD UNIQUE KEY unique_user_ciclo (user_id, fecha_inicio)');
+            server.log.info('[Ciclos] Creada clave única (user_id, fecha_inicio)');
+        }
+    } catch (err: any) {
+        server.log.error('[Ciclos] Error asegurando unicidad de fecha_inicio:', err);
+    }
+
+    // Índices compuestos (user_id, fecha) para que las consultas por mes sean
+    // casi instantáneas aun con mucho histórico. Se crean sólo si no existen.
+    await ensureIndexes();
+}
+
+// Crea un índice sólo si no existe (MySQL no soporta CREATE INDEX IF NOT EXISTS).
+async function ensureIndex(table: string, indexName: string, columns: string) {
+    try {
+        const [rows]: any = await pool.query(
+            'SELECT COUNT(*) AS cnt FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?',
+            [table, indexName]
+        );
+        if (rows[0].cnt === 0) {
+            await pool.query(`CREATE INDEX ${indexName} ON ${table} (${columns})`);
+            server.log.info(`[Index] Creado ${indexName} en ${table} (${columns})`);
+        }
+    } catch (err: any) {
+        server.log.error(`[Index] Error asegurando ${indexName} en ${table}:`, err);
+    }
+}
+
+async function ensureIndexes() {
+    await ensureIndex('eventos', 'idx_eventos_user_fecha', 'user_id, fecha');
+    await ensureIndex('finanzas_transacciones', 'idx_tx_user_fecha', 'user_id, fecha');
+    await ensureIndex('notas', 'idx_notas_user_fecha', 'user_id, fecha');
+    await ensureIndex('habitos_log', 'idx_habitoslog_user_fecha', 'user_id, fecha');
 }
 
 const start = async () => {

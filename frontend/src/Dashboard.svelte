@@ -1,12 +1,19 @@
 <script lang="ts">
   import { navigate } from './lib/router';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import Calendar from './lib/components/Calendar.svelte';
   import CurrencyInput from './lib/components/CurrencyInput.svelte';
   import AdvancedAnalytics from './lib/components/AdvancedAnalytics.svelte';
   import OnboardingFinanzas from './lib/components/OnboardingFinanzas.svelte';
+  import CoachMark from './lib/components/CoachMark.svelte';
   import { API_BASE_URL } from './lib/config';
   import { getTodayLocal, toDateOnly } from './lib/dateUtils';
+  import { getCycleHistory, buildCycleStats, MIN_SANGRADO, MAX_SANGRADO } from './lib/cycleUtils';
+  import { get } from 'svelte/store';
+  import { leer, ErrorDeRed } from './lib/api';
+  import { isOnline, iniciarMonitorDeRed, comprobarConexion } from './lib/net';
+  import { pendientes, sincronizar, descartadas, limpiarDescartadas, sincronizando } from './lib/outbox';
+  import { claveGlobal, claveMes, leerCache, escribirCache } from './lib/storage';
   
   import './assets/css/styles.css';
   import './assets/css/calendar.css';
@@ -40,15 +47,60 @@
     plannedIncomeData = { id: null, cuenta_id: '', descripcion: '', monto: 0, frecuencia: 'mensual', fecha_inicio: getTodayLocal() };
     showPlannedIncomeModal = true;
   }
-  function onboardingGoBudget() {
+  async function onboardingGoBudget() {
     activeFinanceTab = 'presupuesto';
-    showPresupuestoModal = true;
+    await tick();
+    setTimeout(() => {
+      coach = {
+        key: 'budget',
+        target: '.budget-grid',
+        icon: 'pie_chart',
+        title: 'Define tus presupuestos',
+        description: 'Cada tarjeta es una categoría de gasto. Haz doble clic en la categoría que quieras para asignarle un límite mensual y controlar cuánto gastas. Verás una barra que se llena a medida que registras gastos.',
+        cta: 'Entendido',
+        cta2: 'Crear ahora'
+      };
+    }, 120);
   }
-  
-  let calendarComponent;
-  let selectedDay = null;
+
+  // --- Coach marks (tour interactivo) ---
+  let coach: any = null;
+
+  function maybeStartFinanceTour() {
+    if (userId === null) return;
+    if (localStorage.getItem(`fin_coach_cal_${userId}`) === '1') return;
+    setTimeout(() => {
+      if (!isFinanceMode || coach) return;
+      coach = {
+        key: 'calendar',
+        target: '.calendar-container',
+        icon: 'touch_app',
+        title: 'Registra un pago en segundos',
+        description: 'Haz doble clic (o doble toque en el móvil) sobre cualquier día del calendario para registrar un gasto o ingreso en esa fecha.',
+        cta: '¡Entendido!'
+      };
+    }, 650);
+  }
+
+  function closeCoach() {
+    if (coach && coach.key === 'calendar' && userId !== null) {
+      localStorage.setItem(`fin_coach_cal_${userId}`, '1');
+    }
+    coach = null;
+  }
+
+  function coachAction() {
+    const key = coach && coach.key;
+    if (key === 'budget') showPresupuestoModal = true;
+    closeCoach();
+  }
+
+  let calendarComponent: any;
+  let selectedDay: any = null;
   let showEventModal = false;
   let showPeriodModal = false;
+  let periodFecha = '';
+  let periodSaving = false;
   let showSearchBar = false;
   let canSearch = false;
   let searchQuery = '';
@@ -66,6 +118,10 @@
   let notesList = [];
   let habitsList = [];
   let habitLogsList = [];
+  // Datos que antes cargaba el Calendar por su cuenta; ahora vienen del bootstrap
+  // y se le pasan por props (evita peticiones duplicadas).
+  let cumpleanosList = [];
+  let cyclesList: any[] = [];
 
   let noteData = { id: null, contenido: '', etiqueta: 'personal', color: '#4FC3F7' };
   let habitData = { id: null, nombre: '', icono: 'check_circle', color: '#4CAF50', frecuencia: 'diario', meta_diaria: 1 };
@@ -82,6 +138,9 @@
   let showAccountModal = false;
   let showPlannedIncomeModal = false;
   let showTransactionModal = false;
+  let showTransferModal = false;
+  let transferenciasMonthList: any[] = [];
+  let transferData = { cuenta_origen_id: '', cuenta_destino_id: '', monto: 0, descripcion: '', fecha: '' };
   let showVerifyIncomeModal = false;
   let showMetaModal = false;
   let showPresupuestoModal = false;
@@ -149,18 +208,25 @@
     { value: 'celebration',        label: 'Celebración' },
   ];
 
-  // Categorías actualmente en uso (transacciones o presupuestos), para bloquear su borrado
+  // Categorías en uso a nivel global (calculado en servidor), más las del mes
+  // visible, para bloquear su borrado en la UI sin cargar todo el histórico.
+  let categoriasUsadasSet = new Set<string>();
   $: categoriasEnUso = (() => {
-    const usados = new Set<string>();
+    const usados = new Set<string>(categoriasUsadasSet);
     for (const t of transaccionesList) if (t.categoria) usados.add(t.categoria);
     for (const p of presupuestosList) if (p.categoria) usados.add(p.categoria);
     return usados;
   })();
 
   // Enlace de datos del calendario
-  let dashboardEvents = [];
+  let dashboardEvents: any[] = [];
   let currentMonth;
   let currentYear;
+  // Control de carga por mes (evita refetch del mismo mes)
+  let bootstrapped = false;
+  let loadedMonthKey = '';
+  const MESES_NOMBRE = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  $: mesNombre = (currentMonth !== undefined && currentMonth !== null) ? `${MESES_NOMBRE[currentMonth]} ${currentYear}` : '';
 
   let eventData = { 
     id: null,
@@ -178,83 +244,121 @@
     mensaje: '',
     telefono: ''
   };
-  let periodData = { observacion: '' };
+  let periodData: { id: number | null; observacion: string; dias_sangrado: number | string } = { id: null, observacion: '', dias_sangrado: '' };
+
+  // Histórico de ciclos con la duración de cada uno, para el panel de gestión.
+  $: cycleHistory = getCycleHistory(cyclesList);
+  // Días de sangrado promedio: precarga el campo del modal en ciclos nuevos.
+  $: cycleStats = buildCycleStats(cyclesList);
 
   $: selectedDayNotes = selectedDay ? notesList.filter(n => toDateOnly(n.fecha) === selectedDay.dateStr) : [];
   $: selectedDayHabitLogs = selectedDay ? habitLogsList.filter(l => toDateOnly(l.fecha) === selectedDay.dateStr) : [];
   $: selectedDayTransactions = selectedDay ? transaccionesList.filter(t => toDateOnly(t.fecha) === selectedDay.dateStr) : [];
 
-  async function loadDashboardNotes() {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/api/notes`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) notesList = await res.json();
-    } catch (err) {
-      console.error(err);
+  // === CARGA OPTIMIZADA EN DOS NIVELES ===
+  // 1) GLOBAL: datos acotados que no dependen del mes (cuentas, metas, categorías,
+  //    cumpleaños, ciclos, hábitos...). Se carga una sola vez por sesión.
+  // 2) MES: datos de alto volumen (eventos, transacciones, notas, logs, presupuestos)
+  //    sólo del mes que se está viendo. Se recarga al cambiar de mes.
+  // Así el peso de carga no crece con el histórico del usuario.
+
+  // --- Caché local (stale-while-revalidate): pinta al instante desde caché y
+  //     refresca en segundo plano. Es también lo que sostiene el modo sin
+  //     conexión: si la red no responde, la app se queda con lo cacheado en vez
+  //     de mostrarse vacía. Ver lib/storage.ts. ---
+
+  function applyGlobal(data: any, fromCache = false) {
+    cumpleanosList = data.cumpleanos || [];
+    cyclesList = data.cycles || [];
+    habitsList = data.habits || [];
+    categoriasUsadasSet = new Set<string>(data.categoriasUsadas || []);
+
+    const f = data.finanzas || {};
+    cuentasList = f.cuentas || [];
+    ingresosPlanificadosList = f.ingresosPlanificados || [];
+    verificacionesList = f.verificaciones || [];
+    metasList = f.metas || [];
+    if (Array.isArray(f.categorias) && f.categorias.length > 0) {
+      categoriasFinanzas = f.categorias;
+      TRANSACTIONS_CATEGORIES = f.categorias.map((c: any) => ({ value: c.valor, label: c.label, icon: c.icono }));
     }
-  }
 
-  async function loadDashboardHabits() {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/api/habits`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) habitsList = await res.json();
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
-  async function loadDashboardHabitLogs() {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/api/habits/logs`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) habitLogsList = await res.json();
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
-  async function loadDashboardFinance() {
-    try {
-      const token = localStorage.getItem('token');
-      const now = new Date();
-      const mes = now.getMonth() + 1;
-      const anio = now.getFullYear();
-      const [resCuentas, resPlanificados, resTransacciones, resVerificaciones, resMetas, resPresupuestos] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/finanzas/cuentas`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}/api/finanzas/ingresos-planificados`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}/api/finanzas/transacciones`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}/api/finanzas/verificaciones`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}/api/finanzas/metas`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}/api/finanzas/presupuestos?mes=${mes}&anio=${anio}`, { headers: { 'Authorization': `Bearer ${token}` } })
-      ]);
-
-      if (resCuentas.ok) cuentasList = await resCuentas.json();
-      if (resPlanificados.ok) ingresosPlanificadosList = await resPlanificados.json();
-      if (resTransacciones.ok) transaccionesList = await resTransacciones.json();
-      if (resVerificaciones.ok) verificacionesList = await resVerificaciones.json();
-      if (resMetas.ok) metasList = await resMetas.json();
-      if (resPresupuestos.ok) presupuestosList = await resPresupuestos.json();
-      await loadCategoriasFinanzas();
-
-      // Usuarios que ya tienen todo configurado no deberían ver la guía de onboarding.
-      if (!onboardingAutoChecked && userId !== null) {
-        onboardingAutoChecked = true;
-        const stored = localStorage.getItem(`onboarding_fin_${userId}`);
-        if (stored === null && onboardingComplete) {
-          onboardingDismissed = true;
-          localStorage.setItem(`onboarding_fin_${userId}`, '1');
-        }
+    // El auto-descarte del onboarding solo con datos frescos (no de caché).
+    if (!fromCache && !onboardingAutoChecked && userId !== null) {
+      onboardingAutoChecked = true;
+      const stored = localStorage.getItem(`onboarding_fin_${userId}`);
+      if (stored === null && onboardingComplete) {
+        onboardingDismissed = true;
+        localStorage.setItem(`onboarding_fin_${userId}`, '1');
       }
-    } catch (err) {
-      console.error('Error al cargar datos financieros:', err);
     }
+  }
+
+  // useCache=false tras una mutación: repintar desde el caché mostraría el estado
+  // anterior al cambio que el usuario acaba de hacer.
+  async function loadGlobal(useCache = true) {
+    const cacheKey = claveGlobal(userId);
+    const cached = useCache ? leerCache(cacheKey) : null;
+    if (cached) applyGlobal(cached, true); // pintado inmediato
+
+    // `leer` devuelve null si no hubo forma de contactar al servidor: en ese
+    // caso nos quedamos con el caché, que es justo el modo sin conexión.
+    const data = await leer('/api/dashboard/bootstrap');
+    if (data === null) {
+      if (!cached && !leerCache(cacheKey)) throw new ErrorDeRed();
+      return;
+    }
+    applyGlobal(data, false);
+    escribirCache(cacheKey, data);
+  }
+
+  function applyMonth(data: any) {
+    dashboardEvents = data.events || [];
+    transaccionesList = data.transacciones || [];
+    notesList = data.notes || [];
+    habitLogsList = data.habitLogs || [];
+    presupuestosList = data.presupuestos || [];
+    transferenciasMonthList = data.transferencias || [];
+  }
+
+  async function loadMonth(mes: number, anio: number) {
+    loadedMonthKey = `${anio}-${mes}`;
+    const cacheKey = claveMes(userId, anio, mes);
+    const cached = leerCache(cacheKey);
+    if (cached) applyMonth(cached); // pintado inmediato del mes
+    else applyMonth({});            // mes sin caché: vaciar en vez de dejar el anterior
+
+    try {
+      const data = await leer(`/api/dashboard/month?mes=${mes + 1}&anio=${anio}`);
+      if (data === null) return;    // sin conexión: se queda lo cacheado
+      applyMonth(data);
+      escribirCache(cacheKey, data);
+    } catch (err) {
+      console.error('Error al cargar el mes:', err);
+    }
+
+    // Precarga silenciosa de los meses vecinos, para poder navegar el calendario
+    // sin conexión y no sólo ver el mes en el que estabas al perder la señal.
+    precargarMesesVecinos(mes, anio);
+  }
+
+  let precargando = false;
+  async function precargarMesesVecinos(mes: number, anio: number) {
+    if (precargando || !get(isOnline)) return;
+    precargando = true;
+    try {
+      for (const delta of [-1, 1]) {
+        let m = mes + delta;
+        let a = anio;
+        if (m > 11) { m = 0; a++; }
+        if (m < 0) { m = 11; a--; }
+        const key = claveMes(userId, a, m);
+        if (leerCache(key)) continue;
+        const data = await leer(`/api/dashboard/month?mes=${m + 1}&anio=${a}`);
+        if (data) escribirCache(key, data);
+      }
+    } catch { /* la precarga nunca debe molestar al usuario */ }
+    finally { precargando = false; }
   }
 
   async function loadCategoriasFinanzas() {
@@ -330,14 +434,14 @@
   }
 
   async function refreshDashboardNotesAndHabits() {
-    await Promise.all([
-      loadDashboardNotes(),
-      loadDashboardHabits(),
-      loadDashboardHabitLogs(),
-      loadDashboardFinance()
-    ]);
-    if (calendarComponent) {
-      await calendarComponent.refreshData();
+    // Tras una mutación, refresca lo global (saldos, metas...) y el mes visible.
+    const mesActual = currentMonth ?? new Date().getMonth();
+    const anioActual = currentYear ?? new Date().getFullYear();
+    try {
+      // Sin caché: acabamos de mutar, el caché está desactualizado por definición.
+      await Promise.all([loadGlobal(false), loadMonth(mesActual, anioActual)]);
+    } catch {
+      alert('Se guardó el cambio, pero no se pudo actualizar la vista. Revisa tu conexión y recarga.');
     }
     if (selectedDay) {
       const dayEvents = dashboardEvents.filter(ev => toDateOnly(ev.fecha) === selectedDay.dateStr);
@@ -649,6 +753,59 @@
         await refreshDashboardNotesAndHabits();
       } else {
         alert('Error al eliminar la transacción');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  // --- Transferencias entre cuentas ---
+  function openTransferModal() {
+    transferData = { cuenta_origen_id: '', cuenta_destino_id: '', monto: 0, descripcion: '', fecha: getTodayLocal() };
+    showTransferModal = true;
+  }
+
+  async function saveTransfer() {
+    if (!transferData.cuenta_origen_id || !transferData.cuenta_destino_id || !transferData.monto || !transferData.fecha) {
+      alert('Completa todos los campos requeridos');
+      return;
+    }
+    if (transferData.cuenta_origen_id === transferData.cuenta_destino_id) {
+      alert('La cuenta de origen y destino deben ser diferentes');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/api/finanzas/transferencias`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(transferData)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showTransferModal = false;
+        await refreshDashboardNotesAndHabits();
+      } else {
+        alert(data.message || 'Error al registrar la transferencia');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error de conexión');
+    }
+  }
+
+  async function deleteTransfer(id: number) {
+    if (!confirm('¿Eliminar esta transferencia? Se revertirán los cambios en los saldos.')) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/api/finanzas/transferencias/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        await refreshDashboardNotesAndHabits();
+      } else {
+        alert('Error al eliminar la transferencia');
       }
     } catch (err) {
       console.error(err);
@@ -1281,8 +1438,10 @@
       isHabitsMode = false;
       document.body.classList.remove('theme-female', 'theme-notes', 'theme-habits');
       document.body.classList.add('theme-finance');
+      maybeStartFinanceTour();
     } else {
       document.body.classList.remove('theme-finance');
+      if (coach && coach.key === 'calendar') closeCoach();
     }
   }
 
@@ -1304,8 +1463,53 @@
       onboardingDismissed = true;
     }
 
-    await refreshDashboardNotesAndHabits();
+    // 1) Datos globales (una vez). 2) Mes actual. Luego activamos el watcher.
+    const mes = currentMonth ?? new Date().getMonth();
+    const anio = currentYear ?? new Date().getFullYear();
+    // Si la red falla se sigue pintando lo que haya en caché; el watcher de mes
+    // debe activarse igual para que navegar el calendario siga funcionando.
+    try {
+      await Promise.all([loadGlobal(), loadMonth(mes, anio)]);
+    } catch (err) {
+      console.error('Error en la carga inicial:', err);
+    }
+    bootstrapped = true;
+
+    // A partir de aquí la app vigila la conexión: al recuperarla, vacía la cola
+    // de cambios pendientes y vuelve a bajar los datos frescos.
+    iniciarMonitorDeRed(alRecuperarConexion);
   });
+
+  async function alRecuperarConexion() {
+    if (get(pendientes).length === 0) {
+      await refrescarDesdeServidor();
+      return;
+    }
+    const r = await sincronizar();
+    if (r.enviadas > 0) await refrescarDesdeServidor();
+  }
+
+  async function refrescarDesdeServidor() {
+    const mes = currentMonth ?? new Date().getMonth();
+    const anio = currentYear ?? new Date().getFullYear();
+    try {
+      await Promise.all([loadGlobal(false), loadMonth(mes, anio)]);
+    } catch { /* seguimos con lo cacheado */ }
+  }
+
+  /** Reintento manual desde el aviso de "sin conexión". */
+  async function reintentarConexion() {
+    const ok = await comprobarConexion();
+    if (ok) await alRecuperarConexion();
+  }
+
+  // Watcher de mes: cuando el usuario navega el calendario, recarga sólo ese mes.
+  $: if (bootstrapped && currentMonth !== undefined && currentYear !== undefined) {
+    const key = `${currentYear}-${currentMonth}`;
+    if (key !== loadedMonthKey) {
+      loadMonth(currentMonth, currentYear);
+    }
+  }
 
   function handleDayClick(e) {
     if (selectedDay && selectedDay.dateStr === e.detail.dayData.dateStr) {
@@ -1400,7 +1604,7 @@
         }
       });
       if (res.ok) {
-        if (calendarComponent) await calendarComponent.refreshData();
+        if (calendarComponent) await refreshDashboardNotesAndHabits();
         if (selectedDay) {
           const dayEvents = dashboardEvents.filter(e => toDateOnly(e.fecha) === selectedDay.dateStr);
           selectedDay = { ...selectedDay, dayEvents };
@@ -1466,9 +1670,9 @@
           });
           if (res.ok) {
               if (calendarComponent) {
-                  await calendarComponent.refreshData();
+                  await refreshDashboardNotesAndHabits();
                   const currentStr = selectedDay.dateStr.slice(5);
-                  const updatedBirthdays = calendarComponent.cumpleanos.filter(c => c.fecha && c.fecha.slice(5) === currentStr);
+                  const updatedBirthdays = cumpleanosList.filter(c => c.fecha && c.fecha.slice(5) === currentStr);
                   selectedDay = { ...selectedDay, dayBirthdays: updatedBirthdays };
               }
           } else {
@@ -1494,7 +1698,7 @@
       });
       if (res.ok) {
         ev.estado_pago = nuevoEstado;
-        if (calendarComponent) await calendarComponent.refreshData();
+        if (calendarComponent) await refreshDashboardNotesAndHabits();
         // Forzar reactividad del panel
         if (selectedDay) {
           const dayEvents = dashboardEvents.filter(e => toDateOnly(e.fecha) === selectedDay.dateStr);
@@ -1534,8 +1738,7 @@
   function handleDayDoubleClick(e) {
     selectedDay = e.detail.dayData;
     if (isFemaleMode) {
-      periodData.observacion = '';
-      showPeriodModal = true;
+      openPeriodModal(selectedDay.dateStr);
     } else if (isNotesMode) {
       noteData = { id: null, contenido: '', etiqueta: 'personal', color: '#4FC3F7' };
       showNoteModal = true;
@@ -1595,9 +1798,9 @@
         if (res.ok) {
             showEventModal = false;
             if (calendarComponent) {
-                await calendarComponent.refreshData();
+                await refreshDashboardNotesAndHabits();
                 const currentStr = selectedDay.dateStr.slice(5);
-                const updatedBirthdays = calendarComponent.cumpleanos.filter(c => c.fecha && c.fecha.slice(5) === currentStr);
+                const updatedBirthdays = cumpleanosList.filter(c => c.fecha && c.fecha.slice(5) === currentStr);
                 selectedDay = { ...selectedDay, dayBirthdays: updatedBirthdays };
             }
         } else {
@@ -1632,7 +1835,7 @@
       
       if (res.ok) {
         showEventModal = false;
-        if (calendarComponent) await calendarComponent.refreshData();
+        if (calendarComponent) await refreshDashboardNotesAndHabits();
         // Disparar click_day de nuevo para actualizar el panel derecho
         if (selectedDay) {
           const dayEvents = dashboardEvents.filter(ev => toDateOnly(ev.fecha) === selectedDay.dateStr);
@@ -1647,29 +1850,84 @@
     }
   }
 
+  // Abre el modal en modo "crear" o en modo "editar/eliminar" según si ese día
+  // ya es el inicio de un ciclo registrado.
+  function openPeriodModal(dateStr: string) {
+    const existente = cyclesList.find(c => toDateOnly(c.fecha_inicio) === dateStr);
+    periodData = existente
+      ? {
+          id: existente.id,
+          observacion: existente.observacion || '',
+          dias_sangrado: existente.dias_sangrado ?? ''
+        }
+      // En un ciclo nuevo se precarga el promedio de la usuaria: sólo lo cambia
+      // si este mes fue distinto.
+      : { id: null, observacion: '', dias_sangrado: cycleStats.avgPeriodLength };
+    periodFecha = dateStr;
+    showPeriodModal = true;
+  }
+
+  function openPeriodModalFromHistory(log: any) {
+    selectedDay = { ...(selectedDay || {}), dateStr: log.fecha_inicio };
+    openPeriodModal(log.fecha_inicio);
+  }
+
   async function savePeriod() {
+    if (periodSaving) return;
+    periodSaving = true;
     try {
       const token = localStorage.getItem('token');
-      const payload = {
-        fecha_inicio: selectedDay.dateStr,
-        observacion: periodData.observacion
-      };
-      
-      const res = await fetch(`${API_BASE_URL}/api/cycles`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-      
-      if (res.ok) {
-        showPeriodModal = false;
-        if (calendarComponent) await calendarComponent.refreshData();
-      } else {
-        alert('Error al registrar el periodo');
+      const editando = periodData.id !== null;
+      const res = await fetch(
+        `${API_BASE_URL}/api/cycles${editando ? `/${periodData.id}` : ''}`,
+        {
+          method: editando ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            fecha_inicio: periodFecha,
+            observacion: periodData.observacion,
+            dias_sangrado: periodData.dias_sangrado === '' ? null : Number(periodData.dias_sangrado)
+          })
+        }
+      );
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // El backend rechaza fechas futuras, duplicados y formatos inválidos:
+        // se muestra su mensaje en vez de un error genérico.
+        alert(data.message || 'No se pudo guardar el periodo.');
+        return;
       }
+
+      showPeriodModal = false;
+      await refreshDashboardNotesAndHabits();
+      if (data.advertencia) alert(data.advertencia);
+    } catch (err) {
+      console.error(err);
+      alert('Error de conexión');
+    } finally {
+      periodSaving = false;
+    }
+  }
+
+  async function deletePeriod(id: number, fecha: string) {
+    if (!confirm(`¿Eliminar el ciclo registrado el ${fecha}?\n\nEl calendario recalculará las fases y la predicción con los registros restantes.`)) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/api/cycles/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.message || 'No se pudo eliminar el ciclo.');
+        return;
+      }
+      showPeriodModal = false;
+      await refreshDashboardNotesAndHabits();
     } catch (err) {
       console.error(err);
       alert('Error de conexión');
@@ -1689,6 +1947,10 @@
   async function handleSearch() {
     if (!canSearch) {
       alert('Buscador deshabilitado para su usuario.');
+      return;
+    }
+    if (!$isOnline) {
+      alert('La búsqueda de empresas consulta un servicio externo, así que necesita conexión a internet.\n\nEl resto de la app sigue funcionando sin conexión.');
       return;
     }
     const query = searchQuery.trim();
@@ -1743,7 +2005,7 @@
   }
 
   async function searchEmpresas(query: string) {
-    if (!canSearch) return;
+    if (!canSearch || !$isOnline) return;
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE_URL}/api/empresas/search?q=${encodeURIComponent(query)}`, {
@@ -1771,6 +2033,10 @@
 
   async function exportarExcelEmpresa(nit: string, razsoc: string) {
     if (!canSearch) return;
+    if (!$isOnline) {
+      alert('Generar el Excel requiere conexión a internet.');
+      return;
+    }
     alert('Generando Excel...');
 
     try {
@@ -1905,15 +2171,47 @@
   }
 </script>
 
-<svelte:head>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-</svelte:head>
+<!-- Estado de conexión. Sin internet la app sigue siendo usable: se avisa de
+     lo que quedará pendiente de enviar, en vez de fallar en silencio. -->
+{#if !$isOnline || $pendientes.length > 0}
+<div class="net-banner {$isOnline ? 'net-banner--sync' : 'net-banner--offline'}">
+    <i class="material-icons">{$isOnline ? 'cloud_upload' : 'cloud_off'}</i>
+    <span class="net-banner__text">
+        {#if !$isOnline}
+            Sin conexión — estás viendo tus datos guardados en el dispositivo.
+            {#if $pendientes.length > 0}
+                {$pendientes.length} cambio{$pendientes.length !== 1 ? 's' : ''} se enviará{$pendientes.length !== 1 ? 'n' : ''} al reconectar.
+            {/if}
+        {:else if $sincronizando}
+            Sincronizando {$pendientes.length} cambio{$pendientes.length !== 1 ? 's' : ''}...
+        {:else}
+            {$pendientes.length} cambio{$pendientes.length !== 1 ? 's' : ''} pendiente{$pendientes.length !== 1 ? 's' : ''} de enviar.
+        {/if}
+    </span>
+    {#if !$isOnline}
+        <button class="net-banner__btn" on:click={reintentarConexion}>Reintentar</button>
+    {:else if !$sincronizando && $pendientes.length > 0}
+        <button class="net-banner__btn" on:click={alRecuperarConexion}>Enviar ahora</button>
+    {/if}
+</div>
+{/if}
+
+{#if $descartadas.length > 0}
+<div class="net-banner net-banner--error">
+    <i class="material-icons">error_outline</i>
+    <span class="net-banner__text">
+        {$descartadas.length} cambio{$descartadas.length !== 1 ? 's' : ''} no se pudo guardar:
+        {$descartadas[0].motivo}
+    </span>
+    <button class="net-banner__btn" on:click={limpiarDescartadas}>Entendido</button>
+</div>
+{/if}
 
 <!-- Header estilo WhatsApp -->
 <header class="header">
     <div class="header-content">
         <div class="header-left">
+            <img src="/logo22.png" alt="Agendaservi" style="height:34px; width:auto; object-fit:contain; margin-right:4px;" />
             <i class="material-icons">
                 {isFemaleMode ? 'female' : isFinanceMode ? 'payments' : isNotesMode ? 'note_add' : isHabitsMode ? 'self_improvement' : 'event'}
             </i>
@@ -1958,7 +2256,9 @@
 
         <div class="header-right {showSearchBar ? 'hidden-by-search' : ''}">
             {#if canSearch}
-                <button class="icon-btn" on:click={toggleSearchBar} id="searchBtn" title="Buscar">
+                <button class="icon-btn" on:click={toggleSearchBar} id="searchBtn"
+                    title={$isOnline ? 'Buscar' : 'La búsqueda de empresas necesita internet'}
+                    style={$isOnline ? '' : 'opacity: 0.4;'}>
                     <i class="material-icons">search</i>
                 </button>
             {/if}
@@ -1983,7 +2283,7 @@
 
 <!-- Contenedor principal -->
 <main class="main-container">
-    <Calendar bind:this={calendarComponent} bind:events={dashboardEvents} bind:currentMonth bind:currentYear selectedDateStr={selectedDay?.dateStr ?? null} {isFemaleMode} {isFinanceMode} {isNotesMode} {isHabitsMode} transacciones={transaccionesList} plannedOccurrences={occurrencesList} on:click_day={handleDayClick} on:dblclick_day={handleDayDoubleClick} />
+    <Calendar bind:this={calendarComponent} bind:events={dashboardEvents} bind:currentMonth bind:currentYear selectedDateStr={selectedDay?.dateStr ?? null} {isFemaleMode} {isFinanceMode} {isNotesMode} {isHabitsMode} cumpleanos={cumpleanosList} cycleLogs={cyclesList} notes={notesList} habits={habitsList} habitLogs={habitLogsList} transacciones={transaccionesList} plannedOccurrences={occurrencesList} on:click_day={handleDayClick} on:dblclick_day={handleDayDoubleClick} />
 
     <!-- Próximos eventos / Eventos del día -->
     <div class="upcoming-section">
@@ -2670,7 +2970,19 @@
                             <span class="insight-title">Próximo Periodo</span>
                         </div>
                         <div class="insight-desc">
-                            Esperado en {selectedDay.cycleDetails.nextPeriodIn} día{selectedDay.cycleDetails.nextPeriodIn !== 1 ? 's' : ''}.
+                            {#if selectedDay.cycleDetails.phaseKey === 'late-period'}
+                                <span style="color: #ff5252; font-weight: bold;">Con {selectedDay.cycleDetails.diasRetraso} día{selectedDay.cycleDetails.diasRetraso !== 1 ? 's' : ''} de retraso.</span>
+                                Si ya empezó, regístralo con doble click para recalcular el ciclo.
+                            {:else}
+                                Esperado en {selectedDay.cycleDetails.nextPeriodIn} día{selectedDay.cycleDetails.nextPeriodIn !== 1 ? 's' : ''}.
+                            {/if}
+                            <div style="margin-top: 8px; font-size: 0.82em; color: var(--text-secondary);">
+                                {#if selectedDay.cycleDetails.esCicloObservado}
+                                    Ciclo de referencia: {selectedDay.cycleDetails.actualCycleLength} días.
+                                {:else}
+                                    Proyección estimada sobre {selectedDay.cycleDetails.actualCycleLength} días (promedio de tus ciclos recientes).
+                                {/if}
+                            </div>
                         </div>
                     </div>
                     <div class="insight-card" style="margin-top: 15px;">
@@ -2691,17 +3003,83 @@
                                 <div style="width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg, #ba68c8, #9c27b0); box-shadow: 0 0 10px rgba(156, 39, 176, 0.5);"></div>
                                 <span>Ovulación</span>
                             </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="width: 20px; height: 20px; border-radius: 50%; background: transparent; border: 2px dashed #e91e63;"></div>
+                                <span>Periodo previsto</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="width: 20px; height: 20px; border-radius: 50%; background: rgba(255,82,82,0.12); border: 2px dashed #ff5252;"></div>
+                                <span>Periodo con retraso</span>
+                            </div>
                         </div>
                     </div>
                 {:else if selectedDay}
                     <div class="text-center text-text-secondary w-full" style="padding: 20px 0;">
                         <i class="material-icons" style="font-size: 48px; opacity: 0.5; margin-bottom: 10px;">spa</i>
-                        <p>Sin registros de ciclo para poder realizar el análisis. Empieza registrando tu periodo.</p>
+                        {#if cyclesList.length === 0}
+                            <p>Sin registros de ciclo para poder realizar el análisis. Haz doble click en un día para registrar tu periodo.</p>
+                        {:else}
+                            <p>Este día queda fuera del rango analizable: es anterior a tu primer registro o está demasiado lejos en el futuro como para predecirlo con fiabilidad.</p>
+                        {/if}
                     </div>
                 {:else}
                     <div class="text-center text-text-secondary w-full" style="padding: 20px 0;">
                         <i class="material-icons" style="font-size: 48px; opacity: 0.5; margin-bottom: 10px;">spa</i>
                         <p>Selecciona un día en el calendario para ver tu análisis de ciclo y recomendaciones diarias.</p>
+                    </div>
+                {/if}
+
+                {#if cycleHistory.length > 0}
+                    <div class="insight-card" style="margin-top: 15px;">
+                        <div class="insight-header">
+                            <i class="material-icons">history</i>
+                            <span class="insight-title">Historial de Ciclos ({cycleHistory.length})</span>
+                        </div>
+                        <div class="insight-desc" style="margin-top: 10px;">
+                            <div style="font-size: 0.8em; color: var(--text-secondary); margin-bottom: 10px;">
+                                Toca un registro para editarlo o eliminarlo. Al hacerlo, el calendario recalcula todas las fases.
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto;">
+                                {#each cycleHistory as log (log.id ?? log.fecha_inicio)}
+                                    <div style="display: flex; align-items: center; gap: 10px; background: var(--bg-tertiary); padding: 8px 10px; border-radius: 8px; border-left: 3px solid {log.anomalo ? '#ff9800' : '#e91e63'};">
+                                        <div style="flex: 1; min-width: 0;">
+                                            <div style="font-weight: bold; font-size: 0.9em;">
+                                                {log.fecha_inicio}
+                                                {#if log.enCurso}
+                                                    <span style="font-weight: normal; font-size: 0.85em; color: var(--text-secondary);">· en curso</span>
+                                                {/if}
+                                            </div>
+                                            <div style="font-size: 0.8em; color: var(--text-secondary);">
+                                                {#if log.duracion === null}
+                                                    Duración pendiente
+                                                {:else}
+                                                    Ciclo de {log.duracion} días
+                                                    {#if log.anomalo}
+                                                        <span style="color: #ff9800;" title="Fuera del rango 20-45 días: no se usa para el promedio">⚠ atípico</span>
+                                                    {/if}
+                                                {/if}
+                                                {#if log.diasSangrado !== null}
+                                                    · sangrado {log.diasSangrado} días
+                                                {:else}
+                                                    · <span style="color: #ff9800;" title="Sin registrar: se usa tu promedio">sangrado sin registrar</span>
+                                                {/if}
+                                            </div>
+                                            {#if log.observacion}
+                                                <div style="font-size: 0.78em; color: var(--text-secondary); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title={log.observacion}>
+                                                    {log.observacion}
+                                                </div>
+                                            {/if}
+                                        </div>
+                                        <button class="icon-btn" title="Editar" on:click={() => openPeriodModalFromHistory(log)}>
+                                            <i class="material-icons" style="font-size: 18px;">edit</i>
+                                        </button>
+                                        <button class="icon-btn" title="Eliminar" on:click={() => deletePeriod(log.id, log.fecha_inicio)}>
+                                            <i class="material-icons" style="font-size: 18px; color: #ff5252;">delete</i>
+                                        </button>
+                                    </div>
+                                {/each}
+                            </div>
+                        </div>
                     </div>
                 {/if}
             </div>
@@ -2999,9 +3377,16 @@
 
                 {:else if activeFinanceTab === 'cuentas'}
                     <!-- 2. PESTAÑA MIS CUENTAS / TARJETAS -->
-                    <button type="button" class="btn btn-secondary w-full" on:click={() => { accountData = { id: null, nombre: '', tipo: 'ahorros', saldo: 0, limite: 0, interes_tasa: 0, fecha_inicio: getTodayLocal(), plazo_dias: 0, dia_corte: null }; showAccountModal = true; }} style="margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid rgba(255, 215, 0, 0.3); background: rgba(255, 215, 0, 0.05); color: #FFD700;">
-                        <i class="material-icons" style="font-size: 18px;">add_card</i> Agregar Tarjeta / Cuenta
-                    </button>
+                    <div class="cuentas-action-row">
+                        <button type="button" class="btn btn-secondary cuentas-action-btn" on:click={() => { accountData = { id: null, nombre: '', tipo: 'ahorros', saldo: 0, limite: 0, interes_tasa: 0, fecha_inicio: getTodayLocal(), plazo_dias: 0, dia_corte: null }; showAccountModal = true; }} style="border: 1px solid rgba(255, 215, 0, 0.3); background: rgba(255, 215, 0, 0.05); color: #FFD700;">
+                            <i class="material-icons" style="font-size: 18px;">add_card</i> Agregar Cuenta
+                        </button>
+                        {#if cuentasList.length >= 2}
+                        <button type="button" class="btn btn-secondary cuentas-action-btn" on:click={openTransferModal} style="border: 1px solid rgba(79, 195, 247, 0.35); background: rgba(79, 195, 247, 0.07); color: #4FC3F7;">
+                            <i class="material-icons" style="font-size: 18px;">swap_horiz</i> Transferir
+                        </button>
+                        {/if}
+                    </div>
 
                     {#if cuentasList.length > 0}
                         <div style="display: flex; flex-direction: column; gap: 10px;">
@@ -3474,10 +3859,6 @@
 
                     <!-- Sección: Mis Categorías -->
                     <div style="margin-bottom: 18px;">
-                        <div style="display:flex; align-items:center; justify-content:flex-end; margin-bottom:10px;">
-                            <span style="font-size:0.72rem; color:var(--text-tertiary);">{categoriasFinanzas.length} categorías</span>
-                        </div>
-
                         <!-- Lista de categorías existentes -->
                         <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
                             {#each categoriasFinanzas as cat}
@@ -3522,6 +3903,7 @@
                                     style="flex:1; min-width:120px; padding:8px 10px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-tertiary); color:var(--text-primary);"
                                 />
                                 <button type="button" disabled={categoriaGuardando} on:click={crearCategoria}
+                                    class="cat-agregar-btn"
                                     style="padding:8px 14px; border-radius:8px; background:#FFA726; color:#000; font-weight:700; border:none; cursor:pointer; font-size:0.82rem; display:flex; align-items:center; gap:4px;">
                                     <i class="material-icons" style="font-size:16px;">add</i> Agregar
                                 </button>
@@ -3570,6 +3952,10 @@
                             </div>
                         {/if}
                     {:else}
+                        <h4 style="color: var(--text-primary); font-size: 0.9rem; font-weight: bold; margin: 12px 0 8px 0; display:flex; align-items:center; gap:6px;">
+                            <i class="material-icons" style="font-size:18px; color:#FFD700;">history</i>
+                            Transacciones de {mesNombre} ({transaccionesList.length})
+                        </h4>
                         {#if transaccionesList.length > 0}
                             <div style="display: flex; flex-direction: column; gap: 10px; max-height: 450px; overflow-y: auto;">
                                 {#each transaccionesList as tx}
@@ -3599,10 +3985,41 @@
                                 No has registrado gastos ni ingresos aún. Agrega tu primer registro con el botón superior.
                             </div>
                         {/if}
+
+                        {#if transferenciasMonthList.length > 0}
+                            <h4 style="color: var(--text-primary); font-size: 0.9rem; font-weight: bold; margin: 18px 0 8px 0; display:flex; align-items:center; gap:6px;">
+                                <i class="material-icons" style="font-size:18px; color:#4FC3F7;">swap_horiz</i>
+                                Transferencias del mes ({transferenciasMonthList.length})
+                            </h4>
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                {#each transferenciasMonthList as tr}
+                                    <div style="background: rgba(79,195,247,0.04); border: 1px solid rgba(79,195,247,0.18); padding: 10px 12px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #4FC3F7;">
+                                        <div>
+                                            <div style="display:flex; align-items:center; gap:6px; font-weight:600; font-size:0.85rem; color:var(--text-primary);">
+                                                <i class="material-icons" style="font-size:16px; color:#4FC3F7;">swap_horiz</i>
+                                                {tr.descripcion || 'Transferencia'}
+                                            </div>
+                                            <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:3px; display:flex; align-items:center; gap:4px;">
+                                                <span style="color:#F44336; font-weight:600;">{cuentasList.find(c => c.id === tr.cuenta_origen_id)?.nombre || 'Origen'}</span>
+                                                <i class="material-icons" style="font-size:13px; color:var(--text-secondary);">arrow_forward</i>
+                                                <span style="color:#34E47E; font-weight:600;">{cuentasList.find(c => c.id === tr.cuenta_destino_id)?.nombre || 'Destino'}</span>
+                                                <span style="margin-left:4px;">· {toDateOnly(tr.fecha)}</span>
+                                            </div>
+                                        </div>
+                                        <div style="display:flex; align-items:center; gap:10px;">
+                                            <span style="font-weight:bold; font-size:0.9rem; color:#4FC3F7;">{formatPrice(tr.monto)}</span>
+                                            <button class="icon-btn" style="width:24px; height:24px;" on:click={() => deleteTransfer(tr.id)} title="Eliminar transferencia">
+                                                <i class="material-icons" style="font-size:16px; color:var(--danger);">delete</i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                {/each}
+                            </div>
+                        {/if}
                     {/if}
                 {:else if activeFinanceTab === 'graficos'}
                     <!-- 7. PESTAÑA GRÁFICOS AVANZADOS -->
-                    <AdvancedAnalytics cuentas={cuentasList} transacciones={transaccionesList} categorias={categoriasFinanzas} />
+                    <AdvancedAnalytics cuentas={cuentasList} categorias={categoriasFinanzas} />
                 {/if}
             </div>
 
@@ -4049,6 +4466,20 @@
     </div>
 </main>
 
+{#if coach}
+    <CoachMark
+        target={coach.target}
+        title={coach.title}
+        description={coach.description}
+        icon={coach.icon}
+        cta={coach.cta}
+        cta2={coach.cta2 || ''}
+        on:next={closeCoach}
+        on:skip={closeCoach}
+        on:action={coachAction}
+    />
+{/if}
+
 <!-- Footer -->
 <footer class="app-footer">
     <div class="app-footer-inner">
@@ -4170,9 +4601,12 @@
                     <div class="form-group">
                         <label for="eventHora">
                             <i class="material-icons">access_time</i>
-                            Hora
+                            Hora <span style="font-weight:400; color:var(--text-tertiary); font-size:0.78rem;">(opcional)</span>
                         </label>
-                        <input type="time" id="eventHora" bind:value={eventData.hora} required>
+                        <input type="time" id="eventHora" bind:value={eventData.hora}>
+                        <small style="display:block; margin-top:4px; color:var(--text-tertiary); font-size:0.72rem; line-height:1.35;">
+                            Si la dejas vacía, te avisaremos a las 7:00 a.m. en tu resumen del día. Con hora, te recordamos 30 min antes y a la hora exacta.
+                        </small>
                     </div>
                 </div>
 
@@ -4252,13 +4686,44 @@
 <div class="modal active">
     <div class="modal-content modal-small">
         <div class="modal-header">
-            <h3>Ciclo Menstrual</h3>
+            <h3>{periodData.id ? 'Editar Ciclo' : 'Ciclo Menstrual'}</h3>
             <button class="modal-close" on:click={() => showPeriodModal = false}>
                 <i class="material-icons">close</i>
             </button>
         </div>
         <div class="modal-body">
-            <p>¿Comenzó tu periodo el <strong>{selectedDay ? selectedDay.dateStr : ''}</strong>?</p>
+            {#if periodData.id}
+                <p>Este día ya está registrado como el <strong>inicio de un ciclo</strong>. Puedes corregir la fecha, editar la observación o eliminarlo.</p>
+            {:else}
+                <p>¿Comenzó tu periodo el <strong>{periodFecha}</strong>?</p>
+            {/if}
+
+            <div class="form-group" style="margin-top: 15px;">
+                <label for="periodFecha">
+                    <i class="material-icons">event</i>
+                    Fecha de inicio
+                </label>
+                <input id="periodFecha" type="date" bind:value={periodFecha} max={getTodayLocal()}
+                    style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); margin-top: 5px;" />
+            </div>
+
+            <div class="form-group" style="margin-top: 15px;">
+                <label for="periodDias">
+                    <i class="material-icons">water_drop</i>
+                    ¿Cuántos días te duró el sangrado?
+                </label>
+                <input id="periodDias" type="number" bind:value={periodData.dias_sangrado}
+                    min={MIN_SANGRADO} max={MAX_SANGRADO} placeholder="Déjalo vacío si aún no lo sabes"
+                    style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); margin-top: 5px;" />
+                <div style="font-size: 0.78em; color: var(--text-secondary); margin-top: 6px;">
+                    {#if cycleStats.sangradosUsados > 0}
+                        Tu promedio es de {cycleStats.avgPeriodLength} días. Ajústalo si este ciclo fue distinto.
+                    {:else}
+                        Aún no tienes datos propios, así que se usan {cycleStats.avgPeriodLength} días de referencia. Puedes volver a editarlo cuando termine tu periodo.
+                    {/if}
+                </div>
+            </div>
+
             <div class="form-group" style="margin-top: 15px;">
                 <label for="periodObservacion">
                     <i class="material-icons">edit_note</i>
@@ -4266,9 +4731,17 @@
                 </label>
                 <textarea id="periodObservacion" bind:value={periodData.observacion} rows="3" placeholder="Añade notas, síntomas o detalles..." style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); margin-top: 5px;"></textarea>
             </div>
+
             <div class="modal-actions" style="margin-top: 20px;">
+                {#if periodData.id}
+                    <button type="button" class="btn btn-danger" on:click={() => periodData.id !== null && deletePeriod(periodData.id, periodFecha)}>
+                        <i class="material-icons">delete</i> Eliminar
+                    </button>
+                {/if}
                 <button type="button" class="btn btn-secondary" on:click={() => showPeriodModal = false}>Cancelar</button>
-                <button type="button" class="btn btn-primary" on:click={savePeriod}>Confirmar</button>
+                <button type="button" class="btn btn-primary" on:click={savePeriod} disabled={periodSaving || !periodFecha}>
+                    {periodSaving ? 'Guardando...' : (periodData.id ? 'Guardar cambios' : 'Confirmar')}
+                </button>
             </div>
         </div>
     </div>
@@ -4632,6 +5105,99 @@
 </div>
 {/if}
 
+{#if showTransferModal}
+{@const cuentaOrigen = cuentasList.find(c => c.id == transferData.cuenta_origen_id)}
+{@const cuentaDestino = cuentasList.find(c => c.id == transferData.cuenta_destino_id)}
+<div class="modal active">
+    <div class="modal-content modal-small">
+        <div class="modal-header">
+            <h3 style="display:flex; align-items:center; gap:8px;"><i class="material-icons" style="color:#4FC3F7;">swap_horiz</i> Transferir entre cuentas</h3>
+            <button class="modal-close" on:click={() => showTransferModal = false}>
+                <i class="material-icons">close</i>
+            </button>
+        </div>
+        <form class="modal-body" on:submit|preventDefault={saveTransfer}>
+            <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 15px;">
+                Mueve dinero de una cuenta a otra. Los saldos se ajustan automáticamente y queda registro en el historial.
+            </p>
+
+            <div class="form-group">
+                <label for="trOrigen">Desde (origen)</label>
+                <select id="trOrigen" bind:value={transferData.cuenta_origen_id} required style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); margin-top: 5px;">
+                    <option value="" disabled>Selecciona cuenta de origen</option>
+                    {#each cuentasList as c}
+                        <option value={c.id} disabled={c.id == transferData.cuenta_destino_id}>{c.nombre} ({formatPrice(c.saldo)})</option>
+                    {/each}
+                </select>
+            </div>
+
+            <div style="display:flex; justify-content:center; margin: 6px 0;">
+                <div style="width:36px; height:36px; border-radius:50%; background:rgba(79,195,247,0.1); border:1px solid rgba(79,195,247,0.3); display:flex; align-items:center; justify-content:center;">
+                    <i class="material-icons" style="color:#4FC3F7; font-size:20px;">south</i>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="trDestino">Hacia (destino)</label>
+                <select id="trDestino" bind:value={transferData.cuenta_destino_id} required style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); margin-top: 5px;">
+                    <option value="" disabled>Selecciona cuenta de destino</option>
+                    {#each cuentasList as c}
+                        <option value={c.id} disabled={c.id == transferData.cuenta_origen_id}>{c.nombre} ({formatPrice(c.saldo)})</option>
+                    {/each}
+                </select>
+            </div>
+
+            <div class="form-row" style="margin-top:10px;">
+                <div class="form-group">
+                    <label for="trMonto">Monto ($)</label>
+                    <CurrencyInput id="trMonto" bind:value={transferData.monto} required={true} />
+                </div>
+                <div class="form-group">
+                    <label for="trFecha">Fecha</label>
+                    <input type="date" id="trFecha" bind:value={transferData.fecha} required style="margin-top: 5px;">
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top:10px;">
+                <label for="trDesc">Descripción (opcional)</label>
+                <input type="text" id="trDesc" bind:value={transferData.descripcion} placeholder="Ej: Pago de tarjeta, ahorro mensual..." maxlength="255">
+            </div>
+
+            {#if cuentaOrigen && cuentaDestino && Number(transferData.monto) > 0}
+                <div style="margin-top:14px; background:rgba(79,195,247,0.06); border:1px solid rgba(79,195,247,0.18); border-radius:10px; padding:12px;">
+                    <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; font-weight:bold; margin-bottom:8px;">Vista previa de saldos</div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;">
+                        <span style="color:var(--text-secondary);">{cuentaOrigen.nombre}</span>
+                        <span style="color:var(--text-primary);">
+                            {formatPrice(cuentaOrigen.saldo)} →
+                            <strong style="color:{cuentaOrigen.tipo === 'tarjeta_credito' ? '#FF5252' : '#34E47E'};">
+                                {formatPrice(Number(cuentaOrigen.saldo) + (cuentaOrigen.tipo === 'tarjeta_credito' ? Number(transferData.monto) : -Number(transferData.monto)))}
+                            </strong>
+                        </span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
+                        <span style="color:var(--text-secondary);">{cuentaDestino.nombre}</span>
+                        <span style="color:var(--text-primary);">
+                            {formatPrice(cuentaDestino.saldo)} →
+                            <strong style="color:{cuentaDestino.tipo === 'tarjeta_credito' ? '#34E47E' : '#34E47E'};">
+                                {formatPrice(Number(cuentaDestino.saldo) + (cuentaDestino.tipo === 'tarjeta_credito' ? -Number(transferData.monto) : Number(transferData.monto)))}
+                            </strong>
+                        </span>
+                    </div>
+                </div>
+            {/if}
+
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button type="button" class="btn btn-secondary" on:click={() => showTransferModal = false}>Cancelar</button>
+                <button type="submit" class="btn btn-primary" style="background-color: #4FC3F7; color: #003;">
+                    <i class="material-icons">swap_horiz</i> Transferir
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{/if}
+
 {#if showVerifyIncomeModal}
 <div class="modal active">
     <div class="modal-content modal-small">
@@ -4813,6 +5379,32 @@
 {/if}
 
 <style>
+  .cuentas-action-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .cuentas-action-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  @media (max-width: 640px) {
+    .cat-agregar-btn {
+      width: 100%;
+      justify-content: center;
+    }
+    .cuentas-action-row {
+      flex-direction: column;
+    }
+    .cuentas-action-btn {
+      width: 100%;
+    }
+  }
+
   .whatsapp-simulator {
     margin-top: 10px;
     background: rgba(11, 20, 26, 0.4);
