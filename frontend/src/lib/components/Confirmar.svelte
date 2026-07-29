@@ -240,11 +240,6 @@
   }
 </script>
 
-<svelte:head>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-</svelte:head>
-
 <div class="confirm-container">
   <!-- Efecto de Confeti -->
   {#if confettiParticles.length > 0}

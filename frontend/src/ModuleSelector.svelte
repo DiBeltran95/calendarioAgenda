@@ -61,7 +61,7 @@
     <div class="text-center mb-16">
       <div class="relative inline-block mb-6">
         <div class="logo-glow"></div>
-        <img src="/logoSinFondo.png" alt="Logo" class="relative w-20 h-20 object-contain" />
+        <img src="/logo22.png" alt="Agendaservi" class="relative w-20 h-20 object-contain" />
       </div>
       <p class="text-sm font-semibold text-cyan-400 tracking-[0.25em] uppercase mb-3">Bienvenido de vuelta</p>
       <h1 class="text-5xl font-black text-white mb-4 leading-tight">

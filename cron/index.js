@@ -61,6 +61,113 @@ function formatTime12h(timeStr) {
     return `${hours12}:${minutesStr} ${esPM ? 'PM' : 'AM'}`;
 }
 
+// ---------------------------------------------------------------------------
+//  PERSONALIZACIÓN DE MENSAJES
+// ---------------------------------------------------------------------------
+
+// Categorías que se notifican como recordatorio matutino (7 a.m.) y NO con el
+// patrón de "media hora antes + hora exacta" de las reuniones.
+const CATEGORIAS_TODO_EL_DIA = new Set(['arriendo', 'aceite_moto', 'servicios', 'aniversario', 'mesiversario']);
+
+// Metadatos visuales por categoría (emoji + nombre legible).
+const CATEGORIA_META = {
+    reunion:      { emoji: '📅', nombre: 'Reunión' },
+    cumpleanos:   { emoji: '🎂', nombre: 'Cumpleaños' },
+    moto:         { emoji: '🏍️', nombre: 'Moto' },
+    carro:        { emoji: '🚗', nombre: 'Carro' },
+    casa:         { emoji: '🏠', nombre: 'Casa' },
+    arriendo:     { emoji: '🏠', nombre: 'Arriendo' },
+    aceite_moto:  { emoji: '🛢️', nombre: 'Cambio de aceite' },
+    mecanica:     { emoji: '🔧', nombre: 'Mecánica' },
+    servicios:    { emoji: '🧾', nombre: 'Servicios públicos' },
+    doctor:       { emoji: '🩺', nombre: 'Cita médica' },
+    medicamentos: { emoji: '💊', nombre: 'Medicamentos' },
+    dentista:     { emoji: '🦷', nombre: 'Odontología' },
+    cita_amor:    { emoji: '❤️', nombre: 'Cita romántica' },
+    aniversario:  { emoji: '💑', nombre: 'Aniversario' },
+    matrimonio:   { emoji: '💍', nombre: 'Matrimonio' },
+    mesiversario: { emoji: '🌹', nombre: 'Mesiversario' }
+};
+function metaCategoria(cat) {
+    return CATEGORIA_META[cat] || { emoji: '📌', nombre: 'Recordatorio' };
+}
+
+// Un evento es "de crédito" si nació automáticamente desde el módulo de finanzas
+// (lleva tarjeta_credito_id). Esos van siempre en el resumen de las 7 a.m.
+function esCreditoEvent(ev) {
+    return ev.tarjeta_credito_id !== null && ev.tarjeta_credito_id !== undefined;
+}
+
+// Un evento se notifica en el resumen matutino (7 a.m.) si: es de crédito, no
+// tiene hora definida, o pertenece a una categoría de "todo el día".
+function esTodoElDia(ev) {
+    if (esCreditoEvent(ev)) return true;
+    if (!ev.hora) return true;
+    return CATEGORIAS_TODO_EL_DIA.has(ev.categoria);
+}
+
+const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+function fechaLegible(dateStr) {
+    const d = new Date(`${dateStr}T12:00:00-05:00`);
+    return `${DIAS_SEMANA[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
+}
+
+function formatCOP(n) {
+    return '$' + Number(n || 0).toLocaleString('es-CO');
+}
+
+const CONFIRM_BASE_URL = 'https://vapcaqueta.alwaysdata.net/confirmar';
+
+// --- Constructores de mensaje para eventos TEMPORIZADOS (con hora exacta) ---
+
+function buildTimedExactMsg(event) {
+    const meta = metaCategoria(event.categoria);
+    const hora = formatTime12h(event.hora);
+    const ubic = event.ubicacion ? `\n📍 *Lugar:* ${event.ubicacion}` : '';
+
+    let cuerpo;
+    switch (event.categoria) {
+        case 'reunion':
+            cuerpo = `Es momento de tu reunión *${event.titulo}*. ¡Que sea muy productiva!`;
+            break;
+        case 'doctor':
+        case 'dentista':
+            cuerpo = `Es la hora de tu cita: *${event.titulo}*. Lleva tus documentos y llega con tiempo. 🩺`;
+            break;
+        case 'medicamentos':
+            cuerpo = `Es momento de tomar tu medicamento: *${event.titulo}*. Cuida tu salud. 💊`;
+            break;
+        case 'cita_amor':
+            cuerpo = `Llegó la hora de tu cita: *${event.titulo}*. ¡Disfruta cada momento! ❤️`;
+            break;
+        case 'mecanica':
+        case 'moto':
+        case 'carro':
+            cuerpo = `Recordatorio: *${event.titulo}*. Dale el mantenimiento que merece. 🔧`;
+            break;
+        case 'matrimonio':
+            cuerpo = `Hoy es el gran momento: *${event.titulo}*. 💍`;
+            break;
+        default:
+            cuerpo = `Tu compromiso *${event.titulo}* es ahora mismo.`;
+    }
+
+    let msg = `${meta.emoji} *${meta.nombre} — ¡Es la hora!*\n\n${cuerpo}\n\n🕒 *Hora:* ${hora}${ubic}`;
+    if (event.uuid_confirmacion && event.tipo_transaccion && event.tipo_transaccion !== 'ninguno') {
+        msg += `\n\n🔗 *Confirma y registra el gasto aquí:*\n${CONFIRM_BASE_URL}/${event.uuid_confirmacion}`;
+    }
+    return msg;
+}
+
+function buildTimedPreMsg(event) {
+    const meta = metaCategoria(event.categoria);
+    const hora = formatTime12h(event.hora);
+    const ubic = event.ubicacion ? `\n📍 *Lugar:* ${event.ubicacion}` : '';
+    return `⏰ *Faltan 30 minutos* ${meta.emoji}\n\nTu ${meta.nombre.toLowerCase()} *${event.titulo}* comienza a las *${hora}*.${ubic}\n\n💡 Te avisaremos de nuevo a la hora exacta.`;
+}
+
 // WhatsApp Send Message Function
 async function sendWhatsAppMessage(whatsapp, text) {
     try {
@@ -180,9 +287,9 @@ async function checkEventReminders() {
 
         // Fetch events for today and tomorrow for verified users
         const [events] = await connection.query(
-            `SELECT e.id, e.titulo, DATE_FORMAT(e.fecha, '%Y-%m-%d') as fecha, e.hora, e.ubicacion, e.uuid_confirmacion, u.whatsapp 
-             FROM eventos e 
-             JOIN usuarios u ON e.user_id = u.id 
+            `SELECT e.id, e.titulo, DATE_FORMAT(e.fecha, '%Y-%m-%d') as fecha, e.hora, e.categoria, e.ubicacion, e.costo, e.tipo_transaccion, e.tarjeta_credito_id, e.uuid_confirmacion, u.whatsapp
+             FROM eventos e
+             JOIN usuarios u ON e.user_id = u.id
              WHERE e.fecha IN (?, ?) AND u.verificado = true`,
             [todayStr, tomorrowStr]
         );
@@ -192,6 +299,11 @@ async function checkEventReminders() {
         const LOOK_AHEAD = 5 * 60 * 1000; // 5 minutes lookahead to schedule precise timeouts
 
         for (const event of events) {
+            // Los eventos "de todo el día" (sin hora, de crédito o categorías como
+            // arriendo/aceite/servicios/aniversario/mesiversario) NO se notifican aquí:
+            // se consolidan en el resumen matutino de las 7 a.m.
+            if (esTodoElDia(event)) continue;
+
             const eventDateStr = String(event.fecha);
 
             const exactTrigger = getColombianTime(eventDateStr, event.hora);
@@ -205,10 +317,7 @@ async function checkEventReminders() {
                 // Past or immediate execution
                 if (exactDelay >= -60 * 60 * 1000) {
                     const triggerISO = exactTrigger.toISOString();
-                    let msg = `🚀 *Comienza tu evento* 🚀\n\nTu evento *${event.titulo}* está programado para comenzar ahora.\n\n🕒 *Hora:* ${formatTime12h(event.hora)}\n📍 *Ubicación:* ${event.ubicacion || 'Sin ubicación definida'}\n\n¡Éxitos!`;
-                    if (event.uuid_confirmacion) {
-                        msg += `\n\n🔗 *Confirma y registra gastos aquí:* https://vapcaqueta.alwaysdata.net/confirmar/${event.uuid_confirmacion}`;
-                    }
+                    const msg = buildTimedExactMsg(event);
                     await executeEventReminder(event, 'evento_exacto', triggerISO, msg);
                 }
             } else if (exactDelay <= LOOK_AHEAD) {
@@ -229,10 +338,7 @@ async function checkEventReminders() {
 
                 const timeoutId = setTimeout(async () => {
                     scheduledTimeouts.delete(exactKey);
-                    let msg = `🚀 *Comienza tu evento* 🚀\n\nTu evento *${event.titulo}* está programado para comenzar ahora.\n\n🕒 *Hora:* ${formatTime12h(event.hora)}\n📍 *Ubicación:* ${event.ubicacion || 'Sin ubicación definida'}\n\n¡Éxitos!`;
-                    if (event.uuid_confirmacion) {
-                        msg += `\n\n🔗 *Confirma y registra gastos aquí:* https://vapcaqueta.alwaysdata.net/confirmar/${event.uuid_confirmacion}`;
-                    }
+                    const msg = buildTimedExactMsg(event);
                     await executeEventReminder(event, 'evento_exacto', triggerISO, msg);
                 }, exactDelay);
 
@@ -248,7 +354,7 @@ async function checkEventReminders() {
                 // Past or immediate execution
                 if (preDelay >= -60 * 60 * 1000) {
                     const triggerISO = preTrigger.toISOString();
-                    const msg = `⏰ *Recordatorio anticipado* (30 minutos) ⏰\n\nTu evento *${event.titulo}* comenzará en 30 minutos.\n\n🕒 *Hora:* ${formatTime12h(event.hora)}\n📍 *Ubicación:* ${event.ubicacion || 'Sin ubicación definida'}\n\n💡 Te avisaremos nuevamente a la hora exacta.`;
+                    const msg = buildTimedPreMsg(event);
                     await executeEventReminder(event, 'evento_30m', triggerISO, msg);
                 }
             } else if (preDelay > 0 && preDelay <= LOOK_AHEAD) {
@@ -269,7 +375,7 @@ async function checkEventReminders() {
 
                 const timeoutId = setTimeout(async () => {
                     scheduledTimeouts.delete(preKey);
-                    const msg = `⏰ *Recordatorio anticipado* (30 minutos) ⏰\n\nTu evento *${event.titulo}* comenzará en 30 minutos.\n\n🕒 *Hora:* ${formatTime12h(event.hora)}\n📍 *Ubicación:* ${event.ubicacion || 'Sin ubicación definida'}\n\n💡 Te avisaremos nuevamente a la hora exacta.`;
+                    const msg = buildTimedPreMsg(event);
                     await executeEventReminder(event, 'evento_30m', triggerISO, msg);
                 }, preDelay);
 
@@ -284,141 +390,138 @@ async function checkEventReminders() {
     }
 }
 
-async function checkBirthdays() {
+// ---------------------------------------------------------------------------
+//  RESUMEN MATUTINO (7 a.m.)
+//  Consolida en UN SOLO mensaje por usuario todo lo "de todo el día":
+//  cumpleaños, recordatorios/pagos sin hora, pagos de tarjeta de crédito,
+//  festivo del día y aviso de puente festivo (viernes/sábado).
+// ---------------------------------------------------------------------------
+
+function construirResumen({ todayStr, bdays, recordatorios, creditos, todayHoliday, puente }) {
+    const partes = [];
+    partes.push('☀️ *Buenos días* ☀️');
+    partes.push(`Esto es lo que tienes para hoy, ${fechaLegible(todayStr)}:`);
+
+    if (todayHoliday) {
+        partes.push(`\n🇨🇴 *Día festivo*\nHoy es festivo en Colombia: *${todayHoliday.localName}*. ¡Disfruta de este merecido descanso! 🏖️`);
+    }
+
+    if (bdays.length > 0) {
+        let s = '\n🎂 *Cumpleaños de hoy*';
+        for (const b of bdays) {
+            s += `\n• *${b.nombre}*`;
+            if (b.telefono) s += ` — 📞 ${b.telefono}`;
+            if (b.mensaje) s += `\n   _"${b.mensaje}"_`;
+        }
+        s += '\n¡No olvides felicitarle en su día! 🥳';
+        partes.push(s);
+    }
+
+    if (recordatorios.length > 0) {
+        let s = '\n📋 *Recordatorios y pagos de hoy*';
+        for (const e of recordatorios) {
+            const meta = metaCategoria(e.categoria);
+            let linea = `\n• ${meta.emoji} *${e.titulo}*`;
+            if (e.costo && Number(e.costo) > 0) linea += ` — ${formatCOP(e.costo)}`;
+            if (e.ubicacion) linea += ` _(${e.ubicacion})_`;
+            s += linea;
+        }
+        partes.push(s);
+    }
+
+    if (creditos.length > 0) {
+        let total = 0;
+        let s = '\n💳 *Pagos de tarjeta de crédito*';
+        for (const e of creditos) {
+            total += Number(e.costo || 0);
+            s += `\n• *${e.titulo}*`;
+            if (e.costo && Number(e.costo) > 0) s += ` — ${formatCOP(e.costo)}`;
+        }
+        if (creditos.length > 1) s += `\n💰 *Total de hoy:* ${formatCOP(total)}`;
+        s += '\n_Paga a tiempo para mantener tu vida crediticia sana y evitar intereses._';
+        partes.push(s);
+    }
+
+    if (puente) {
+        partes.push(`\n🏖️ *¡Puente festivo a la vista!*\nEste lunes es festivo por *${puente.holiday.localName}*. ¡Prepárate para un fin de semana largo! ✈️`);
+    }
+
+    partes.push('\n✨ Que tengas un día excelente. Estamos contigo para que no se te escape nada.');
+    return partes.join('\n');
+}
+
+async function checkDailyDigest() {
+    const colNow = getColombianNow();
+    if (colNow.getHours() < 7) return; // Sólo a partir de las 7:00 a.m. (hora Colombia)
+
     const connection = await pool.getConnection();
     try {
         const todayStr = getColombianDateString(0);
-        const [, month, day] = todayStr.split('-');
-        const todayMonthDay = `${month}-${day}`;
+        const dow = colNow.getDay(); // 0 = domingo ... 5 = viernes, 6 = sábado
+        const year = Number(todayStr.slice(0, 4));
 
-        // Get birthdays for today
-        const [birthdays] = await connection.query(
-            `SELECT c.id, c.nombre, c.mensaje, c.telefono, u.whatsapp 
-             FROM cumpleanos c 
-             JOIN usuarios u ON c.user_id = u.id 
-             WHERE DATE_FORMAT(c.fecha, '%m-%d') = ? AND u.verificado = true`,
-            [todayMonthDay]
-        );
+        // Festivo de hoy
+        const holidays = await getHolidays(year);
+        const todayHoliday = holidays.find(h => h.date === todayStr) || null;
 
-        for (const b of birthdays) {
+        // Puente: viernes (5) o sábado (6) -> revisar si el próximo lunes es festivo
+        let puente = null;
+        if (dow === 5 || dow === 6) {
+            const offset = dow === 5 ? 3 : 2;
+            const lunesStr = getColombianDateString(offset);
+            const lunesHols = await getHolidays(Number(lunesStr.slice(0, 4)));
+            const h = lunesHols.find(x => x.date === lunesStr);
+            if (h) puente = { fecha: lunesStr, holiday: h };
+        }
+
+        const [users] = await connection.query("SELECT id, whatsapp FROM usuarios WHERE verificado = true");
+
+        for (const user of users) {
+            // Cumpleaños de hoy de este usuario
+            const [bdays] = await connection.query(
+                `SELECT id, nombre, mensaje, telefono FROM cumpleanos WHERE user_id = ? AND DATE_FORMAT(fecha, '%m-%d') = ?`,
+                [user.id, todayStr.slice(5)]
+            );
+
+            // Eventos de hoy de este usuario, filtrando los "de todo el día"
+            const [evs] = await connection.query(
+                `SELECT id, titulo, hora, categoria, ubicacion, costo, tipo_transaccion, tarjeta_credito_id
+                 FROM eventos WHERE user_id = ? AND DATE_FORMAT(fecha, '%Y-%m-%d') = ?`,
+                [user.id, todayStr]
+            );
+            const todoElDia = evs.filter(esTodoElDia);
+            const creditos = todoElDia.filter(esCreditoEvent);
+            const recordatorios = todoElDia.filter(e => !esCreditoEvent(e));
+
+            // ¿Hay algo que comunicar hoy?
+            const hayContenido = bdays.length > 0 || todoElDia.length > 0 || todayHoliday || puente;
+            if (!hayContenido) continue;
+
+            // Lock único por usuario y día: garantiza UN solo resumen diario
             try {
                 await connection.query(
-                    "INSERT INTO notificaciones_enviadas (tipo, referencia_id, fecha_referencia) VALUES ('cumpleanos', ?, ?)",
-                    [b.id, todayStr]
+                    "INSERT INTO notificaciones_enviadas (tipo, referencia_id, fecha_referencia) VALUES ('resumen_diario', ?, ?)",
+                    [user.id, todayStr]
                 );
             } catch (dbErr) {
-                if (dbErr.code === 'ER_DUP_ENTRY') {
-                    continue; // Already processed by another process
-                }
+                if (dbErr.code === 'ER_DUP_ENTRY') continue; // Ya se envió hoy
                 throw dbErr;
             }
 
-            let msg = `🎉 *¡Hoy es un día especial!* 🎂\n\n*${b.nombre}* está de cumpleaños hoy.`;
-            if (b.mensaje) {
-                msg += `\n\n📝 *Mensaje personalizado guardado:*\n"${b.mensaje}"`;
-            }
-            if (b.telefono) {
-                msg += `\n\n📞 *Teléfono de contacto:* ${b.telefono}`;
-            }
-            msg += `\n\n¡No olvides felicitarle en su día! 🥳`;
-
-            const success = await sendWhatsAppMessage(b.whatsapp, msg);
+            const msg = construirResumen({ todayStr, bdays, recordatorios, creditos, todayHoliday, puente });
+            const success = await sendWhatsAppMessage(user.whatsapp, msg);
             if (!success) {
                 await connection.query(
-                    "DELETE FROM notificaciones_enviadas WHERE tipo = 'cumpleanos' AND referencia_id = ? AND fecha_referencia = ?",
-                    [b.id, todayStr]
+                    "DELETE FROM notificaciones_enviadas WHERE tipo = 'resumen_diario' AND referencia_id = ? AND fecha_referencia = ?",
+                    [user.id, todayStr]
                 );
-                console.log(`[Cron] Failed to send birthday message. Lock released for contact ${b.id}`);
+                console.log(`[Digest] Falló el envío; lock liberado para user ${user.id}`);
             } else {
-                console.log(`[Cron] Successfully sent and saved birthday reminder for contact ${b.id}`);
+                console.log(`[Digest] Resumen diario enviado a user ${user.id} (${bdays.length} cumple, ${recordatorios.length} recordatorios, ${creditos.length} créditos)`);
             }
         }
     } catch (error) {
-        console.error('[Cron Birthdays] Error checking birthdays:', error);
-    } finally {
-        connection.release();
-    }
-}
-
-async function checkHolidays() {
-    const connection = await pool.getConnection();
-    try {
-        const todayStr = getColombianDateString(0);
-        const year = new Date(todayStr).getFullYear();
-        const holidays = await getHolidays(year);
-
-        const currentColombian = getColombianNow();
-        const dayOfWeek = currentColombian.getDay(); // 0 = Sunday, ..., 5 = Friday, 6 = Saturday
-
-        // 1. Check if today is a Holiday
-        const todayHoliday = holidays.find(h => h.date === todayStr);
-        if (todayHoliday) {
-            const [users] = await connection.query("SELECT id, whatsapp FROM usuarios WHERE verificado = true");
-            for (const user of users) {
-                try {
-                    await connection.query(
-                        "INSERT INTO notificaciones_enviadas (tipo, referencia_id, fecha_referencia) VALUES ('festivo_dia', ?, ?)",
-                        [user.id, todayStr]
-                    );
-                } catch (dbErr) {
-                    if (dbErr.code === 'ER_DUP_ENTRY') {
-                        continue;
-                    }
-                    throw dbErr;
-                }
-
-                const msg = `🇨🇴 *¡Feliz día festivo!* 🇨🇴\n\nHoy es festivo en Colombia por: *${todayHoliday.localName}* (${todayHoliday.name}).\n\n¡Disfruta de este merecido descanso! 🏖️`;
-                const success = await sendWhatsAppMessage(user.whatsapp, msg);
-                if (!success) {
-                    await connection.query(
-                        "DELETE FROM notificaciones_enviadas WHERE tipo = 'festivo_dia' AND referencia_id = ? AND fecha_referencia = ?",
-                        [user.id, todayStr]
-                    );
-                } else {
-                    console.log(`[Cron] Successfully sent and saved holiday notification for user ${user.id}`);
-                }
-            }
-        }
-
-        // 2. Check for upcoming long weekend (Puente Festivo)
-        // Runs on Friday (5) or Saturday (6) checking the next Monday
-        if (dayOfWeek === 5 || dayOfWeek === 6) {
-            const offset = dayOfWeek === 5 ? 3 : 2;
-            const nextMondayStr = getColombianDateString(offset);
-            const mondayYear = new Date(nextMondayStr).getFullYear();
-            const mondayHolidays = await getHolidays(mondayYear);
-
-            const mondayHoliday = mondayHolidays.find(h => h.date === nextMondayStr);
-            if (mondayHoliday) {
-                const [users] = await connection.query("SELECT id, whatsapp FROM usuarios WHERE verificado = true");
-                for (const user of users) {
-                    try {
-                        await connection.query(
-                            "INSERT INTO notificaciones_enviadas (tipo, referencia_id, fecha_referencia) VALUES ('festivo_puente', ?, ?)",
-                            [user.id, nextMondayStr]
-                        );
-                    } catch (dbErr) {
-                        if (dbErr.code === 'ER_DUP_ENTRY') {
-                            continue;
-                        }
-                        throw dbErr;
-                    }
-
-                    const msg = `🏖️ *¡Se acerca un puente festivo!* 🏖️\n\nEste lunes es festivo por: *${mondayHoliday.localName}*.\n\n¡Prepárate para un fin de semana largo de descanso! ✈️`;
-                    const success = await sendWhatsAppMessage(user.whatsapp, msg);
-                    if (!success) {
-                        await connection.query(
-                            "DELETE FROM notificaciones_enviadas WHERE tipo = 'festivo_puente' AND referencia_id = ? AND fecha_referencia = ?",
-                            [user.id, nextMondayStr]
-                        );
-                    } else {
-                        console.log(`[Cron] Successfully sent and saved puente holiday notification for user ${user.id}`);
-                    }
-                }
-            }
-        }
-    } catch (error) {
-        console.error('[Cron Holidays] Error checking holidays:', error);
+        console.error('[Digest] Error en el resumen diario:', error);
     } finally {
         connection.release();
     }
@@ -565,12 +668,8 @@ async function main() {
     // Check immediately on startup
     await checkEventReminders();
     await checkCDTYields();
-
-    const colNow = getColombianNow();
-    if (colNow.getHours() >= 8) {
-        await checkBirthdays();
-        await checkHolidays();
-    }
+    // El resumen diario se autolimita a partir de las 7:00 a.m. (hora Colombia)
+    await checkDailyDigest();
 
     // Interval checks
     const POLL_INTERVAL = 30000; // 30 seconds
@@ -579,20 +678,33 @@ async function main() {
             console.log(`[Cron] Running polling loop... Timestamp: ${new Date().toLocaleString()}`);
             await checkEventReminders();
             await checkCDTYields();
-
-            const now = getColombianNow();
-            // General notifications (Birthdays/Holidays) run after 8:00 AM Colombia
-            if (now.getHours() >= 8) {
-                await checkBirthdays();
-                await checkHolidays();
-            }
+            // Resumen matutino consolidado (cumpleaños + recordatorios + créditos
+            // + festivos + puente). Internamente sólo actúa desde las 7:00 a.m.
+            await checkDailyDigest();
         } catch (err) {
             console.error('[Cron] Error in polling loop:', err);
         }
     }, POLL_INTERVAL);
 }
 
-main().catch(err => {
-    console.error('[Cron] Fatal error in main loop:', err);
-    process.exit(1);
-});
+// Sólo arranca el servicio si se ejecuta directamente (node index.js).
+// Al importarlo (p. ej. para pruebas) NO se inicia el bucle ni la BD.
+if (require.main === module) {
+    main().catch(err => {
+        console.error('[Cron] Fatal error in main loop:', err);
+        process.exit(1);
+    });
+}
+
+// Exponemos las funciones puras (sin BD) para pruebas y reutilización.
+module.exports = {
+    construirResumen,
+    buildTimedExactMsg,
+    buildTimedPreMsg,
+    esTodoElDia,
+    esCreditoEvent,
+    metaCategoria,
+    fechaLegible,
+    formatCOP,
+    formatTime12h
+};

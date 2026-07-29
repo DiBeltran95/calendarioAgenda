@@ -1,11 +1,37 @@
 <script lang="ts">
   import { toDateOnly } from '../dateUtils';
+  import { API_BASE_URL } from '../config';
 
   export let cuentas: any[] = [];
-  export let transacciones: any[] = [];
   export let categorias: any[] = [];
 
   let activeFilter = '30d';
+
+  // Las gráficas son la ÚNICA vista con histórico. Cargan sólo el rango elegido
+  // (y sólo cuando se abre esta pestaña), trayendo del backend campos mínimos.
+  let transacciones: any[] = [];
+  let loadingAnalytics = false;
+
+  async function loadAnalytics(dias: number) {
+    loadingAnalytics = true;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/api/finanzas/analytics?dias=${dias}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        transacciones = data.transacciones || [];
+      }
+    } catch (e) {
+      console.error('Error al cargar analíticas', e);
+    } finally {
+      loadingAnalytics = false;
+    }
+  }
+
+  // Recarga al cambiar el rango (y una vez al montar con el filtro por defecto).
+  $: loadAnalytics(getDaysCount(activeFilter));
 
   // ===== CATEGORY VISUAL CONFIG =====
   const CAT_BASE: Record<string, { label: string, color: string, icon: string }> = {
