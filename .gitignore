@@ -39,3 +39,6 @@ Thumbs.db
 
 # Downloads folder (generated Excel reports)
 backend/downloads/
+
+# Claude Code local settings
+.claude/settings.local.json
