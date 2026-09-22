@@ -53,9 +53,10 @@ calendario-saas/
 │   ├── server.ts       # Rutas /api/* (auth, eventos, ciclos, notas, hábitos, cumpleaños, finanzas…)
 │   ├── setupDB.ts      # Crea las tablas en MySQL
 │   └── lib/            # Utilidades de fechas, validación de ciclo, Excel
-└── cron/       # Servicio de recordatorios
-    ├── index.js
-    └── ecosystem.config.cjs
+├── cron/       # Servicio de recordatorios
+│   ├── index.js
+│   └── ecosystem.config.cjs
+└── mobile/     # App Flutter (iOS / Android / web) — 100% local con SQLite
 ```
 
 ---
@@ -141,6 +142,23 @@ cd frontend && npm test     # ciclo menstrual + outbox offline
 1. Subir la carpeta `cron/` y crear `cron/.env`.
 2. `npm install`.
 3. Ejecutar como servicio: `npx pm2 start ecosystem.config.cjs` (logs en `cron/logs/`).
+
+---
+
+## 📱 App móvil (`mobile/`)
+
+App Flutter con los calendarios de **eventos**, **ciclo menstrual** y **control financiero**, construida con **Flutter + Riverpod + Drift (SQLite)**. Guarda los datos solo en el dispositivo y no depende del backend. Detalles en [`mobile/README.md`](mobile/README.md).
+
+**Generar el `.ipa` (GitHub Actions):** el workflow [`.github/workflows/mobile.yml`](.github/workflows/mobile.yml) corre en cada push a `main` que modifique `mobile/`, o a mano desde **Actions → "Mobile (Flutter) · IPA y APK" → Run workflow**. Hace tres cosas:
+
+1. Corre el analizador y las pruebas.
+2. Compila el **APK de Android** y lo deja como artefacto.
+3. Compila el **`.ipa` de iOS sin firmar** y lo deja como artefacto y en una *release* `mobile-build-N`. Para instalarlo en el iPhone hay que firmarlo con tu Apple ID desde Sideloadly o AltStore.
+
+Desarrollo local:
+```bash
+cd mobile && flutter pub get && flutter run
+```
 
 ---
 
