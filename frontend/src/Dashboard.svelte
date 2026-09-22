@@ -8,6 +8,7 @@
   import CoachMark from './lib/components/CoachMark.svelte';
   import { API_BASE_URL } from './lib/config';
   import { getTodayLocal, toDateOnly } from './lib/dateUtils';
+  import { EVENT_CATEGORIES, categoryIcon, categoryLabel, esAnual } from './lib/categories';
   import { getCycleHistory, buildCycleStats, MIN_SANGRADO, MAX_SANGRADO } from './lib/cycleUtils';
   import { get } from 'svelte/store';
   import { leer, ErrorDeRed } from './lib/api';
@@ -1528,24 +1529,7 @@
     }
   }
 
-  const CATEGORIES = [
-    { value: 'reunion', label: 'Reunión', icon: 'fiber_manual_record' },
-    { value: 'cumpleanos', label: 'Cumpleaños', icon: 'cake' },
-    { value: 'moto', label: 'Moto', icon: 'two_wheeler' },
-    { value: 'carro', label: 'Carro', icon: 'directions_car' },
-    { value: 'casa', label: 'Casa', icon: 'home' },
-    { value: 'arriendo', label: 'Arriendo', icon: 'real_estate_agent' },
-    { value: 'aceite_moto', label: 'Aceite (Moto)', icon: 'water_drop' },
-    { value: 'mecanica', label: 'Mecánica', icon: 'handyman' },
-    { value: 'servicios', label: 'Servicios', icon: 'receipt_long' },
-    { value: 'doctor', label: 'Doctor', icon: 'local_hospital' },
-    { value: 'medicamentos', label: 'Medicamentos', icon: 'medication' },
-    { value: 'dentista', label: 'Dentista', icon: 'health_and_safety' },
-    { value: 'cita_amor', label: 'Cita amor', icon: 'favorite' },
-    { value: 'aniversario', label: 'Aniversario', icon: 'celebration' },
-    { value: 'matrimonio', label: 'Matrimonio', icon: 'diversity_1' },
-    { value: 'mesiversario', label: 'Mesiversario', icon: 'favorite_border' }
-  ];
+  const CATEGORIES = EVENT_CATEGORIES;
 
   let showCategoryDropdown = false;
   let categorySearch = '';
@@ -1581,14 +1565,16 @@
     for (const ev of currentMonthEvents) {
       const fecha = toDateOnly(ev.fecha);
       if (fecha < desde) continue;
+      const anual = esAnual(ev.frecuencia);
       items.push({
         tipo: 'evento',
         fecha,
         hora: ev.hora ? ev.hora.slice(0, 5) : '',
         titulo: ev.titulo || 'Evento',
-        detalle: ev.ubicacion || (ev.hora ? '' : 'Todo el día'),
-        icono: 'event',
-        etiqueta: 'Evento'
+        detalle: ev.ubicacion || (anual ? 'Cada año' : (ev.hora ? '' : 'Todo el día')),
+        icono: categoryIcon(ev.categoria),
+        etiqueta: categoryLabel(ev.categoria),
+        anual
       });
     }
 

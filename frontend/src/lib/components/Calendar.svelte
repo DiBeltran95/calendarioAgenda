@@ -5,6 +5,7 @@
   import { leer } from '../api';
   import { claveAnio, leerCache, escribirCache } from '../storage';
   import { getTodayLocal, toDateOnly } from '../dateUtils';
+  import { categoryIcon, categoryLabel, esAnual } from '../categories';
 
   export let isFemaleMode = false;
   export let isFinanceMode = false;
@@ -109,6 +110,16 @@
         return eStr === dateStr;
       });
 
+      // Eventos que se repiten cada año: en la casilla se pintan con el icono de
+      // su categoría (moto, casa, doctor…) en vez de un punto genérico.
+      const annualEvents = dayEvents
+        .filter(e => esAnual(e.frecuencia))
+        .map(e => ({
+          icon: categoryIcon(e.categoria),
+          titulo: `${e.titulo || categoryLabel(e.categoria)} · cada año`
+        }));
+      const otherEvents = dayEvents.filter(e => !esAnual(e.frecuencia));
+
       // Cumpleaños del día (coinciden mes y día)
       const dayBirthdays = cumpleanos.filter(c => {
         if (!c.fecha) return false;
@@ -156,6 +167,8 @@
         holiday, 
         importantDay, 
         dayEvents, 
+        annualEvents,
+        otherEvents,
         dayBirthdays,
         cyclePhase,
         cycleDetails,
@@ -336,9 +349,19 @@
                         <div class="important-indicator" title="{dayData.importantDay.nombre} — {dayData.importantDay.descripcion || ''}"></div>
                     {/if}
                     <div class="calendar-indicators">
-                      {#if dayData.dayEvents.length > 0}
-                        <div class="event-indicator" title="{dayData.dayEvents.length} evento(s)">
-                          {#each dayData.dayEvents.slice(0, 3) as event}
+                      {#if dayData.annualEvents.length > 0}
+                        <div class="annual-indicator">
+                          {#each dayData.annualEvents.slice(0, 2) as annual}
+                            <i class="material-icons annual-icon" title="{annual.titulo}">{annual.icon}</i>
+                          {/each}
+                          {#if dayData.annualEvents.length > 2}
+                            <span class="annual-more" title="{dayData.annualEvents.length} eventos anuales">+{dayData.annualEvents.length - 2}</span>
+                          {/if}
+                        </div>
+                      {/if}
+                      {#if dayData.otherEvents.length > 0}
+                        <div class="event-indicator" title="{dayData.otherEvents.length} evento(s)">
+                          {#each dayData.otherEvents.slice(0, 3) as event}
                             <div class="event-dot"></div>
                           {/each}
                         </div>
