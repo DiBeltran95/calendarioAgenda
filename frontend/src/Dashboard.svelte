@@ -97,6 +97,10 @@
 
   let calendarComponent: any;
   let selectedDay: any = null;
+  // Festivos y días importantes los carga el Calendar; los recibimos por bind
+  // para poder listarlos también en "Próximos" del Detalle del Día.
+  let monthHolidays: any[] = [];
+  let monthImportantDays: any[] = [];
   let showEventModal = false;
   let showPeriodModal = false;
   let periodFecha = '';
@@ -1558,6 +1562,92 @@
     return evYear === currentYear && evMonth === currentMonth;
   });
 
+  // Agenda de lo que queda del mes visible: eventos, festivos, días importantes
+  // y cumpleaños, mezclados y ordenados por fecha (y hora) de forma ascendente.
+  const MESES_CORTOS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const MESES_LARGOS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  $: monthPrefix = (currentYear !== undefined && currentMonth !== undefined)
+    ? `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`
+    : '';
+
+  $: upcomingItems = (() => {
+    if (!monthPrefix) return [];
+    const hoy = getTodayLocal();
+    // Si el mes visible ya pasó no hay nada "próximo"; si es futuro, se lista completo.
+    const desde = monthPrefix > hoy.slice(0, 7) ? `${monthPrefix}-00` : hoy;
+    const items: any[] = [];
+
+    for (const ev of currentMonthEvents) {
+      const fecha = toDateOnly(ev.fecha);
+      if (fecha < desde) continue;
+      items.push({
+        tipo: 'evento',
+        fecha,
+        hora: ev.hora ? ev.hora.slice(0, 5) : '',
+        titulo: ev.titulo || 'Evento',
+        detalle: ev.ubicacion || (ev.hora ? '' : 'Todo el día'),
+        icono: 'event',
+        etiqueta: 'Evento'
+      });
+    }
+
+    for (const h of monthHolidays) {
+      const fecha = toDateOnly(h.date);
+      if (!fecha.startsWith(monthPrefix) || fecha < desde) continue;
+      items.push({
+        tipo: 'festivo',
+        fecha,
+        hora: '',
+        titulo: h.localName || h.name || 'Festivo',
+        detalle: 'Día no laboral',
+        icono: 'celebration',
+        etiqueta: 'Festivo'
+      });
+    }
+
+    for (const d of monthImportantDays) {
+      const fecha = toDateOnly(d.date);
+      if (!fecha.startsWith(monthPrefix) || fecha < desde) continue;
+      items.push({
+        tipo: 'importante',
+        fecha,
+        hora: '',
+        titulo: d.nombre || 'Día importante',
+        detalle: d.categoria || 'Día especial',
+        icono: 'star',
+        etiqueta: 'Día importante'
+      });
+    }
+
+    for (const c of cumpleanosList) {
+      if (!c.fecha) continue;
+      const mmdd = toDateOnly(c.fecha).slice(5); // los cumpleaños se repiten cada año
+      if (!mmdd) continue;
+      const fecha = `${monthPrefix}-${mmdd.slice(3)}`;
+      if (mmdd.slice(0, 2) !== monthPrefix.slice(5) || fecha < desde) continue;
+      const edad = c.anio_nacimiento ? (currentYear - c.anio_nacimiento) : null;
+      items.push({
+        tipo: 'cumpleanos',
+        fecha,
+        hora: '',
+        titulo: c.nombre || 'Cumpleaños',
+        detalle: edad !== null ? `Cumple ${edad} años` : 'Cumpleaños',
+        icono: 'cake',
+        etiqueta: 'Cumpleaños'
+      });
+    }
+
+    // Mismo día: primero lo de todo el día (sin hora), luego por hora ascendente.
+    items.sort((a, b) => a.fecha === b.fecha ? a.hora.localeCompare(b.hora) : a.fecha.localeCompare(b.fecha));
+    return items;
+  })();
+
+  /** Abre el detalle del día desde la lista de próximos. */
+  function abrirDiaDesdeLista(dateStr: string) {
+    calendarComponent?.selectDay?.(dateStr);
+  }
+
   $: monthlyStats = currentMonthEvents.reduce((acc, ev) => {
     const costo = Number(ev.costo || 0);
     if (ev.tipo_transaccion === 'gasto') {
@@ -2283,7 +2373,7 @@
 
 <!-- Contenedor principal -->
 <main class="main-container">
-    <Calendar bind:this={calendarComponent} bind:events={dashboardEvents} bind:currentMonth bind:currentYear selectedDateStr={selectedDay?.dateStr ?? null} {isFemaleMode} {isFinanceMode} {isNotesMode} {isHabitsMode} cumpleanos={cumpleanosList} cycleLogs={cyclesList} notes={notesList} habits={habitsList} habitLogs={habitLogsList} transacciones={transaccionesList} plannedOccurrences={occurrencesList} on:click_day={handleDayClick} on:dblclick_day={handleDayDoubleClick} />
+    <Calendar bind:this={calendarComponent} bind:events={dashboardEvents} bind:currentMonth bind:currentYear bind:holidays={monthHolidays} bind:importantDays={monthImportantDays} selectedDateStr={selectedDay?.dateStr ?? null} {isFemaleMode} {isFinanceMode} {isNotesMode} {isHabitsMode} cumpleanos={cumpleanosList} cycleLogs={cyclesList} notes={notesList} habits={habitsList} habitLogs={habitLogsList} transacciones={transaccionesList} plannedOccurrences={occurrencesList} on:click_day={handleDayClick} on:dblclick_day={handleDayDoubleClick} />
 
     <!-- Próximos eventos / Eventos del día -->
     <div class="upcoming-section">
@@ -4422,44 +4512,44 @@
                         {/if}
                     </div>
                 {:else}
-                    <!-- Vista sin día seleccionado: próximos eventos del mes -->
-                    {@const upcomingEvents = currentMonthEvents.filter(e => {
-                        const today = getTodayLocal();
-                        return toDateOnly(e.fecha) >= today;
-                    }).sort((a, b) => a.fecha.localeCompare(b.fecha)).slice(0, 5)}
-
-                    {#if upcomingEvents.length > 0}
+                    <!-- Vista sin día seleccionado: agenda de lo que queda del mes
+                         (eventos, festivos, días importantes y cumpleaños) en orden. -->
+                    {#if upcomingItems.length > 0}
                         <div style="margin-bottom: 12px;">
                             <h4 style="color: var(--text-primary); font-size: 0.95rem; font-weight: 500; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
                                 <i class="material-icons" style="color: var(--wa-green); font-size: 20px;">upcoming</i>
-                                Próximos Eventos
+                                Próximos en {MESES_LARGOS[currentMonth]} ({upcomingItems.length})
                             </h4>
-                            <div style="display: flex; flex-direction: column; gap: 8px;">
-                                {#each upcomingEvents as ev}
-                                    <div class="upcoming-mini-card">
+                            <div class="upcoming-agenda">
+                                {#each upcomingItems as item (item.tipo + item.fecha + item.titulo)}
+                                    <button type="button" class="upcoming-mini-card upcoming-{item.tipo}" on:click={() => abrirDiaDesdeLista(item.fecha)} title="Ver el {item.fecha}">
                                         <div class="upcoming-mini-left">
                                             <div class="upcoming-mini-date">
-                                                <span class="upcoming-mini-day">{toDateOnly(ev.fecha).split('-')[2]}</span>
-                                                <span class="upcoming-mini-month">{['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][Number(toDateOnly(ev.fecha).split('-')[1]) - 1]}</span>
+                                                <span class="upcoming-mini-day">{item.fecha.split('-')[2]}</span>
+                                                <span class="upcoming-mini-month">{MESES_CORTOS[Number(item.fecha.split('-')[1]) - 1]}</span>
                                             </div>
                                             <div class="upcoming-mini-info">
-                                                <span class="upcoming-mini-title">{ev.titulo}</span>
+                                                <span class="upcoming-mini-title">{item.titulo}</span>
                                                 <span class="upcoming-mini-time">
-                                                    <i class="material-icons" style="font-size: 12px;">schedule</i>
-                                                    {ev.hora ? ev.hora.slice(0, 5) : 'Todo el día'}
+                                                    <i class="material-icons" style="font-size: 12px;">{item.icono}</i>
+                                                    {item.hora ? item.hora : item.etiqueta}{item.detalle ? ` · ${item.detalle}` : ''}
                                                 </span>
                                             </div>
                                         </div>
-                                    </div>
+                                    </button>
                                 {/each}
                             </div>
                         </div>
-                    {/if}
 
-                    <div class="text-center text-text-secondary w-full" style="padding: 20px 0;">
-                        <i class="material-icons" style="font-size: 48px; opacity: 0.5; margin-bottom: 10px;">event_available</i>
-                        <p>Selecciona un día en el calendario para ver sus detalles o eventos.</p>
-                    </div>
+                        <div class="text-center text-text-secondary w-full" style="padding: 4px 0 12px;">
+                            <p style="font-size: 0.8rem;">Selecciona un día en el calendario para ver su detalle.</p>
+                        </div>
+                    {:else}
+                        <div class="text-center text-text-secondary w-full" style="padding: 20px 0;">
+                            <i class="material-icons" style="font-size: 48px; opacity: 0.5; margin-bottom: 10px;">event_available</i>
+                            <p>No queda nada pendiente este mes. Selecciona un día en el calendario para ver sus detalles.</p>
+                        </div>
+                    {/if}
                 {/if}
             </div>
         {/if}
@@ -5649,6 +5739,15 @@
   /* ============================================
      UPCOMING MINI CARDS (Events mode, no day selected)
      ============================================ */
+  .upcoming-agenda {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 420px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
   .upcoming-mini-card {
     display: flex;
     align-items: center;
@@ -5659,7 +5758,11 @@
     border: 1px solid var(--border-color);
     border-radius: 10px;
     transition: all 0.2s ease;
-    cursor: default;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    color: inherit;
   }
 
   .upcoming-mini-card:hover {
@@ -5726,6 +5829,25 @@
     font-size: 0.72rem;
     color: var(--text-secondary);
   }
+
+  /* Color por tipo de elemento de la agenda */
+  .upcoming-mini-card.upcoming-festivo .upcoming-mini-date {
+    background: rgba(255, 167, 38, 0.1);
+    border-color: rgba(255, 167, 38, 0.25);
+  }
+  .upcoming-mini-card.upcoming-festivo .upcoming-mini-day { color: #FFA726; }
+
+  .upcoming-mini-card.upcoming-importante .upcoming-mini-date {
+    background: rgba(156, 39, 176, 0.12);
+    border-color: rgba(156, 39, 176, 0.3);
+  }
+  .upcoming-mini-card.upcoming-importante .upcoming-mini-day { color: #CE93D8; }
+
+  .upcoming-mini-card.upcoming-cumpleanos .upcoming-mini-date {
+    background: rgba(236, 64, 122, 0.12);
+    border-color: rgba(236, 64, 122, 0.3);
+  }
+  .upcoming-mini-card.upcoming-cumpleanos .upcoming-mini-day { color: #F48FB1; }
 
   .upcoming-mini-badge {
     width: 24px;

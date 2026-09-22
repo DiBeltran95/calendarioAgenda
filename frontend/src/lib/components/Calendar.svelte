@@ -20,8 +20,8 @@
   // Festivos y días importantes dependen del AÑO mostrado, así que el Calendar
   // los sigue cargando él mismo (al montar y al cambiar de año). El resto de los
   // datos llega por props desde el bootstrap del Dashboard (una sola petición).
-  let holidays: any[] = [];
-  let importantDays: any[] = [];
+  export let holidays: any[] = [];
+  export let importantDays: any[] = [];
   export let cycleLogs: any[] = [];
   export let notes: any[] = [];
   export let habits: any[] = [];
@@ -170,6 +170,16 @@
         habitCompletionRate
       };
     });
+  }
+
+  /**
+   * Selecciona un día del mes visible desde fuera del calendario (por ejemplo,
+   * desde la lista de "Próximos" del Dashboard). Emite el mismo evento que un
+   * click en la celda, así el detalle del día se arma igual en los dos casos.
+   */
+  export function selectDay(dateStr: string) {
+    const dayData = daysInMonth.find(d => d.dateStr === dateStr);
+    if (dayData) dispatch('click_day', { dateStr, dayData });
   }
 
   async function changeMonth(delta: number) {
