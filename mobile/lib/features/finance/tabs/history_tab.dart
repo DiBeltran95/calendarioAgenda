@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/palette.dart';
 import '../../../app/theme/tokens.dart';
 import '../../../core/dates.dart';
-import '../../../core/db/database.dart';
+import '../../../data/models.dart';
 import '../../../core/icon_map.dart';
 import '../../../core/money.dart';
 import '../../../core/motion.dart';
@@ -120,18 +120,7 @@ class TxTile extends ConsumerWidget {
       return;
     }
     toaster.show('Movimiento eliminado y saldo revertido', icon: Icons.delete_outline_rounded, onUndo: () {
-      repo.crearTransaccion(
-        TransaccionInput(
-          tipo: tx.tipo,
-          monto: tx.monto,
-          descripcion: tx.descripcion,
-          fecha: tx.fecha,
-          cuentaId: tx.cuentaId,
-          categoria: tx.categoria,
-          cuotas: tx.cuotas,
-        ),
-        metaId: tx.metaId,
-      );
+      repo.crearTransaccion(TransaccionInput.desde(tx));
     });
   }
 
@@ -181,7 +170,6 @@ class TxTile extends ConsumerWidget {
                       if (!ingreso) cat?.label ?? tx.categoria,
                       cuenta?.nombre ?? 'Sin cuenta',
                       if (tx.cuotas > 1) '${tx.cuotas} cuotas',
-                      if (tx.metaId != null) 'Aporte a meta',
                     ].join(' · '),
                     style: context.text.bodySmall,
                     maxLines: 1,

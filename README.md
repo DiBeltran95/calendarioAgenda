@@ -56,7 +56,7 @@ calendario-saas/
 ├── cron/       # Servicio de recordatorios
 │   ├── index.js
 │   └── ecosystem.config.cjs
-└── mobile/     # App Flutter (iOS / Android / web) — 100% local con SQLite
+└── mobile/     # App Flutter (iOS / Android / web) — cliente del backend con caché SQLite y avisos locales
 ```
 
 ---
@@ -147,7 +147,13 @@ cd frontend && npm test     # ciclo menstrual + outbox offline
 
 ## 📱 App móvil (`mobile/`)
 
-App Flutter con los calendarios de **eventos**, **ciclo menstrual** y **control financiero**, construida con **Flutter + Riverpod + Drift (SQLite)**. Guarda los datos solo en el dispositivo y no depende del backend. Detalles en [`mobile/README.md`](mobile/README.md).
+App Flutter con los calendarios de **eventos**, **ciclo menstrual** y **control financiero**, construida con **Flutter + Riverpod + Drift (SQLite)**. Detalles en [`mobile/README.md`](mobile/README.md).
+
+- Usa el **mismo backend** que la web (`dibeltran05.alwaysdata.net`) sin modificarlo.
+- Cada usuario inicia sesión y ve los mismos datos que en agendaservi.com.
+- Los eventos que registra los avisa el **cron** por WhatsApp.
+- La app también programa **notificaciones en el teléfono** con las mismas reglas del cron.
+- Guarda una caché en SQLite para abrir al instante y funcionar sin conexión.
 
 **Generar el `.ipa` (GitHub Actions):** el workflow [`.github/workflows/mobile.yml`](.github/workflows/mobile.yml) corre en cada push a `main` que modifique `mobile/`, o a mano desde **Actions → "Mobile (Flutter) · IPA y APK" → Run workflow**. Hace tres cosas:
 

@@ -5,8 +5,11 @@ import 'package:go_router/go_router.dart';
 
 import '../core/motion.dart';
 import '../core/providers.dart';
+import '../data/sync.dart';
+import '../features/notifications/notification_service.dart';
 import 'theme/app_module.dart';
 import 'theme/palette.dart';
+import 'theme/tokens.dart';
 
 class _Destino {
   const _Destino(this.label, this.icon, this.iconSel, this.module);
@@ -16,28 +19,59 @@ class _Destino {
   final AppModule? module;
 }
 
+/// Orden de las pestañas (coincide con las ramas del router).
 final _destinos = [
-  for (final m in AppModule.values) _Destino(m.label, m.icon, m.iconSelected, m),
-  const _Destino('Ajustes', Icons.tune_outlined, Icons.tune_rounded, null),
+  _Destino(AppModule.inicio.label, AppModule.inicio.icon, AppModule.inicio.iconSelected, AppModule.inicio),
+  _Destino(AppModule.eventos.label, AppModule.eventos.icon, AppModule.eventos.iconSelected, AppModule.eventos),
+  _Destino(AppModule.finanzas.label, AppModule.finanzas.icon, AppModule.finanzas.iconSelected, AppModule.finanzas),
+  _Destino(AppModule.ciclo.label, AppModule.ciclo.icon, AppModule.ciclo.iconSelected, AppModule.ciclo),
+  const _Destino('Perfil', Icons.person_outline_rounded, Icons.person_rounded, null),
 ];
 
 /// Contenedor principal: navegación inferior en teléfono y riel lateral en
 /// pantallas anchas. Al cambiar de módulo el tema global interpola su color.
-class HomeShell extends ConsumerWidget {
+///
+/// También mantiene viva la programación de notificaciones y refresca los
+/// datos cuando la app vuelve a primer plano.
+class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key, required this.shell});
   final StatefulNavigationShell shell;
 
-  void _ir(WidgetRef ref, int i) {
-    HapticFeedback.selectionClick();
-    final m = _destinos[i].module;
-    if (m != null) ref.read(moduloActivoProvider.notifier).set(m);
-    shell.goBranch(i, initialLocation: i == shell.currentIndex);
+  @override
+  ConsumerState<HomeShell> createState() => _HomeShellState();
+}
+
+class _HomeShellState extends ConsumerState<HomeShell> {
+  late final AppLifecycleListener _ciclo;
+
+  @override
+  void initState() {
+    super.initState();
+    _ciclo = AppLifecycleListener(onResume: () {
+      ref.read(sincronizadorProvider).refrescarTodo();
+      ref.read(permisoAvisosProvider.notifier).revisar();
+    });
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Mantiene el acento global alineado con la rama visible (p. ej. al abrir
-    // la app directamente en /finanzas).
+  void dispose() {
+    _ciclo.dispose();
+    super.dispose();
+  }
+
+  void _ir(int i) {
+    HapticFeedback.selectionClick();
+    final m = _destinos[i].module;
+    if (m != null) ref.read(moduloActivoProvider.notifier).set(m);
+    widget.shell.goBranch(i, initialLocation: i == widget.shell.currentIndex);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Programación de notificaciones siempre activa mientras hay sesión.
+    ref.watch(programadorAvisosProvider);
+
+    final shell = widget.shell;
     final m = _destinos[shell.currentIndex].module;
     if (m != null && ref.read(moduloActivoProvider) != m) {
       WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(moduloActivoProvider.notifier).set(m));
@@ -45,6 +79,7 @@ class HomeShell extends ConsumerWidget {
 
     final wide = MediaQuery.sizeOf(context).width >= 980;
     final p = context.palette;
+    final cuerpo = Column(children: [const _BannerRed(), Expanded(child: shell)]);
 
     if (wide) {
       return Scaffold(
@@ -52,7 +87,7 @@ class HomeShell extends ConsumerWidget {
           children: [
             NavigationRail(
               selectedIndex: shell.currentIndex,
-              onDestinationSelected: (i) => _ir(ref, i),
+              onDestinationSelected: _ir,
               labelType: NavigationRailLabelType.all,
               backgroundColor: p.surface,
               indicatorColor: p.accent.withValues(alpha: 0.2),
@@ -71,27 +106,62 @@ class HomeShell extends ConsumerWidget {
               ],
             ),
             VerticalDivider(width: 1, color: p.border),
-            Expanded(child: shell),
+            Expanded(child: cuerpo),
           ],
         ),
       );
     }
 
     return Scaffold(
-      body: shell,
+      body: cuerpo,
       bottomNavigationBar: DecoratedBox(
         decoration: BoxDecoration(border: Border(top: BorderSide(color: p.border))),
         child: NavigationBar(
           selectedIndex: shell.currentIndex,
-          onDestinationSelected: (i) => _ir(ref, i),
+          onDestinationSelected: _ir,
           animationDuration: Motion.of(context, Motion.slow),
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           destinations: [
-            for (final d in _destinos)
-              NavigationDestination(icon: Icon(d.icon), selectedIcon: Icon(d.iconSel), label: d.label),
+            for (final d in _destinos) NavigationDestination(icon: Icon(d.icon), selectedIcon: Icon(d.iconSel), label: d.label),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Aviso discreto cuando el servidor no responde: la app sigue mostrando lo
+/// guardado en el teléfono y ofrece reintentar.
+class _BannerRed extends ConsumerWidget {
+  const _BannerRed();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final offline = ref.watch(redProvider) == EstadoRed.sinConexion;
+    return AnimatedSize(
+      duration: Motion.of(context, Motion.medium),
+      curve: Motion.enter,
+      child: !offline
+          ? const SizedBox(width: double.infinity)
+          : Material(
+              color: Color.alphaBlend(p.warning.withValues(alpha: 0.16), p.bg),
+              child: SafeArea(
+                bottom: false,
+                child: Semantics(
+                  liveRegion: true,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(Gap.md, Gap.xs, Gap.xs, Gap.xs),
+                    child: Row(children: [
+                      Icon(Icons.cloud_off_rounded, color: p.warning, size: IconSizes.md),
+                      const HGap.sm(),
+                      Expanded(child: Text('Sin conexión · mostrando lo guardado en tu teléfono', style: context.text.bodySmall?.copyWith(color: p.text))),
+                      TextButton(onPressed: () => ref.read(sincronizadorProvider).refrescarTodo(), child: const Text('Reintentar')),
+                    ]),
+                  ),
+                ),
+              ),
+            ),
     );
   }
 }

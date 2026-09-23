@@ -5,10 +5,12 @@ import '../../app/theme/app_module.dart';
 import '../../app/theme/palette.dart';
 import '../../app/theme/tokens.dart';
 import '../../core/dates.dart';
-import '../../core/db/database.dart';
+import '../../data/models.dart';
 import '../../core/holidays.dart';
 import '../../core/motion.dart';
 import '../../core/providers.dart';
+import '../../core/session.dart';
+import '../../data/sync.dart';
 import '../../core/widgets/month_calendar.dart';
 import '../../core/widgets/sheets.dart';
 import '../../core/widgets/ui.dart';
@@ -32,9 +34,11 @@ class EventsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final mes = ref.watch(mesEventosProvider);
     final sel = ref.watch(diaEventosProvider);
-    final eventos = ref.watch(eventosMesProvider((mes.year, mes.month))).value ?? const <Evento>[];
+    final eventosAsync = ref.watch(eventosMesProvider((mes.year, mes.month)));
+    final eventos = eventosAsync.value ?? const <Evento>[];
+    final especiales = ref.watch(diasImportantesProvider(mes.year)).value ?? const <DiaImportante>[];
     final cumples = ref.watch(cumplesProvider).value ?? const <Cumple>[];
-    final nombre = ref.watch(preferenciasProvider).value?.nombre ?? '';
+    final nombre = ref.watch(sesionProvider).value?.usuario.primerNombre ?? '';
 
     final porDia = <String, List<Evento>>{};
     for (final e in eventos) {
@@ -54,6 +58,7 @@ class EventsScreen extends ConsumerWidget {
       body: SafeArea(
         bottom: false,
         child: ModuleLayout(
+          onRefresh: () => ref.read(sincronizadorProvider).refrescarTodo(),
           primary: [
             ModuleHeader(
               overline: saludo(nombre),
@@ -66,6 +71,7 @@ class EventsScreen extends ConsumerWidget {
                 ),
               ],
             ),
+            CargandoBarra(visible: eventosAsync.isLoading && !eventosAsync.hasValue),
             Entrance(child: _ResumenMes(eventos: eventos)),
             const VGap.sm(),
             Entrance(
@@ -87,6 +93,7 @@ class EventsScreen extends ConsumerWidget {
                   },
                   cellBuilder: (context, d) => _EventDayCell(
                     day: d,
+                    especial: diaImportanteEn(especiales, d.fecha),
                     eventos: porDia[d.fecha] ?? const [],
                     cumples: cumplesDelDia(cumples, d.fecha).length,
                   ),
@@ -99,8 +106,14 @@ class EventsScreen extends ConsumerWidget {
             const VGap.md(),
             SmoothSwitcher(
               child: sel == null
-                  ? _AgendaMes(key: ValueKey('agenda-${mes.month}'), mes: mes, eventos: eventos, cumples: cumples)
-                  : _DetalleDia(key: ValueKey(sel), fecha: sel, eventos: porDia[sel] ?? const [], cumples: cumplesDelDia(cumples, sel)),
+                  ? _AgendaMes(key: ValueKey('agenda-${mes.month}'), mes: mes, eventos: eventos, cumples: cumples, especiales: especiales)
+                  : _DetalleDia(
+                      key: ValueKey(sel),
+                      fecha: sel,
+                      eventos: porDia[sel] ?? const [],
+                      cumples: cumplesDelDia(cumples, sel),
+                      especial: diaImportanteEn(especiales, sel),
+                    ),
             ),
           ],
         ),
@@ -112,7 +125,8 @@ class EventsScreen extends ConsumerWidget {
 // ─────────────────────────── Celda ───────────────────────────
 
 class _EventDayCell extends StatelessWidget {
-  const _EventDayCell({required this.day, required this.eventos, required this.cumples});
+  const _EventDayCell({required this.day, required this.eventos, required this.cumples, this.especial});
+  final DiaImportante? especial;
 
   final CalendarDay day;
   final List<Evento> eventos;
@@ -121,7 +135,7 @@ class _EventDayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final festivo = festivoEn(day.fecha);
-    final especial = festivo == null ? diaEspecialEn(day.fecha) : null;
+    final especial = festivo == null ? this.especial : null;
     // Los eventos anuales se pintan con el ícono de su categoría (moto, casa…).
     final anuales = eventos.where((e) => esAnual(e.frecuencia)).toList();
     final otros = eventos.where((e) => !esAnual(e.frecuencia)).toList();
@@ -217,7 +231,8 @@ class _ResumenMes extends StatelessWidget {
 // ─────────────────────────── Detalle del día ───────────────────────────
 
 class _DetalleDia extends ConsumerWidget {
-  const _DetalleDia({super.key, required this.fecha, required this.eventos, required this.cumples});
+  const _DetalleDia({super.key, required this.fecha, required this.eventos, required this.cumples, this.especial});
+  final DiaImportante? especial;
 
   final String fecha;
   final List<Evento> eventos;
@@ -227,7 +242,6 @@ class _DetalleDia extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final festivo = festivoEn(fecha);
-    final especial = diaEspecialEn(fecha);
     final anio = int.parse(fecha.substring(0, 4));
     final vacio = eventos.isEmpty && cumples.isEmpty && festivo == null && especial == null;
     var i = 0;
@@ -267,7 +281,12 @@ class _DetalleDia extends ConsumerWidget {
         if (especial != null)
           Entrance(
             index: i++,
-            child: _InfoDia(color: _especialColor, icon: Icons.star_rounded, titulo: especial.nombre, texto: '${especial.categoria} · ${especial.descripcion}'),
+            child: _InfoDia(
+              color: _especialColor,
+              icon: Icons.star_rounded,
+              titulo: especial!.nombre,
+              texto: [especial!.categoria, especial!.descripcion].where((t) => t.isNotEmpty).join(' · '),
+            ),
           ),
         for (final e in eventos)
           Padding(
@@ -368,7 +387,8 @@ class _ItemAgenda {
 /// Lo que queda del mes visible, en orden: eventos, festivos, días especiales y
 /// cumpleaños (la misma idea que se agregó a la web).
 class _AgendaMes extends ConsumerWidget {
-  const _AgendaMes({super.key, required this.mes, required this.eventos, required this.cumples});
+  const _AgendaMes({super.key, required this.mes, required this.eventos, required this.cumples, required this.especiales});
+  final List<DiaImportante> especiales;
 
   final DateTime mes;
   final List<Evento> eventos;
@@ -399,8 +419,8 @@ class _AgendaMes extends ConsumerWidget {
         ),
       for (final f in festivosColombia(mes.year).where((f) => f.fecha.startsWith(prefijo) && f.fecha.compareTo(desde) >= 0))
         _ItemAgenda(fecha: f.fecha, hora: '', titulo: f.nombre, detalle: 'Festivo · Día no laboral', icon: Icons.celebration_rounded, color: _festivoColor),
-      for (final d in diasEspeciales(mes.year).where((d) => d.fecha.startsWith(prefijo) && d.fecha.compareTo(desde) >= 0))
-        _ItemAgenda(fecha: d.fecha, hora: '', titulo: d.nombre, detalle: d.categoria, icon: Icons.star_rounded, color: _especialColor),
+      for (final d in especiales.where((d) => d.fecha.startsWith(prefijo) && d.fecha.compareTo(desde) >= 0))
+        _ItemAgenda(fecha: d.fecha, hora: '', titulo: d.nombre, detalle: d.categoria.isEmpty ? 'Día especial' : d.categoria, icon: Icons.star_rounded, color: _especialColor),
       for (final c in cumples)
         if (c.fecha.length >= 10 && c.fecha.substring(5, 7) == prefijo.substring(5) && '$prefijo${c.fecha.substring(7)}'.compareTo(desde) >= 0)
           _ItemAgenda(

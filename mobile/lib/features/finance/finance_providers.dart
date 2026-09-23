@@ -1,38 +1,46 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/dates.dart';
-import '../../core/db/database.dart';
+import '../../data/models.dart';
+import '../../data/sync.dart';
 import 'finance_logic.dart';
-import 'finance_repository.dart';
 
-final cuentasProvider = StreamProvider<List<Cuenta>>((ref) => ref.watch(financeRepoProvider).watchCuentas());
+// Vistas derivadas de las cargas del servidor (bootstrap / mes). Devuelven
+// AsyncValue para que la interfaz pueda distinguir "cargando" de "vacío".
 
-/// Transacciones de un mes (clave: (año, mes 1..12)).
-final txMesProvider = StreamProvider.family<List<Transaccion>, (int, int)>((ref, k) {
-  final p = prefijoMes(k.$1, k.$2);
-  return ref.watch(financeRepoProvider).watchTransacciones('$p-01', '$p-31');
+final cuentasProvider = Provider<AsyncValue<List<Cuenta>>>((ref) => ref.watch(bootstrapProvider).whenData((b) => b.cuentas));
+
+final txMesProvider = Provider.autoDispose.family<AsyncValue<List<Transaccion>>, (int, int)>(
+    (ref, k) => ref.watch(monthProvider(k)).whenData((d) => d.transacciones));
+
+final transferenciasMesProvider = Provider.autoDispose.family<AsyncValue<List<Transferencia>>, (int, int)>(
+    (ref, k) => ref.watch(monthProvider(k)).whenData((d) => d.transferencias));
+
+final planesProvider = Provider<AsyncValue<List<IngresoPlanificado>>>((ref) => ref.watch(bootstrapProvider).whenData((b) => b.planes));
+
+final verificacionesProvider = Provider<AsyncValue<List<Verificacion>>>((ref) => ref.watch(bootstrapProvider).whenData((b) => b.verificaciones));
+
+final metasProvider = Provider<AsyncValue<List<Meta>>>((ref) => ref.watch(bootstrapProvider).whenData((b) => b.metas));
+
+final categoriasFinProvider = Provider<AsyncValue<List<CategoriaFinanzas>>>((ref) => ref.watch(bootstrapProvider).whenData((b) => b.categorias));
+
+/// Categorías con transacciones o presupuestos (no se pueden borrar): lo que
+/// calcula el servidor más lo del mes visible, como en la web.
+final categoriasEnUsoProvider = Provider.autoDispose.family<Set<String>, (int, int)>((ref, k) {
+  final usadas = {...?ref.watch(bootstrapProvider).value?.categoriasUsadas};
+  final mes = ref.watch(monthProvider(k)).value;
+  if (mes != null) {
+    usadas.addAll(mes.transacciones.map((t) => t.categoria));
+    usadas.addAll(mes.presupuestos.map((p) => p.categoria));
+  }
+  return usadas;
 });
 
-final transferenciasMesProvider = StreamProvider.family<List<Transferencia>, (int, int)>((ref, k) {
-  final p = prefijoMes(k.$1, k.$2);
-  return ref.watch(financeRepoProvider).watchTransferencias('$p-01', '$p-31');
-});
-
-final planesProvider = StreamProvider<List<IngresoPlanificado>>((ref) => ref.watch(financeRepoProvider).watchPlanes());
-final verificacionesProvider = StreamProvider<List<Verificacion>>((ref) => ref.watch(financeRepoProvider).watchVerificaciones());
-final metasProvider = StreamProvider<List<Meta>>((ref) => ref.watch(financeRepoProvider).watchMetas());
-final presupuestosProvider = StreamProvider<List<Presupuesto>>((ref) => ref.watch(financeRepoProvider).watchPresupuestos());
-final categoriasFinProvider = StreamProvider<List<CategoriaFinanzas>>((ref) => ref.watch(financeRepoProvider).watchCategorias());
-final categoriasEnUsoProvider = StreamProvider<Set<String>>((ref) => ref.watch(financeRepoProvider).watchCategoriasEnUso());
-
-/// Transacciones del último año (para gráficas y patrimonio histórico).
-final txAnaliticaProvider = StreamProvider.family<List<Transaccion>, RangoAnalitica>((ref, r) {
-  final hoy = hoyYmd();
-  return ref.watch(financeRepoProvider).watchTransacciones(sumarDiasYmd(hoy, -r.dias), hoy);
-});
+/// Transacciones del rango de las gráficas (endpoint de analítica).
+final txAnaliticaProvider = Provider.autoDispose.family<AsyncValue<List<Transaccion>>, RangoAnalitica>(
+    (ref, r) => ref.watch(analiticaProvider(r.dias)));
 
 /// Ocurrencias de ingresos planificados del mes.
-final ocurrenciasMesProvider = Provider.family<List<OcurrenciaIngreso>, (int, int)>((ref, k) {
+final ocurrenciasMesProvider = Provider.autoDispose.family<List<OcurrenciaIngreso>, (int, int)>((ref, k) {
   final planes = ref.watch(planesProvider).value ?? const [];
   final verifs = ref.watch(verificacionesProvider).value ?? const [];
   return ocurrenciasMes(planes, verifs, k.$1, k.$2);

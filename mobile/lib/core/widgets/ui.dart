@@ -241,31 +241,38 @@ class ModuleHeader extends StatelessWidget {
 /// Layout adaptable de un módulo: una columna en teléfono y dos paneles en
 /// tablet / web ancho (calendario a la izquierda, detalle a la derecha).
 class ModuleLayout extends StatelessWidget {
-  const ModuleLayout({super.key, required this.primary, required this.secondary, this.bottomPadding = 120});
+  const ModuleLayout({super.key, required this.primary, required this.secondary, this.bottomPadding = 120, this.onRefresh});
 
   final List<Widget> primary;
   final List<Widget> secondary;
   final double bottomPadding;
 
+  /// Arrastrar hacia abajo para sincronizar con el servidor.
+  final Future<void> Function()? onRefresh;
+
   static const breakpoint = 980.0;
+
+  Widget _refrescable(Widget lista) => onRefresh == null ? lista : RefreshIndicator(onRefresh: onRefresh!, child: lista);
 
   @override
   Widget build(BuildContext context) {
+    const fisica = AlwaysScrollableScrollPhysics();
     return LayoutBuilder(builder: (context, c) {
       final wide = c.maxWidth >= breakpoint;
       final side = c.maxWidth < 600 ? Gap.md : Gap.xl;
       if (!wide) {
-        return ListView(
+        return _refrescable(ListView(
+          physics: fisica,
           padding: EdgeInsets.fromLTRB(side, Gap.xs, side, bottomPadding),
           children: [...primary, ...secondary],
-        );
+        ));
       }
       return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             flex: 5,
-            child: ListView(padding: EdgeInsets.fromLTRB(side, Gap.xs, Gap.md, bottomPadding), children: primary),
+            child: _refrescable(ListView(physics: fisica, padding: EdgeInsets.fromLTRB(side, Gap.xs, Gap.md, bottomPadding), children: primary)),
           ),
           Expanded(
             flex: 6,
@@ -274,5 +281,29 @@ class ModuleLayout extends StatelessWidget {
         ],
       );
     });
+  }
+}
+
+/// Barra fina de progreso para la primera carga desde el servidor (cuando
+/// aún no hay nada guardado en el teléfono). Aparece y desaparece suavemente.
+class CargandoBarra extends StatelessWidget {
+  const CargandoBarra({super.key, required this.visible});
+  final bool visible;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: Motion.of(context, Motion.medium),
+      child: visible
+          ? Padding(
+              key: const ValueKey('c'),
+              padding: const EdgeInsets.only(bottom: Gap.sm),
+              child: Semantics(
+                label: 'Cargando datos',
+                child: ClipRRect(borderRadius: BorderRadius.circular(4), child: const LinearProgressIndicator(minHeight: 3)),
+              ),
+            )
+          : const SizedBox(key: ValueKey('n'), width: double.infinity),
+    );
   }
 }

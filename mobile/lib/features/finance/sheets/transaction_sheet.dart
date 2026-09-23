@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/palette.dart';
 import '../../../app/theme/tokens.dart';
 import '../../../core/dates.dart';
-import '../../../core/db/database.dart';
+import '../../../data/models.dart';
 import '../../../core/icon_map.dart';
 import '../../../core/money.dart';
 import '../../../core/motion.dart';

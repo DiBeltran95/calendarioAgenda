@@ -8,6 +8,8 @@ import '../../core/dates.dart';
 import '../../core/db/database.dart';
 import '../../core/motion.dart';
 import '../../core/providers.dart';
+import '../../core/session.dart';
+import '../../data/sync.dart';
 import '../../core/widgets/month_calendar.dart';
 import '../../core/widgets/sheets.dart';
 import '../../core/widgets/ui.dart';
@@ -24,7 +26,7 @@ class CycleScreen extends ConsumerWidget {
     final stats = ref.watch(cycleStatsProvider);
     final sel = ref.watch(diaCicloProvider) ?? hoyYmd();
     final registros = ref.watch(registrosDiaProvider).value ?? const <String, RegistroDia>{};
-    final nombre = ref.watch(preferenciasProvider).value?.nombre ?? '';
+    final nombre = ref.watch(sesionProvider).value?.usuario.primerNombre ?? '';
     final detalles = getCycleDetails(sel, stats);
     final inicios = {for (final l in stats.logs) l.fechaInicio};
 
@@ -41,6 +43,7 @@ class CycleScreen extends ConsumerWidget {
       body: SafeArea(
         bottom: false,
         child: ModuleLayout(
+          onRefresh: () => ref.read(sincronizadorProvider).refrescarTodo(),
           primary: [
             ModuleHeader(
               overline: saludo(nombre),
@@ -53,6 +56,7 @@ class CycleScreen extends ConsumerWidget {
                 ),
               ],
             ),
+            CargandoBarra(visible: ref.watch(bootstrapProvider).isLoading && !ref.watch(bootstrapProvider).hasValue),
             Entrance(
               child: stats.vacio
                   ? _SinRegistros(onRegistrar: registrar)

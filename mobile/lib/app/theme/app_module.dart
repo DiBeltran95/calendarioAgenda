@@ -5,6 +5,16 @@ import 'tokens.dart';
 /// Los tres calendarios de la app. Cada uno tiene su identidad de color; al
 /// cambiar de módulo el tema completo se interpola (colores animados).
 enum AppModule {
+  inicio(
+    label: 'Hoy',
+    titulo: 'Tu día',
+    icon: Icons.wb_twilight_outlined,
+    iconSelected: Icons.wb_twilight_rounded,
+    accentDark: Color(0xFF2DD4BF),
+    accentLight: Color(0xFF0F766E),
+    secondaryDark: Brand.green,
+    secondaryLight: Color(0xFF047857),
+  ),
   eventos(
     label: 'Eventos',
     titulo: 'Calendario de eventos',

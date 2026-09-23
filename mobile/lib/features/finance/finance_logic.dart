@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../core/dates.dart';
-import '../../core/db/database.dart';
+import '../../data/models.dart';
 import '../../core/money.dart';
 
 // ─────────────────────────── Tipos de cuenta ───────────────────────────
@@ -19,8 +19,8 @@ class TipoCuenta {
 }
 
 const tiposCuenta = <TipoCuenta>[
-  TipoCuenta('ahorros', 'Cuenta de ahorros', Icons.savings_rounded, [Color(0xFF059669), Color(0xFF065F46)]),
-  TipoCuenta('corriente', 'Cuenta corriente', Icons.account_balance_rounded, [Color(0xFF2563EB), Color(0xFF1E3A8A)]),
+  TipoCuenta('ahorros', 'Ahorros · tarjeta débito', Icons.savings_rounded, [Color(0xFF059669), Color(0xFF065F46)]),
+  TipoCuenta('corriente', 'Corriente · tarjeta débito', Icons.account_balance_rounded, [Color(0xFF2563EB), Color(0xFF1E3A8A)]),
   TipoCuenta('tarjeta_credito', 'Tarjeta de crédito', Icons.credit_card_rounded, [Color(0xFF7C3AED), Color(0xFF3B0764)]),
   TipoCuenta('cdt', 'Inversión / CDT / Cajita', Icons.trending_up_rounded, [Color(0xFFD97706), Color(0xFF78350F)]),
   TipoCuenta('efectivo', 'Efectivo', Icons.payments_rounded, [Color(0xFF0D9488), Color(0xFF134E4A)]),
@@ -576,11 +576,12 @@ class Analitica {
   late final List<Transaccion> topGastos =
       (enRango.where((t) => t.tipo == 'gasto').toList()..sort((a, b) => b.monto.compareTo(a.monto))).take(8).toList();
 
-  late final List<MapEntry<String, double>> ingresosPorCuenta = () {
+  /// Ingresos agrupados por categoría (el endpoint de analítica no trae la
+  /// cuenta de cada movimiento).
+  late final List<MapEntry<String, double>> ingresosPorCategoria = () {
     final m = <String, double>{};
     for (final t in enRango.where((t) => t.tipo == 'ingreso')) {
-      final nombre = cuentas.where((c) => c.id == t.cuentaId).map((c) => c.nombre).firstOrNull ?? 'Sin cuenta';
-      m[nombre] = (m[nombre] ?? 0) + t.monto;
+      m[t.categoria] = (m[t.categoria] ?? 0) + t.monto;
     }
     return m.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
   }();

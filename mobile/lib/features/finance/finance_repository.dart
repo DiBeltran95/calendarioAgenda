@@ -1,9 +1,12 @@
-import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/dates.dart';
-import '../../core/db/database.dart';
-import '../../core/providers.dart';
+import '../../core/net/api_client.dart';
+import '../../core/net/api_exception.dart';
+import '../../core/net/json.dart';
+import '../../core/session.dart';
+import '../../data/models.dart';
+import '../../data/sync.dart';
 import 'finance_logic.dart';
 
 class CuentaInput {
@@ -25,6 +28,18 @@ class CuentaInput {
   final String? fechaInicio;
   final int plazoDias;
   final int? diaCorte;
+
+  /// Mismo saneamiento que `saveAccount` de la web.
+  Map<String, dynamic> toBody() => {
+        'nombre': nombre.trim(),
+        'tipo': tipo,
+        'saldo': saldo,
+        'limite': esCredito(tipo) ? limite : 0,
+        'interes_tasa': tipo == 'cdt' ? interesTasa : 0,
+        'plazo_dias': tipo == 'cdt' ? plazoDias : 0,
+        'fecha_inicio': tipo == 'cdt' ? (fechaInicio ?? hoyYmd()) : null,
+        'dia_corte': esCredito(tipo) ? diaCorte : null,
+      };
 }
 
 class TransaccionInput {
@@ -44,6 +59,26 @@ class TransaccionInput {
   final int? cuentaId;
   final String categoria;
   final int cuotas;
+
+  factory TransaccionInput.desde(Transaccion t) => TransaccionInput(
+        tipo: t.tipo,
+        monto: t.monto,
+        descripcion: t.descripcion,
+        fecha: t.fecha,
+        cuentaId: t.cuentaId,
+        categoria: t.categoria,
+        cuotas: t.cuotas,
+      );
+
+  Map<String, dynamic> toBody() => {
+        'cuenta_id': cuentaId,
+        'tipo': tipo,
+        'monto': monto,
+        'descripcion': descripcion.trim(),
+        'fecha': fecha,
+        'categoria': categoria,
+        'cuotas': cuotas < 1 ? 1 : cuotas,
+      };
 }
 
 class MetaInput {
@@ -55,6 +90,7 @@ class MetaInput {
     this.fechaObjetivo,
     this.icono = 'savings',
     this.color = 0xFF34E47E,
+    this.completada = false,
   });
   final String nombre;
   final String descripcion;
@@ -63,8 +99,32 @@ class MetaInput {
   final String? fechaObjetivo;
   final String icono;
   final int color;
+  final bool completada;
+
+  factory MetaInput.desde(Meta m) => MetaInput(
+        nombre: m.nombre,
+        montoObjetivo: m.montoObjetivo,
+        descripcion: m.descripcion,
+        montoActual: m.montoActual,
+        fechaObjetivo: m.fechaObjetivo,
+        icono: m.icono,
+        color: m.color,
+        completada: m.completada,
+      );
+
+  Map<String, dynamic> toBody() => {
+        'nombre': nombre.trim(),
+        'descripcion': descripcion.trim(),
+        'monto_objetivo': montoObjetivo,
+        'monto_actual': montoActual,
+        'fecha_objetivo': fechaObjetivo,
+        'icono': icono,
+        'color': colorAHex(color),
+        'completada': completada || (montoObjetivo > 0 && montoActual >= montoObjetivo),
+      };
 }
 
+/// Error de negocio con el mensaje del servidor (o de validación local).
 class FinanzasError implements Exception {
   const FinanzasError(this.mensaje);
   final String mensaje;
@@ -72,404 +132,171 @@ class FinanzasError implements Exception {
   String toString() => mensaje;
 }
 
-/// Toda la lógica que antes vivía en el backend (saldos, cuotas de tarjeta,
-/// transferencias, verificaciones) ahora corre aquí, en transacciones SQLite
-/// atómicas: o se aplica todo o nada.
+/// Finanzas contra `/api/finanzas/...`. El servidor aplica los saldos, las
+/// cuotas de tarjeta (que llegan al calendario de eventos y al WhatsApp) y las
+/// transferencias en transacciones atómicas; la app solo sincroniza.
 class FinanceRepository {
-  FinanceRepository(this._db);
-  final AppDatabase _db;
+  FinanceRepository(this._api, this._sync, this._ref);
+  final ApiClient _api;
+  final Sincronizador _sync;
+  final Ref _ref;
 
-  // ─────────────── Lecturas reactivas ───────────────
-
-  Stream<List<Cuenta>> watchCuentas() =>
-      (_db.select(_db.cuentas)..orderBy([(c) => OrderingTerm(expression: c.nombre)])).watch();
-
-  Stream<List<Transaccion>> watchTransacciones(String desde, String hasta) => (_db.select(_db.transacciones)
-        ..where((t) => t.fecha.isBetweenValues(desde, hasta))
-        ..orderBy([
-          (t) => OrderingTerm(expression: t.fecha, mode: OrderingMode.desc),
-          (t) => OrderingTerm(expression: t.id, mode: OrderingMode.desc),
-        ]))
-      .watch();
-
-  Stream<List<Transferencia>> watchTransferencias(String desde, String hasta) => (_db.select(_db.transferencias)
-        ..where((t) => t.fecha.isBetweenValues(desde, hasta))
-        ..orderBy([(t) => OrderingTerm(expression: t.fecha, mode: OrderingMode.desc)]))
-      .watch();
-
-  Stream<List<IngresoPlanificado>> watchPlanes() =>
-      (_db.select(_db.ingresosPlanificados)..orderBy([(p) => OrderingTerm(expression: p.fechaInicio)])).watch();
-
-  Stream<List<Verificacion>> watchVerificaciones() => _db.select(_db.verificaciones).watch();
-
-  Stream<List<Meta>> watchMetas() => (_db.select(_db.metas)
-        ..orderBy([
-          (m) => OrderingTerm(expression: m.completada),
-          (m) => OrderingTerm(expression: m.creadoEn, mode: OrderingMode.desc),
-        ]))
-      .watch();
-
-  Stream<List<Presupuesto>> watchPresupuestos() => _db.select(_db.presupuestos).watch();
-
-  Stream<List<CategoriaFinanzas>> watchCategorias() => (_db.select(_db.categoriasFinanzas)
-        ..orderBy([
-          (c) => OrderingTerm(expression: c.esDefault, mode: OrderingMode.desc),
-          (c) => OrderingTerm(expression: c.label),
-        ]))
-      .watch();
-
-  /// Categorías con transacciones o presupuestos (no se pueden borrar).
-  Stream<Set<String>> watchCategoriasEnUso() {
-    final q = _db.customSelect(
-      'SELECT categoria FROM transacciones UNION SELECT categoria FROM presupuestos',
-      readsFrom: {_db.transacciones, _db.presupuestos},
-    );
-    return q.watch().map((rows) => {for (final r in rows) r.read<String>('categoria')});
+  Future<T> _op<T>(Future<T> Function() f, {bool meses = true, bool presupuestos = false}) async {
+    try {
+      final r = await f();
+      await _sync.despuesDeCambio(meses: meses, presupuestos: presupuestos);
+      return r;
+    } on ApiException catch (e) {
+      throw FinanzasError(e.message);
+    }
   }
 
   // ─────────────── Cuentas ───────────────
 
-  CuentasCompanion _cuenta(CuentaInput i) => CuentasCompanion(
-        nombre: Value(i.nombre.trim()),
-        tipo: Value(i.tipo),
-        saldo: Value(i.saldo),
-        limite: Value(esCredito(i.tipo) ? i.limite : 0),
-        interesTasa: Value(i.tipo == 'cdt' ? i.interesTasa : 0),
-        fechaInicio: Value(i.tipo == 'cdt' ? (i.fechaInicio ?? hoyYmd()) : null),
-        plazoDias: Value(i.tipo == 'cdt' ? i.plazoDias : 0),
-        diaCorte: Value(esCredito(i.tipo) ? i.diaCorte : null),
-      );
+  Future<int> crearCuenta(CuentaInput i) =>
+      _op(() async => asInt(asMap(await _api.post('/api/finanzas/cuentas', body: i.toBody()))['id']), meses: false);
 
-  Future<int> crearCuenta(CuentaInput i) => _db.into(_db.cuentas).insert(_cuenta(i));
+  Future<void> actualizarCuenta(int id, CuentaInput i) => _op(() => _api.put('/api/finanzas/cuentas/$id', body: i.toBody()), meses: false);
 
-  Future<void> actualizarCuenta(int id, CuentaInput i) =>
-      (_db.update(_db.cuentas)..where((c) => c.id.equals(id))).write(_cuenta(i));
-
-  /// Borra la cuenta. Sus movimientos se conservan en el historial (sin cuenta)
-  /// y las transferencias que la involucran se eliminan.
-  Future<void> eliminarCuenta(int id) => _db.transaction(() async {
-        await (_db.update(_db.transacciones)..where((t) => t.cuentaId.equals(id)))
-            .write(const TransaccionesCompanion(cuentaId: Value(null)));
-        await (_db.update(_db.ingresosPlanificados)..where((p) => p.cuentaId.equals(id)))
-            .write(const IngresosPlanificadosCompanion(cuentaId: Value(null)));
-        await (_db.delete(_db.transferencias)
-              ..where((t) => t.cuentaOrigenId.equals(id) | t.cuentaDestinoId.equals(id)))
-            .go();
-        await (_db.delete(_db.cuentas)..where((c) => c.id.equals(id))).go();
-      });
-
-  Future<Cuenta?> _cuentaPorId(int? id) async {
-    if (id == null) return null;
-    return (_db.select(_db.cuentas)..where((c) => c.id.equals(id))).getSingleOrNull();
-  }
-
-  Future<void> _ajustarSaldo(int cuentaId, double delta) async {
-    if (delta == 0) return;
-    await _db.customUpdate(
-      'UPDATE cuentas SET saldo = saldo + ? WHERE id = ?',
-      variables: [Variable.withReal(delta), Variable.withInt(cuentaId)],
-      updates: {_db.cuentas},
-    );
-  }
-
-  Future<void> _aplicar(int? cuentaId, String tipoTx, double monto, {bool revertir = false}) async {
-    final c = await _cuentaPorId(cuentaId);
-    if (c == null) return;
-    final delta = efectoEnSaldo(tipoTx: tipoTx, tipoCuenta: c.tipo, monto: monto);
-    await _ajustarSaldo(c.id, revertir ? -delta : delta);
-  }
+  Future<void> eliminarCuenta(int id) => _op(() => _api.delete('/api/finanzas/cuentas/$id'));
 
   // ─────────────── Transacciones ───────────────
 
-  /// Registra un movimiento, ajusta el saldo y, si es una compra con tarjeta de
-  /// crédito, crea en el calendario de eventos los cobros de cada cuota.
-  Future<int> crearTransaccion(TransaccionInput i, {int? metaId, int? ingresoPlanificadoId}) {
+  Future<int> crearTransaccion(TransaccionInput i) {
     if (i.monto <= 0) throw const FinanzasError('El monto debe ser mayor a 0');
-    return _db.transaction(() async {
-      final id = await _db.into(_db.transacciones).insert(TransaccionesCompanion.insert(
-            tipo: i.tipo,
-            monto: i.monto,
-            descripcion: i.descripcion.trim(),
-            fecha: i.fecha,
-            cuentaId: Value(i.cuentaId),
-            categoria: Value(i.categoria),
-            cuotas: Value(i.cuotas < 1 ? 1 : i.cuotas),
-            metaId: Value(metaId),
-            ingresoPlanificadoId: Value(ingresoPlanificadoId),
-          ));
-      await _aplicar(i.cuentaId, i.tipo, i.monto);
-      await _generarCobrosTarjeta(id, i);
-      return id;
-    });
+    return _op(() async => asInt(asMap(await _api.post('/api/finanzas/transacciones', body: i.toBody()))['id']));
   }
-
-  Future<void> _generarCobrosTarjeta(int txId, TransaccionInput i) async {
-    final c = await _cuentaPorId(i.cuentaId);
-    if (c == null || !esCredito(c.tipo) || i.tipo != 'gasto') return;
-    final cobros = cobrosTarjeta(fechaCompra: i.fecha, monto: i.monto, cuotas: i.cuotas, diaCorte: c.diaCorte);
-    final n = cobros.length;
-    await _db.batch((b) {
-      b.insertAll(_db.eventos, [
-        for (var k = 0; k < n; k++)
-          EventosCompanion.insert(
-            titulo: '${n > 1 ? 'Cuota ${k + 1}/$n: ' : 'Cobro tarjeta: '}${i.descripcion.trim()}',
-            fecha: cobros[k].$1,
-            hora: const Value('08:00'),
-            categoria: const Value('servicios'),
-            costo: Value(cobros[k].$2),
-            tipoTransaccion: const Value('gasto'),
-            estadoPago: const Value('pendiente'),
-            tarjetaCreditoId: Value(c.id),
-            transaccionId: Value(txId),
-          ),
-      ]);
-    });
-  }
-
-  Future<void> _borrarCobrosPendientes(int txId) => (_db.delete(_db.eventos)
-        ..where((e) => e.transaccionId.equals(txId) & e.estadoPago.equals('pendiente')))
-      .go();
 
   Future<void> actualizarTransaccion(Transaccion old, TransaccionInput i) {
     if (i.monto <= 0) throw const FinanzasError('El monto debe ser mayor a 0');
-    return _db.transaction(() async {
-      await _aplicar(old.cuentaId, old.tipo, old.monto, revertir: true);
-      await (_db.update(_db.transacciones)..where((t) => t.id.equals(old.id))).write(TransaccionesCompanion(
-        tipo: Value(i.tipo),
-        monto: Value(i.monto),
-        descripcion: Value(i.descripcion.trim()),
-        fecha: Value(i.fecha),
-        categoria: Value(i.categoria),
-        cuentaId: Value(i.cuentaId),
-        cuotas: Value(i.cuotas < 1 ? 1 : i.cuotas),
-      ));
-      await _aplicar(i.cuentaId, i.tipo, i.monto);
-      // Mejora sobre la web: los cobros pendientes de la tarjeta se recalculan.
-      await _borrarCobrosPendientes(old.id);
-      await _generarCobrosTarjeta(old.id, i);
-      if (old.metaId != null && old.monto != i.monto) {
-        await _sumarAMeta(old.metaId!, i.monto - old.monto);
-      }
-    });
+    return _op(() => _api.put('/api/finanzas/transacciones/${old.id}', body: i.toBody()));
   }
 
-  /// Borra un movimiento revirtiendo su efecto (saldo, cuotas pendientes,
-  /// aporte a meta y verificación de ingreso asociada).
-  Future<void> eliminarTransaccion(Transaccion t) => _db.transaction(() async {
-        await (_db.delete(_db.transacciones)..where((x) => x.id.equals(t.id))).go();
-        await _aplicar(t.cuentaId, t.tipo, t.monto, revertir: true);
-        await _borrarCobrosPendientes(t.id);
-        if (t.metaId != null) await _sumarAMeta(t.metaId!, -t.monto);
-        await (_db.delete(_db.verificaciones)..where((v) => v.transaccionId.equals(t.id))).go();
-      });
+  /// El servidor revierte el saldo y borra las cuotas pendientes asociadas.
+  Future<void> eliminarTransaccion(Transaccion t) => _op(() => _api.delete('/api/finanzas/transacciones/${t.id}'));
 
   // ─────────────── Transferencias ───────────────
 
   Future<void> transferir({required int origenId, required int destinoId, required double monto, required String fecha, String descripcion = ''}) {
     if (origenId == destinoId) throw const FinanzasError('La cuenta de origen y destino deben ser diferentes');
     if (monto <= 0) throw const FinanzasError('El monto debe ser mayor a 0');
-    return _db.transaction(() async {
-      final o = await _cuentaPorId(origenId);
-      final d = await _cuentaPorId(destinoId);
-      if (o == null || d == null) throw const FinanzasError('Cuenta no encontrada');
-      await _db.into(_db.transferencias).insert(TransferenciasCompanion.insert(
-            cuentaOrigenId: origenId,
-            cuentaDestinoId: destinoId,
-            monto: monto,
-            fecha: fecha,
-            descripcion: Value(descripcion.trim()),
-          ));
-      // Crédito: retirar de la tarjeta aumenta la deuda; abonarle la reduce.
-      await _ajustarSaldo(origenId, esCredito(o.tipo) ? monto : -monto);
-      await _ajustarSaldo(destinoId, esCredito(d.tipo) ? -monto : monto);
-    });
+    return _op(() => _api.post('/api/finanzas/transferencias', body: {
+          'cuenta_origen_id': origenId,
+          'cuenta_destino_id': destinoId,
+          'monto': monto,
+          'descripcion': descripcion.trim(),
+          'fecha': fecha,
+        }));
   }
 
-  Future<void> eliminarTransferencia(Transferencia t) => _db.transaction(() async {
-        final o = await _cuentaPorId(t.cuentaOrigenId);
-        final d = await _cuentaPorId(t.cuentaDestinoId);
-        await (_db.delete(_db.transferencias)..where((x) => x.id.equals(t.id))).go();
-        if (o != null) await _ajustarSaldo(o.id, esCredito(o.tipo) ? -t.monto : t.monto);
-        if (d != null) await _ajustarSaldo(d.id, esCredito(d.tipo) ? t.monto : -t.monto);
-      });
+  Future<void> eliminarTransferencia(Transferencia t) => _op(() => _api.delete('/api/finanzas/transferencias/${t.id}'));
 
   // ─────────────── Ingresos planificados ───────────────
 
-  Future<int> crearPlan({required String descripcion, required double monto, required String frecuencia, required String fechaInicio, int? cuentaId}) {
+  Future<void> crearPlan({required String descripcion, required double monto, required String frecuencia, required String fechaInicio, int? cuentaId}) {
     if (monto <= 0) throw const FinanzasError('El monto debe ser mayor a 0');
-    return _db.into(_db.ingresosPlanificados).insert(IngresosPlanificadosCompanion.insert(
-          descripcion: descripcion.trim(),
-          monto: monto,
-          frecuencia: frecuencia,
-          fechaInicio: fechaInicio,
-          cuentaId: Value(cuentaId),
-        ));
-  }
-
-  Future<void> actualizarPlan(int id, {required String descripcion, required double monto, required String frecuencia, required String fechaInicio, int? cuentaId, bool activo = true}) =>
-      (_db.update(_db.ingresosPlanificados)..where((p) => p.id.equals(id))).write(IngresosPlanificadosCompanion(
-        descripcion: Value(descripcion.trim()),
-        monto: Value(monto),
-        frecuencia: Value(frecuencia),
-        fechaInicio: Value(fechaInicio),
-        cuentaId: Value(cuentaId),
-        activo: Value(activo),
-      ));
-
-  Future<void> eliminarPlan(int id) => _db.transaction(() async {
-        await (_db.delete(_db.verificaciones)..where((v) => v.ingresoPlanificadoId.equals(id))).go();
-        await (_db.delete(_db.ingresosPlanificados)..where((p) => p.id.equals(id))).go();
-      });
-
-  /// Confirma que un ingreso esperado llegó: registra la transacción real y la
-  /// verificación en una sola operación.
-  Future<void> verificarIngreso({
-    required IngresoPlanificado plan,
-    required String fechaEsperada,
-    required String fechaReal,
-    required double montoReal,
-    int? cuentaId,
-  }) {
-    if (montoReal <= 0) throw const FinanzasError('El monto debe ser mayor a 0');
-    return _db.transaction(() async {
-      final existe = await (_db.select(_db.verificaciones)
-            ..where((v) => v.ingresoPlanificadoId.equals(plan.id) & v.fechaEsperada.equals(fechaEsperada)))
-          .getSingleOrNull();
-      if (existe != null) throw const FinanzasError('Esta fecha ya fue verificada para este ingreso');
-      final cuenta = cuentaId ?? plan.cuentaId;
-      final txId = await crearTransaccion(
-        TransaccionInput(
-          tipo: 'ingreso',
-          monto: montoReal,
-          descripcion: 'Cobro: ${plan.descripcion}',
-          fecha: fechaReal,
-          cuentaId: cuenta,
-          categoria: 'otros',
-        ),
-        ingresoPlanificadoId: plan.id,
-      );
-      await _db.into(_db.verificaciones).insert(VerificacionesCompanion.insert(
-            ingresoPlanificadoId: plan.id,
-            fechaEsperada: fechaEsperada,
-            fechaReal: fechaReal,
-            montoReal: montoReal,
-            transaccionId: Value(txId),
-          ));
-    });
-  }
-
-  Future<void> deshacerVerificacion(Verificacion v) => _db.transaction(() async {
-        if (v.transaccionId != null) {
-          final t = await (_db.select(_db.transacciones)..where((x) => x.id.equals(v.transaccionId!))).getSingleOrNull();
-          if (t != null) await eliminarTransaccion(t);
-        }
-        await (_db.delete(_db.verificaciones)..where((x) => x.id.equals(v.id))).go();
-      });
-
-  // ─────────────── Metas ───────────────
-
-  MetasCompanion _meta(MetaInput i) => MetasCompanion(
-        nombre: Value(i.nombre.trim()),
-        descripcion: Value(i.descripcion.trim()),
-        montoObjetivo: Value(i.montoObjetivo),
-        montoActual: Value(i.montoActual),
-        fechaObjetivo: Value(i.fechaObjetivo),
-        icono: Value(i.icono),
-        color: Value(i.color),
-        completada: Value(i.montoObjetivo > 0 && i.montoActual >= i.montoObjetivo),
-      );
-
-  Future<int> crearMeta(MetaInput i) {
-    if (i.nombre.trim().isEmpty || i.montoObjetivo <= 0) {
-      throw const FinanzasError('Nombre y monto objetivo son obligatorios');
-    }
-    return _db.into(_db.metas).insert(_meta(i));
-  }
-
-  Future<void> actualizarMeta(int id, MetaInput i) =>
-      (_db.update(_db.metas)..where((m) => m.id.equals(id))).write(_meta(i));
-
-  Future<void> eliminarMeta(int id) => _db.transaction(() async {
-        await (_db.update(_db.transacciones)..where((t) => t.metaId.equals(id)))
-            .write(const TransaccionesCompanion(metaId: Value(null)));
-        await (_db.delete(_db.metas)..where((m) => m.id.equals(id))).go();
-      });
-
-  Future<void> _sumarAMeta(int metaId, double delta) async {
-    await _db.customUpdate(
-      'UPDATE metas SET monto_actual = MAX(0, monto_actual + ?), '
-      'completada = CASE WHEN monto_actual + ? >= monto_objetivo THEN 1 ELSE 0 END WHERE id = ?',
-      variables: [Variable.withReal(delta), Variable.withReal(delta), Variable.withInt(metaId)],
-      updates: {_db.metas},
+    return _op(
+      () => _api.post('/api/finanzas/ingresos-planificados', body: {
+        'cuenta_id': cuentaId,
+        'descripcion': descripcion.trim(),
+        'monto': monto,
+        'frecuencia': frecuencia,
+        'fecha_inicio': fechaInicio,
+      }),
+      meses: false,
     );
   }
 
-  /// Aporta a una meta. Si se elige cuenta, también se registra el movimiento
-  /// (categoría ahorro) y se descuenta de esa cuenta. Devuelve true si con este
-  /// aporte la meta quedó cumplida.
-  Future<bool> aportarAMeta(Meta meta, double monto, {int? cuentaId, String? fecha}) {
+  Future<void> eliminarPlan(int id) => _op(() => _api.delete('/api/finanzas/ingresos-planificados/$id'), meses: false);
+
+  /// Confirma que un ingreso esperado llegó: el servidor registra la
+  /// transacción y la verificación, y suma el saldo.
+  Future<void> verificarIngreso({required IngresoPlanificado plan, required String fechaEsperada, required String fechaReal, required double montoReal, int? cuentaId}) {
+    if (montoReal <= 0) throw const FinanzasError('El monto debe ser mayor a 0');
+    return _op(() => _api.post('/api/finanzas/ingresos-planificados/verificar', body: {
+          'ingreso_planificado_id': plan.id,
+          'fecha_esperada': fechaEsperada,
+          'fecha_real': fechaReal,
+          'monto_real': montoReal,
+          'cuenta_id': cuentaId ?? plan.cuentaId,
+        }));
+  }
+
+  Future<void> deshacerVerificacion(Verificacion v) => _op(() => _api.delete('/api/finanzas/verificaciones/${v.id}'));
+
+  // ─────────────── Metas ───────────────
+
+  Future<void> crearMeta(MetaInput i) {
+    if (i.nombre.trim().isEmpty || i.montoObjetivo <= 0) throw const FinanzasError('Nombre y monto objetivo son obligatorios');
+    return _op(() => _api.post('/api/finanzas/metas', body: i.toBody()), meses: false);
+  }
+
+  Future<void> actualizarMeta(int id, MetaInput i) => _op(() => _api.put('/api/finanzas/metas/$id', body: i.toBody()), meses: false);
+
+  Future<void> eliminarMeta(int id) => _op(() => _api.delete('/api/finanzas/metas/$id'), meses: false);
+
+  /// Aporta a una meta. Si se elige cuenta, primero se registra el gasto de
+  /// ahorro (como "Aportar" en la web) y luego se suma a la meta. Devuelve
+  /// true si con este aporte la meta quedó cumplida.
+  Future<bool> aportarAMeta(Meta meta, double monto, {int? cuentaId, String? fecha}) async {
     if (monto <= 0) throw const FinanzasError('El aporte debe ser mayor a 0');
-    return _db.transaction(() async {
+    final nuevo = meta.montoActual + monto;
+    final cumplida = !meta.completada && nuevo >= meta.montoObjetivo;
+    await _op(() async {
       if (cuentaId != null) {
-        await crearTransaccion(
-          TransaccionInput(
-            tipo: 'gasto',
-            monto: monto,
-            descripcion: 'Aporte a meta: ${meta.nombre}',
-            fecha: fecha ?? hoyYmd(),
-            cuentaId: cuentaId,
-            categoria: 'ahorro',
-          ),
-          metaId: meta.id,
-        );
+        await _api.post('/api/finanzas/transacciones', body: TransaccionInput(
+          tipo: 'gasto',
+          monto: monto,
+          descripcion: 'Aporte a meta: ${meta.nombre}',
+          fecha: fecha ?? hoyYmd(),
+          cuentaId: cuentaId,
+          categoria: 'ahorro',
+        ).toBody());
       }
-      await _sumarAMeta(meta.id, monto);
-      return !meta.completada && meta.montoActual + monto >= meta.montoObjetivo;
-    });
+      final m = MetaInput.desde(meta);
+      await _api.put('/api/finanzas/metas/${meta.id}', body: MetaInput(
+        nombre: m.nombre,
+        montoObjetivo: m.montoObjetivo,
+        descripcion: m.descripcion,
+        montoActual: nuevo,
+        fechaObjetivo: m.fechaObjetivo,
+        icono: m.icono,
+        color: m.color,
+        completada: nuevo >= m.montoObjetivo,
+      ).toBody());
+    }, meses: cuentaId != null);
+    return cumplida;
   }
 
   // ─────────────── Presupuestos ───────────────
 
   Future<void> guardarPresupuesto({required String categoria, required double limite, required int mes, required int anio}) {
     if (limite <= 0) throw const FinanzasError('El límite debe ser mayor a 0');
-    return _db.into(_db.presupuestos).insert(
-          PresupuestosCompanion.insert(categoria: categoria, montoLimite: limite, mes: mes, anio: anio),
-          onConflict: DoUpdate(
-            (_) => PresupuestosCompanion(montoLimite: Value(limite)),
-            target: [_db.presupuestos.categoria, _db.presupuestos.mes, _db.presupuestos.anio],
-          ),
-        );
+    return _op(
+      () => _api.post('/api/finanzas/presupuestos', body: {'categoria': categoria, 'monto_limite': limite, 'mes': mes, 'anio': anio}),
+      presupuestos: true,
+    );
   }
 
-  /// Quita el límite de una categoría. Como los límites se arrastran de un mes
-  /// al siguiente, se borran todos los de esa categoría.
-  Future<void> quitarPresupuesto(String categoria) =>
-      (_db.delete(_db.presupuestos)..where((p) => p.categoria.equals(categoria))).go();
+  /// Quita el límite de una categoría. Como la app arrastra los límites de un
+  /// mes al siguiente, se borran todos los de esa categoría.
+  Future<void> quitarPresupuesto(String categoria) async {
+    final todos = _ref.read(presupuestosProvider).value ?? const <Presupuesto>[];
+    await _op(() async {
+      for (final p in todos.where((p) => p.categoria == categoria)) {
+        await _api.delete('/api/finanzas/presupuestos/${p.id}');
+      }
+    }, presupuestos: true);
+  }
 
   // ─────────────── Categorías ───────────────
 
-  Future<void> crearCategoria(String label, String icono) async {
-    final valor = slugCategoria(label);
-    if (valor.isEmpty) throw const FinanzasError('El nombre de la categoría no es válido');
-    final existe = await (_db.select(_db.categoriasFinanzas)..where((c) => c.valor.equals(valor))).getSingleOrNull();
-    if (existe != null) throw const FinanzasError('Ya tienes una categoría con ese nombre');
-    await _db.into(_db.categoriasFinanzas).insert(CategoriasFinanzasCompanion.insert(
-          valor: valor,
-          label: label.trim(),
-          icono: Value(icono),
-        ));
+  Future<void> crearCategoria(String label, String icono) {
+    if (label.trim().isEmpty) throw const FinanzasError('Escribe un nombre para la categoría.');
+    return _op(() => _api.post('/api/finanzas/categorias', body: {'label': label.trim(), 'icono': icono}), meses: false);
   }
 
-  Future<void> eliminarCategoria(CategoriaFinanzas c) async {
-    final usos = await _db.customSelect(
-      'SELECT (SELECT COUNT(*) FROM transacciones WHERE categoria = ?1) + '
-      '(SELECT COUNT(*) FROM presupuestos WHERE categoria = ?1) AS n',
-      variables: [Variable.withString(c.valor)],
-    ).getSingle();
-    final n = usos.read<int>('n');
-    if (n > 0) throw FinanzasError('No puedes eliminar esta categoría porque tiene $n registro(s) asociado(s).');
-    await (_db.delete(_db.categoriasFinanzas)..where((x) => x.id.equals(c.id))).go();
-  }
+  Future<void> eliminarCategoria(CategoriaFinanzas c) => _op(() => _api.delete('/api/finanzas/categorias/${c.id}'), meses: false);
 }
 
-final financeRepoProvider = Provider((ref) => FinanceRepository(ref.watch(databaseProvider)));
+final financeRepoProvider = Provider((ref) => FinanceRepository(ref.watch(apiProvider), ref.watch(sincronizadorProvider), ref));

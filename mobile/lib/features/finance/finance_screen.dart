@@ -6,10 +6,12 @@ import '../../app/theme/app_module.dart';
 import '../../app/theme/palette.dart';
 import '../../app/theme/tokens.dart';
 import '../../core/dates.dart';
-import '../../core/db/database.dart';
+import '../../data/models.dart';
 import '../../core/money.dart';
 import '../../core/motion.dart';
 import '../../core/providers.dart';
+import '../../core/session.dart';
+import '../../data/sync.dart';
 import '../../core/widgets/month_calendar.dart';
 import '../../core/widgets/sheets.dart';
 import '../../core/widgets/ui.dart';
@@ -60,9 +62,10 @@ class FinanceScreen extends ConsumerWidget {
       body: SafeArea(
         bottom: false,
         child: ModuleLayout(
+          onRefresh: () => ref.read(sincronizadorProvider).refrescarTodo(),
           primary: [
             ModuleHeader(
-              overline: saludo(prefs.nombre),
+              overline: saludo(ref.watch(sesionProvider).value?.usuario.primerNombre ?? ''),
               title: AppModule.finanzas.label,
               actions: [
                 if (cuentas.length >= 2)
@@ -73,6 +76,7 @@ class FinanceScreen extends ConsumerWidget {
                   ),
               ],
             ),
+            CargandoBarra(visible: ref.watch(monthProvider((mes.year, mes.month))).isLoading && !ref.watch(monthProvider((mes.year, mes.month))).hasValue),
             Entrance(child: _Patrimonio(cuentas: cuentas, txMes: txMes)),
             if (!prefs.onboardingFinanzasOculto) ...[
               const VGap.sm(),

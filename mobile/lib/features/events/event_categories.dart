@@ -34,10 +34,9 @@ final Map<String, EventCategory> _porValor = {for (final c in eventCategories) c
 EventCategory categoriaEvento(String? value) =>
     _porValor[value] ?? const EventCategory('general', 'General', Icons.event_rounded, Color(0xFF94A3B8));
 
-/// Frecuencias de repetición de un evento.
+/// Frecuencias que ofrece el formulario.
 const frecuenciasEvento = <(String, String)>[
-  ('unica', 'Única'),
-  ('diaria', 'Diaria'),
+  ('unica', 'Una vez'),
   ('quincenal', 'Quincenal'),
   ('mensual', 'Mensual'),
   ('trimestral', 'Trimestral'),
@@ -45,11 +44,64 @@ const frecuenciasEvento = <(String, String)>[
   ('anual', 'Anual'),
 ];
 
-String frecuenciaLabel(String? v) {
-  for (final (k, l) in frecuenciasEvento) {
-    if (k == v) return l;
-  }
-  return 'Única';
+/// Todas las que entiende el servidor (incluye "diaria", creada desde la web).
+const _todasFrecuencias = <String, String>{
+  'unica': 'Una vez',
+  'diaria': 'Diaria',
+  'quincenal': 'Quincenal',
+  'mensual': 'Mensual',
+  'trimestral': 'Trimestral',
+  'semestral': 'Semestral',
+  'anual': 'Anual',
+};
+
+String frecuenciaLabel(String? v) => _todasFrecuencias[v] ?? 'Una vez';
+
+/// Explicación corta de la repetición, para el formulario.
+String frecuenciaDetalle(String v) => switch (v) {
+      'quincenal' => 'Cada 15 días',
+      'mensual' => 'Cada mes, el mismo día',
+      'trimestral' => 'Cada 3 meses',
+      'semestral' => 'Cada 6 meses',
+      'anual' => 'Cada año, la misma fecha',
+      'diaria' => 'Todos los días',
+      _ => 'Solo en la fecha elegida',
+    };
+
+// ─────────────── Reglas de notificación (idénticas al cron) ───────────────
+
+/// Categorías que se avisan en el resumen de las 7:00 a. m. y no con el patrón
+/// "30 minutos antes + a la hora" (cron/index.js · CATEGORIAS_TODO_EL_DIA).
+const categoriasTodoElDia = {'arriendo', 'aceite_moto', 'servicios', 'aniversario', 'mesiversario'};
+
+/// Emoji y nombre con que el cron presenta cada categoría en WhatsApp.
+const metaCategoriaCron = <String, (String, String)>{
+  'reunion': ('📅', 'Reunión'),
+  'cumpleanos': ('🎂', 'Cumpleaños'),
+  'moto': ('🏍️', 'Moto'),
+  'carro': ('🚗', 'Carro'),
+  'casa': ('🏠', 'Casa'),
+  'arriendo': ('🏠', 'Arriendo'),
+  'aceite_moto': ('🛢️', 'Cambio de aceite'),
+  'mecanica': ('🔧', 'Mecánica'),
+  'servicios': ('🧾', 'Servicios públicos'),
+  'doctor': ('🩺', 'Cita médica'),
+  'medicamentos': ('💊', 'Medicamentos'),
+  'dentista': ('🦷', 'Odontología'),
+  'cita_amor': ('❤️', 'Cita romántica'),
+  'aniversario': ('💑', 'Aniversario'),
+  'matrimonio': ('💍', 'Matrimonio'),
+  'mesiversario': ('🌹', 'Mesiversario'),
+};
+
+(String, String) metaCron(String categoria) => metaCategoriaCron[categoria] ?? ('📌', 'Recordatorio');
+
+/// true si el evento se avisa en el resumen matutino (sin hora, cobro de
+/// tarjeta o categoría "de todo el día").
+bool esTodoElDiaCron({required String categoria, required String? hora, int? tarjetaCreditoId}) {
+  if (tarjetaCreditoId != null) return true;
+  if (hora == null || hora.isEmpty) return true;
+  return categoriasTodoElDia.contains(categoria);
 }
 
 bool esAnual(String? frecuencia) => frecuencia == 'anual';

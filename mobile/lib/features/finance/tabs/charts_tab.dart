@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/palette.dart';
 import '../../../app/theme/tokens.dart';
 import '../../../core/dates.dart';
-import '../../../core/db/database.dart';
+import '../../../data/models.dart';
 import '../../../core/money.dart';
 import '../../../core/motion.dart';
 import '../../../core/widgets/fields.dart';
@@ -90,7 +90,8 @@ class ChartsTab extends ConsumerWidget {
                       const HGap.xs(),
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(t.descripcion, style: context.text.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          Text(t.descripcion.isEmpty ? nombreCat(t.categoria) : t.descripcion,
+                              style: context.text.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
                           Text('${nombreCat(t.categoria)} · ${fechaCorta(t.fecha)}', style: context.text.bodySmall),
                         ]),
                       ),
@@ -102,20 +103,20 @@ class ChartsTab extends ConsumerWidget {
           ),
           const VGap.md(),
         ],
-        if (a.ingresosPorCuenta.isNotEmpty)
+        if (a.ingresosPorCategoria.isNotEmpty)
           Entrance(
             index: i++,
             child: _Card(
               icon: Icons.account_balance_rounded,
               titulo: 'Fuentes de ingreso',
-              sub: 'Por cuenta',
+              sub: 'Por categoría',
               child: Column(children: [
-                for (final e in a.ingresosPorCuenta)
+                for (final e in a.ingresosPorCategoria)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 5),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                       Row(children: [
-                        Expanded(child: Text(e.key, style: context.text.bodyMedium)),
+                        Expanded(child: Text(nombreCat(e.key), style: context.text.bodyMedium)),
                         Text(cop(e.value), style: context.text.titleSmall),
                       ]),
                       const SizedBox(height: 4),

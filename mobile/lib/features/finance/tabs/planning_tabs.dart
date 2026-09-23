@@ -6,13 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/palette.dart';
 import '../../../app/theme/tokens.dart';
 import '../../../core/dates.dart';
-import '../../../core/db/database.dart';
+import '../../../data/models.dart';
 import '../../../core/icon_map.dart';
 import '../../../core/money.dart';
 import '../../../core/motion.dart';
 import '../../../core/widgets/sheets.dart';
 import '../../../core/widgets/ui.dart';
 import '../finance_logic.dart';
+import '../../../data/sync.dart';
 import '../finance_providers.dart';
 import '../finance_repository.dart';
 import '../sheets/finance_sheets.dart';
@@ -349,7 +350,6 @@ class PlannerTab extends ConsumerWidget {
               padding: const EdgeInsets.only(bottom: Gap.xs),
               child: AppCard(
                 padding: const EdgeInsets.fromLTRB(Gap.sm, Gap.xs, Gap.xxs, Gap.xs),
-                onTap: () => showAppSheet(context, (_) => PlanSheet(plan: pl)),
                 child: Row(children: [
                   IconBadge(Icons.work_rounded, color: pl.activo ? p.gold : p.textSecondary, size: 38),
                   const HGap.sm(),

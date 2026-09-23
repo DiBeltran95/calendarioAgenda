@@ -5,12 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/palette.dart';
 import '../../../app/theme/tokens.dart';
 import '../../../core/dates.dart';
-import '../../../core/db/database.dart';
+import '../../../data/models.dart';
 import '../../../core/motion.dart';
 import '../../../core/widgets/fields.dart';
 import '../../../core/widgets/sheets.dart';
 import '../event_categories.dart';
 import '../events_repository.dart';
+import '../mensajes.dart';
 
 /// Abre el formulario para crear o editar un evento o un cumpleaños.
 Future<void> abrirFormularioEvento(
@@ -58,7 +59,6 @@ class _EventFormSheetState extends ConsumerState<EventFormSheet> {
   final _form = GlobalKey<FormState>();
   late final TextEditingController _titulo;
   late final TextEditingController _ubicacion;
-  late final TextEditingController _notas;
   late final TextEditingController _costo;
   late final TextEditingController _anio;
   late final TextEditingController _telefono;
@@ -90,7 +90,6 @@ class _EventFormSheetState extends ConsumerState<EventFormSheet> {
     _estado = e?.estadoPago ?? 'pendiente';
     _titulo = TextEditingController(text: e?.titulo ?? c?.nombre ?? '');
     _ubicacion = TextEditingController(text: e?.ubicacion ?? '');
-    _notas = TextEditingController(text: e?.notas ?? '');
     _costo = TextEditingController(text: montoInicial(e?.costo ?? 0));
     _anio = TextEditingController(text: c?.anioNacimiento?.toString() ?? '');
     _telefono = TextEditingController(text: c?.telefono ?? '');
@@ -99,7 +98,7 @@ class _EventFormSheetState extends ConsumerState<EventFormSheet> {
 
   @override
   void dispose() {
-    for (final c in [_titulo, _ubicacion, _notas, _costo, _anio, _telefono, _mensaje]) {
+    for (final c in [_titulo, _ubicacion, _costo, _anio, _telefono, _mensaje]) {
       c.dispose();
     }
     super.dispose();
@@ -132,7 +131,6 @@ class _EventFormSheetState extends ConsumerState<EventFormSheet> {
           hora: _hora,
           categoria: _categoria,
           ubicacion: _ubicacion.text,
-          notas: _notas.text,
           frecuencia: _frecuencia,
           costo: parseMonto(_costo.text),
           tipoTransaccion: _tipoTx,
@@ -249,8 +247,10 @@ class _EventFormSheetState extends ConsumerState<EventFormSheet> {
           maxLines: 3,
           minLines: 2,
           textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(hintText: 'Opcional · se enviará por WhatsApp'),
+          decoration: const InputDecoration(hintText: 'Opcional · aparecerá en tu recordatorio'),
         ),
+        const VGap.md(),
+        const _AvisosCard(categoria: 'cumpleanos', hora: null),
       ],
     );
   }
@@ -270,18 +270,25 @@ class _EventFormSheetState extends ConsumerState<EventFormSheet> {
         ),
         const FieldLabel('Se repite'),
         ChoiceChips<String>(
-          options: frecuenciasEvento,
+          options: [
+            ...frecuenciasEvento,
+            if (!frecuenciasEvento.any((f) => f.$1 == _frecuencia)) (_frecuencia, frecuenciaLabel(_frecuencia)),
+          ],
           value: _frecuencia,
           onChanged: (v) => setState(() => _frecuencia = v),
         ),
-        if (_frecuencia != 'unica')
-          Padding(
-            padding: const EdgeInsets.only(top: Gap.xs),
+        Padding(
+          padding: const EdgeInsets.only(top: Gap.xs),
+          child: SmoothSwitcher(
             child: Text(
-              'Se crearán las próximas ${maxOcurrencias(_frecuencia)} ocurrencias en el calendario.',
+              _frecuencia == 'unica'
+                  ? frecuenciaDetalle(_frecuencia)
+                  : '${frecuenciaDetalle(_frecuencia)} · se agendan las próximas ${maxOcurrencias(_frecuencia)} fechas.',
+              key: ValueKey(_frecuencia),
               style: context.text.bodySmall,
             ),
           ),
+        ),
         const FieldLabel('Movimiento de dinero'),
         SegmentedPill<String>(
           options: const [
@@ -320,14 +327,8 @@ class _EventFormSheetState extends ConsumerState<EventFormSheet> {
                   ],
                 ),
         ),
-        const FieldLabel('Notas'),
-        TextFormField(
-          controller: _notas,
-          maxLines: 3,
-          minLines: 2,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(hintText: 'Opcional'),
-        ),
+        const VGap.md(),
+        _AvisosCard(categoria: _categoria, hora: _hora),
       ],
     );
   }
@@ -399,6 +400,39 @@ class _CategoryPicker extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+/// Explica cuándo llegará el recordatorio según la categoría y la hora (las
+/// mismas reglas del cron): así el usuario sabe qué esperar antes de guardar.
+class _AvisosCard extends StatelessWidget {
+  const _AvisosCard({required this.categoria, required this.hora});
+  final String categoria;
+  final String? hora;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    const wa = Color(0xFF25D366);
+    final texto = descripcionAvisos(categoria: categoria, hora: hora);
+    return AnimatedContainer(
+      duration: Motion.of(context, Motion.medium),
+      padding: const EdgeInsets.all(Gap.sm),
+      decoration: BoxDecoration(
+        color: wa.withValues(alpha: context.isDark ? 0.1 : 0.08),
+        borderRadius: Radii.rMd,
+        border: Border.all(color: wa.withValues(alpha: 0.3)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.notifications_active_rounded, color: wa, size: IconSizes.md),
+        const HGap.xs(),
+        Expanded(
+          child: SmoothSwitcher(
+            child: Text(texto, key: ValueKey(texto), style: context.text.bodySmall?.copyWith(color: p.text)),
+          ),
+        ),
+      ]),
     );
   }
 }

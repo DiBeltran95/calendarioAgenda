@@ -7,35 +7,7 @@ export 'tables.dart';
 
 part 'database.g.dart';
 
-/// Categorías de gasto con las que arranca cada instalación (las mismas que
-/// sembraba el backend). El usuario puede crear más desde Presupuesto.
-const categoriasPorDefecto = [
-  ('comida', 'Comida', 'restaurant'),
-  ('transporte', 'Transporte', 'directions_car'),
-  ('servicios', 'Servicios/Facturas', 'receipt_long'),
-  ('entretenimiento', 'Entretenimiento/Ocio', 'sports_esports'),
-  ('salud', 'Salud/Bienestar', 'medication'),
-  ('educacion', 'Educación', 'school'),
-  ('ahorro', 'Ahorro/Inversión', 'savings'),
-  ('arriendo', 'Arriendo', 'real_estate_agent'),
-  ('otros', 'Otros', 'payments'),
-];
-
-@DriftDatabase(tables: [
-  Eventos,
-  Cumples,
-  Ciclos,
-  RegistrosDia,
-  Cuentas,
-  Transacciones,
-  Transferencias,
-  IngresosPlanificados,
-  Verificaciones,
-  Metas,
-  Presupuestos,
-  CategoriasFinanzas,
-  Ajustes,
-])
+@DriftDatabase(tables: [Ajustes, CacheEntries, RegistrosDia])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _abrir());
 
@@ -45,48 +17,24 @@ class AppDatabase extends _$AppDatabase {
   @override
   int get schemaVersion => 1;
 
-  @override
-  MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) async {
-          await m.createAll();
-          await _sembrarCategorias();
-        },
-        beforeOpen: (details) async {
-          await customStatement('PRAGMA foreign_keys = ON');
-        },
-      );
+  // ─────────────── Caché de respuestas del servidor ───────────────
 
-  Future<void> _sembrarCategorias() async {
-    await batch((b) {
-      b.insertAll(
-        categoriasFinanzas,
-        [
-          for (final (valor, label, icono) in categoriasPorDefecto)
-            CategoriasFinanzasCompanion.insert(
-              valor: valor,
-              label: label,
-              icono: Value(icono),
-              esDefault: const Value(true),
-            ),
-        ],
-        mode: InsertMode.insertOrIgnore,
-      );
-    });
+  Future<Map<String, Object?>?> leerCache(String clave) async {
+    final r = await (select(cacheEntries)..where((c) => c.clave.equals(clave))).getSingleOrNull();
+    return r == null ? null : {'json': r.json, 'actualizado': r.actualizado};
   }
 
-  /// Borra todos los datos y deja la base como recién instalada.
-  Future<void> reiniciar() async {
-    await transaction(() async {
-      for (final t in allTables) {
-        await delete(t).go();
-      }
-      await _sembrarCategorias();
-    });
-  }
+  Future<void> escribirCache(String clave, String json) => into(cacheEntries).insertOnConflictUpdate(
+        CacheEntriesCompanion.insert(clave: clave, json: json, actualizado: DateTime.now()),
+      );
+
+  /// Borra la caché (al cerrar sesión: los datos de un usuario no deben quedar
+  /// a la vista del siguiente que inicie sesión en el mismo teléfono).
+  Future<void> limpiarCache() => delete(cacheEntries).go();
 
   static QueryExecutor _abrir() {
     return driftDatabase(
-      name: 'agendaservi',
+      name: 'agendaservi_v2',
       web: DriftWebOptions(
         sqlite3Wasm: Uri.parse('sqlite3.wasm'),
         driftWorker: Uri.parse('drift_worker.js'),

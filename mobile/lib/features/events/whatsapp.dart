@@ -2,16 +2,18 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/dates.dart';
-import '../../core/db/database.dart';
 import '../../core/money.dart';
+import '../../core/net/api_client.dart';
+import '../../data/models.dart';
 
-/// Mensaje de recordatorio (mismo formato que el simulador de la web, sin el
-/// enlace de confirmación, que dependía del servidor).
+/// Mensaje para compartir un compromiso con otra persona (el mismo formato
+/// del simulador de la web, con el enlace público para confirmar el pago).
 String mensajeRecordatorio(Evento e) {
   final hora = e.hora == null ? '' : ' a las ${hora12(e.hora)}';
-  final valor = e.tipoTransaccion != 'ninguno' && e.costo > 0 ? '\n💰 Valor: ${cop(e.costo)}' : '';
+  final valor = e.esTransaccion && e.costo > 0 ? '\n💰 Valor: ${cop(e.costo)}' : '';
   final lugar = e.ubicacion.isEmpty ? '' : '\n📍 ${e.ubicacion}';
-  return 'Hola! Te recuerdo tu compromiso:\n📌 *${e.titulo}*\n📅 Fecha: ${fechaLarga(e.fecha)}$hora$lugar$valor';
+  final enlace = e.uuidConfirmacion == null ? '' : '\n🔗 Confirma aquí: ${ApiClient.confirmacionBaseUrl}/${e.uuidConfirmacion}';
+  return 'Hola! Te recuerdo tu compromiso:\n📌 *${e.titulo}*\n📅 Fecha: ${fechaLarga(e.fecha)}$hora$lugar$valor$enlace';
 }
 
 String mensajeCumple(Cumple c) {

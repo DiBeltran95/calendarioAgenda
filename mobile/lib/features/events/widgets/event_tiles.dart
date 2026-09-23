@@ -5,44 +5,54 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/palette.dart';
 import '../../../app/theme/tokens.dart';
 import '../../../core/dates.dart';
-import '../../../core/db/database.dart';
+import '../../../data/models.dart';
 import '../../../core/money.dart';
 import '../../../core/motion.dart';
 import '../../../core/widgets/sheets.dart';
 import '../../../core/widgets/ui.dart';
 import '../event_categories.dart';
 import '../events_repository.dart';
+import '../mensajes.dart';
 import '../whatsapp.dart';
 import 'event_form_sheet.dart';
 
 // ─────────────────────────── Acciones ───────────────────────────
 
-/// Borra un evento (preguntando el alcance si es de una serie) con "Deshacer".
+/// Borra un evento. Si es de una serie pregunta el alcance; si es único se
+/// puede deshacer (se vuelve a crear con los mismos datos).
 Future<void> eliminarEvento(BuildContext context, WidgetRef ref, Evento e) async {
   final repo = ref.read(eventsRepoProvider);
   final toaster = Toaster.of(context);
+  final serie = repo.esSerie(e);
   var alcance = AlcanceSerie.soloEste;
-  if (repo.esSerie(e)) {
+  if (serie) {
     final a = await preguntarAlcance(context, borrar: true);
     if (a == null) return;
     alcance = a;
   }
-  final afectados = await repo.afectados(e, alcance);
-  await repo.eliminar(e, alcance);
-  HapticFeedback.mediumImpact();
-  toaster.show(
-    afectados.length > 1 ? '${afectados.length} eventos eliminados' : 'Evento eliminado',
-    icon: Icons.delete_outline_rounded,
-    onUndo: () => repo.restaurar(afectados),
-  );
+  try {
+    await repo.eliminar(e, alcance);
+    HapticFeedback.mediumImpact();
+    toaster.show(
+      alcance == AlcanceSerie.esteYFuturos ? 'Evento y sus repeticiones pendientes eliminados' : 'Evento eliminado',
+      icon: Icons.delete_outline_rounded,
+      onUndo: serie ? null : () => repo.restaurar(e),
+    );
+  } catch (err) {
+    toaster.show('$err', error: true);
+  }
 }
 
 Future<void> eliminarCumple(BuildContext context, WidgetRef ref, Cumple c) async {
   final repo = ref.read(eventsRepoProvider);
   final toaster = Toaster.of(context);
-  await repo.eliminarCumple(c.id);
-  HapticFeedback.mediumImpact();
-  toaster.show('Cumpleaños eliminado', icon: Icons.delete_outline_rounded, onUndo: () => repo.restaurarCumple(c));
+  try {
+    await repo.eliminarCumple(c.id);
+    HapticFeedback.mediumImpact();
+    toaster.show('Cumpleaños eliminado', icon: Icons.delete_outline_rounded, onUndo: () => repo.restaurarCumple(c));
+  } catch (err) {
+    toaster.show('$err', error: true);
+  }
 }
 
 // ─────────────────────────── Tile de evento ───────────────────────────
@@ -128,7 +138,14 @@ class EventTile extends ConsumerWidget {
           if (esTx)
             _PagoToggle(
               pagado: pagado,
-              onTap: () => ref.read(eventsRepoProvider).alternarPago(e),
+              onTap: () async {
+                final toaster = Toaster.of(context);
+                try {
+                  await ref.read(eventsRepoProvider).alternarPago(e);
+                } catch (err) {
+                  toaster.show('$err', error: true);
+                }
+              },
             ),
         ],
       ),
@@ -243,63 +260,31 @@ class EventDetailSheet extends ConsumerWidget {
             color: e.tipoTransaccion == 'ingreso' ? p.success : p.danger,
           ),
         if (e.tarjetaCreditoId != null) fila(Icons.credit_card_rounded, 'Cobro generado por una compra con tarjeta'),
-        if (e.notas.isNotEmpty) fila(Icons.notes_rounded, e.notas),
         if (esTx) ...[
           const VGap.sm(),
           OutlinedButton.icon(
-            onPressed: () {
+            onPressed: () async {
               final toaster = Toaster.of(context);
-              ref.read(eventsRepoProvider).alternarPago(e);
               Navigator.pop(context);
-              toaster.show(e.estadoPago == 'pagado' ? 'Marcado como pendiente' : 'Marcado como pagado');
+              try {
+                await ref.read(eventsRepoProvider).alternarPago(e);
+                toaster.show(e.pagado ? 'Marcado como pendiente' : 'Marcado como pagado');
+              } catch (err) {
+                toaster.show('$err', error: true);
+              }
             },
             icon: Icon(e.estadoPago == 'pagado' ? Icons.undo_rounded : Icons.check_circle_rounded),
             label: Text(e.estadoPago == 'pagado' ? 'Marcar como pendiente' : 'Marcar como pagado'),
           ),
         ],
         const VGap.lg(),
-        // Vista previa del recordatorio de WhatsApp (como el simulador web).
-        Container(
-          padding: const EdgeInsets.all(Gap.md),
-          decoration: BoxDecoration(
-            color: const Color(0xFF25D366).withValues(alpha: context.isDark ? 0.1 : 0.08),
-            borderRadius: Radii.rLg,
-            border: Border.all(color: const Color(0xFF25D366).withValues(alpha: 0.3)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(children: [
-                const Icon(Icons.chat_rounded, color: Color(0xFF25D366), size: IconSizes.md),
-                const HGap.xs(),
-                Text('Recordatorio de WhatsApp', style: context.text.titleSmall),
-              ]),
-              const VGap.sm(),
-              Text(mensaje, style: context.text.bodyMedium),
-              const VGap.sm(),
-              Row(children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      await copiar(mensaje);
-                      if (context.mounted) toast(context, 'Mensaje copiado', icon: Icons.content_copy_rounded);
-                    },
-                    icon: const Icon(Icons.content_copy_rounded, size: IconSizes.md),
-                    label: const Text('Copiar'),
-                  ),
-                ),
-                const HGap.sm(),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () => abrirWhatsApp(mensaje),
-                    style: FilledButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: const Color(0xFF052E16), minimumSize: const Size(0, 48)),
-                    icon: const Icon(Icons.send_rounded, size: IconSizes.md),
-                    label: const Text('Enviar'),
-                  ),
-                ),
-              ]),
-            ],
-          ),
+        // Lo que enviará el cron por WhatsApp, tal cual.
+        _VistaWhatsApp(evento: e),
+        const VGap.md(),
+        OutlinedButton.icon(
+          onPressed: () => abrirWhatsApp(mensaje),
+          icon: const Icon(Icons.share_rounded, size: IconSizes.md),
+          label: const Text('Compartir con alguien por WhatsApp'),
         ),
       ],
     );
@@ -361,5 +346,100 @@ class BirthdayTile extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+/// Burbujas de chat con los mensajes que enviará el servidor para este evento.
+class _VistaWhatsApp extends StatelessWidget {
+  const _VistaWhatsApp({required this.evento});
+  final Evento evento;
+
+  @override
+  Widget build(BuildContext context) {
+    final e = evento;
+    const wa = Color(0xFF25D366);
+    final todoElDia = esTodoElDiaCron(categoria: e.categoria, hora: e.hora, tarjetaCreditoId: e.tarjetaCreditoId);
+    final mensajes = todoElDia
+        ? [('7:00 a. m. · resumen del día', _lineaResumen(e))]
+        : [('30 min antes', mensajePrevio(e)), ('${hora12Cron(e.hora)} · a la hora', mensajeExacto(e))];
+    return Container(
+      padding: const EdgeInsets.all(Gap.md),
+      decoration: BoxDecoration(
+        color: context.isDark ? const Color(0xFF0B141A) : const Color(0xFFEFE7DD),
+        borderRadius: Radii.rLg,
+        border: Border.all(color: wa.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(children: [
+            const Icon(Icons.chat_rounded, color: wa, size: IconSizes.md),
+            const HGap.xs(),
+            Expanded(child: Text('Así te llegará por WhatsApp', style: context.text.titleSmall)),
+          ]),
+          const VGap.sm(),
+          for (final (i, (cuando, texto)) in mensajes.indexed)
+            Entrance(
+              index: i,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: Gap.xs),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(Gap.sm, Gap.xs, Gap.sm, 6),
+                      decoration: BoxDecoration(
+                        color: context.isDark ? const Color(0xFF202C33) : Colors.white,
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(12),
+                          bottomLeft: Radius.circular(12),
+                          bottomRight: Radius.circular(12),
+                        ),
+                      ),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        _TextoWhatsApp(texto),
+                        const SizedBox(height: 2),
+                        Text(cuando, style: context.text.labelSmall?.copyWith(fontSize: 10.5, letterSpacing: 0)),
+                      ]),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _lineaResumen(Evento e) {
+    final (emoji, _) = metaCron(e.categoria);
+    final credito = e.tarjetaCreditoId != null;
+    return '☀️ *Buenos días* ☀️\n'
+        '${credito ? '💳 *Pagos de tarjeta de crédito*' : '📋 *Recordatorios y pagos de hoy*'}\n'
+        '• ${credito ? '' : '$emoji '}*${e.titulo}*${e.costo > 0 ? ' — ${cop(e.costo)}' : ''}';
+  }
+}
+
+/// Texto con el formato de WhatsApp: *negrita* y _cursiva_.
+class _TextoWhatsApp extends StatelessWidget {
+  const _TextoWhatsApp(this.texto);
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = context.text.bodyMedium!;
+    final spans = <TextSpan>[];
+    final re = RegExp(r'\*([^*]+)\*|_([^_\n]+)_');
+    var i = 0;
+    for (final m in re.allMatches(texto)) {
+      if (m.start > i) spans.add(TextSpan(text: texto.substring(i, m.start)));
+      spans.add(m.group(1) != null
+          ? TextSpan(text: m.group(1), style: const TextStyle(fontWeight: FontWeight.w700))
+          : TextSpan(text: m.group(2), style: const TextStyle(fontStyle: FontStyle.italic)));
+      i = m.end;
+    }
+    if (i < texto.length) spans.add(TextSpan(text: texto.substring(i)));
+    return Text.rich(TextSpan(style: base, children: spans));
   }
 }

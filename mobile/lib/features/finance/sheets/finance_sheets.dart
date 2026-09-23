@@ -5,10 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/palette.dart';
 import '../../../app/theme/tokens.dart';
 import '../../../core/dates.dart';
-import '../../../core/db/database.dart';
+import '../../../data/models.dart';
 import '../../../core/icon_map.dart';
 import '../../../core/money.dart';
 import '../../../core/motion.dart';
+import '../../../core/providers.dart';
 import '../../../core/widgets/fields.dart';
 import '../../../core/widgets/sheets.dart';
 import '../finance_logic.dart';
@@ -311,9 +312,10 @@ class _TransferSheetState extends ConsumerState<TransferSheet> {
 
 // ─────────────────────────── Ingreso planificado ───────────────────────────
 
+/// Nuevo ingreso planificado (el servidor no permite editarlos: para
+/// cambiarlo se elimina y se crea de nuevo, igual que en la web).
 class PlanSheet extends ConsumerStatefulWidget {
-  const PlanSheet({super.key, this.plan});
-  final IngresoPlanificado? plan;
+  const PlanSheet({super.key});
 
   @override
   ConsumerState<PlanSheet> createState() => _PlanSheetState();
@@ -321,23 +323,11 @@ class PlanSheet extends ConsumerStatefulWidget {
 
 class _PlanSheetState extends ConsumerState<PlanSheet> {
   final _form = GlobalKey<FormState>();
-  late String _frecuencia;
-  late String _fecha;
+  String _frecuencia = 'mensual';
+  String _fecha = hoyYmd();
   int? _cuenta;
-  late bool _activo;
-  late final TextEditingController _desc, _monto;
-
-  @override
-  void initState() {
-    super.initState();
-    final pl = widget.plan;
-    _frecuencia = pl?.frecuencia ?? 'mensual';
-    _fecha = pl?.fechaInicio ?? hoyYmd();
-    _cuenta = pl?.cuentaId;
-    _activo = pl?.activo ?? true;
-    _desc = TextEditingController(text: pl?.descripcion ?? '');
-    _monto = TextEditingController(text: montoInicial(pl?.monto ?? 0));
-  }
+  final _desc = TextEditingController();
+  final _monto = TextEditingController();
 
   @override
   void dispose() {
@@ -350,19 +340,21 @@ class _PlanSheetState extends ConsumerState<PlanSheet> {
   Widget build(BuildContext context) {
     final cuentas = ref.watch(cuentasProvider).value ?? const <Cuenta>[];
     return SheetScaffold(
-      title: widget.plan == null ? 'Ingreso planificado' : 'Editar ingreso planificado',
+      title: 'Ingreso planificado',
       subtitle: 'Salario, arriendo que cobras, pagos recurrentes…',
       icon: Icons.event_repeat_rounded,
-      primaryLabel: widget.plan == null ? 'Guardar' : 'Guardar cambios',
+      primaryLabel: 'Guardar',
       onPrimary: () {
         if (!(_form.currentState?.validate() ?? false)) return;
-        final repo = ref.read(financeRepoProvider);
         _ejecutar(
           context,
-          () => widget.plan == null
-              ? repo.crearPlan(descripcion: _desc.text, monto: parseMonto(_monto.text), frecuencia: _frecuencia, fechaInicio: _fecha, cuentaId: _cuenta)
-              : repo.actualizarPlan(widget.plan!.id,
-                  descripcion: _desc.text, monto: parseMonto(_monto.text), frecuencia: _frecuencia, fechaInicio: _fecha, cuentaId: _cuenta, activo: _activo),
+          () => ref.read(financeRepoProvider).crearPlan(
+                descripcion: _desc.text,
+                monto: parseMonto(_monto.text),
+                frecuencia: _frecuencia,
+                fechaInicio: _fecha,
+                cuentaId: _cuenta,
+              ),
           ok: 'Ingreso planificado guardado',
         );
       },
@@ -387,14 +379,6 @@ class _PlanSheetState extends ConsumerState<PlanSheet> {
               DateField(value: _fecha, onChanged: (v) => setState(() => _fecha = v)),
               const FieldLabel('Cuenta donde llega'),
               _cuentaDropdown(cuentas: cuentas, value: _cuenta, nula: 'Ninguna (solo registrar)', onChanged: (v) => setState(() => _cuenta = v)),
-              if (widget.plan != null)
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: _activo,
-                  onChanged: (v) => setState(() => _activo = v),
-                  title: const Text('Activo'),
-                  subtitle: const Text('Pausa el plan sin borrar su historial.'),
-                ),
             ],
           ),
         ),
@@ -818,7 +802,8 @@ class _CategoriesSheetState extends ConsumerState<CategoriesSheet> {
   Widget build(BuildContext context) {
     final p = context.palette;
     final cats = ref.watch(categoriasFinProvider).value ?? const <CategoriaFinanzas>[];
-    final enUso = ref.watch(categoriasEnUsoProvider).value ?? const <String>{};
+    final mes = ref.watch(mesFinanzasProvider);
+    final enUso = ref.watch(categoriasEnUsoProvider((mes.year, mes.month)));
     return SheetScaffold(
       title: 'Categorías de gasto',
       icon: Icons.category_rounded,
