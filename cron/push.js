@@ -1,15 +1,19 @@
 // Notificaciones push a la app móvil mediante Firebase Cloud Messaging (API
 // HTTP v1). Sin dependencias: el token OAuth se firma con `crypto` de Node.
 //
-// Configuración (una de las dos, en el .env del cron):
-//   FCM_SERVICE_ACCOUNT_FILE=/home/usuario/firebase-service-account.json
-//   FCM_SERVICE_ACCOUNT=<JSON de la cuenta de servicio, tal cual o en base64>
+// Configuración (cualquiera de estas):
+//   · Dejar el JSON de la cuenta de servicio de Firebase en esta carpeta, con
+//     el nombre con que lo descarga Firebase (agendaservi-firebase-adminsdk-….json)
+//     o como firebase-service-account.json. Se detecta solo.
+//   · En el .env: FCM_SERVICE_ACCOUNT_FILE=/ruta/al/archivo.json
+//   · En el .env: FCM_SERVICE_ACCOUNT=<el JSON tal cual o en base64>
 //
 // Si no hay configuración el cron sigue funcionando igual (solo WhatsApp) y la
 // app mantiene sus avisos locales como respaldo.
 
 const crypto = require('crypto');
 const fs = require('fs');
+const path = require('path');
 
 const SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -18,13 +22,26 @@ const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 //  Credenciales y token de acceso
 // ---------------------------------------------------------------------------
 
-function leerCuentaServicio(env = process.env) {
+/** Archivo de la cuenta de servicio dejado en la carpeta del cron. */
+function buscarArchivoCuenta(dir = __dirname) {
+    try {
+        const f = fs.readdirSync(dir).filter((n) => /(firebase-adminsdk|service-account).*\.json$/i.test(n)).sort()[0];
+        return f ? path.join(dir, f) : null;
+    } catch {
+        return null;
+    }
+}
+
+function leerCuentaServicio(env = process.env, dir = __dirname) {
     try {
         let raw = null;
-        if (env.FCM_SERVICE_ACCOUNT_FILE) raw = fs.readFileSync(env.FCM_SERVICE_ACCOUNT_FILE, 'utf8');
+        if (env.FCM_SERVICE_ACCOUNT_FILE) raw = fs.readFileSync(path.resolve(dir, env.FCM_SERVICE_ACCOUNT_FILE), 'utf8');
         else if (env.FCM_SERVICE_ACCOUNT) {
             raw = env.FCM_SERVICE_ACCOUNT.trim();
             if (!raw.startsWith('{')) raw = Buffer.from(raw, 'base64').toString('utf8');
+        } else {
+            const archivo = buscarArchivoCuenta(dir);
+            if (archivo) raw = fs.readFileSync(archivo, 'utf8');
         }
         if (!raw) return null;
         const sa = JSON.parse(raw);

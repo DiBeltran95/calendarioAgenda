@@ -70,7 +70,23 @@ test('la cuenta de servicio se lee como JSON o base64', () => {
     const json = JSON.stringify({ client_email: 'a@b', private_key: 'k', project_id: 'p' });
     assert.equal(push.leerCuentaServicio({ FCM_SERVICE_ACCOUNT: json }).project_id, 'p');
     assert.equal(push.leerCuentaServicio({ FCM_SERVICE_ACCOUNT: Buffer.from(json).toString('base64') }).project_id, 'p');
-    assert.equal(push.leerCuentaServicio({}), null);
+    assert.equal(push.leerCuentaServicio({}, require('os').tmpdir() + '/no-existe'), null);
+});
+
+test('la cuenta de servicio se detecta sola en la carpeta del cron', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cron-'));
+    try {
+        assert.equal(push.leerCuentaServicio({}, dir), null);
+        const json = JSON.stringify({ client_email: 'a@b', private_key: 'k', project_id: 'agendaservi' });
+        fs.writeFileSync(path.join(dir, 'agendaservi-firebase-adminsdk-fbsvc-1a2b3c.json'), json);
+        assert.equal(push.leerCuentaServicio({}, dir).project_id, 'agendaservi');
+        // Ruta relativa en el .env: relativa a la carpeta del cron.
+        assert.equal(push.leerCuentaServicio({ FCM_SERVICE_ACCOUNT_FILE: 'agendaservi-firebase-adminsdk-fbsvc-1a2b3c.json' }, dir).project_id, 'agendaservi');
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
 });
 
 const reunion = { id: 7, titulo: 'Reunión equipo', fecha: '2026-09-23', hora: '14:30:00', categoria: 'reunion', ubicacion: 'Sala 2', tipo_transaccion: 'gasto', uuid_confirmacion: 'abc' };

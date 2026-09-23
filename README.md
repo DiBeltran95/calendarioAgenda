@@ -82,8 +82,9 @@ DB_USER=
 DB_PASS=
 DB_NAME=
 WHATSAPP_API_KEY=
-# Opcional: notificaciones push a la app móvil (ver "Notificaciones push")
-FCM_SERVICE_ACCOUNT_FILE=/home/<cuenta>/firebase-service-account.json
+# Opcional: notificaciones push. Si el JSON de Firebase está en la carpeta
+# cron/ no hace falta esta línea (ver "Notificaciones push").
+# FCM_SERVICE_ACCOUNT_FILE=/home/<cuenta>/firebase-service-account.json
 ```
 
 **`frontend/.env`** / **`frontend/.env.production`** (ver `frontend/.env.example`)
@@ -204,9 +205,8 @@ cron (cada 30 s, timers exactos) ── WhatsApp ──► usuario              
    - una app **iOS** con el bundle `com.agendaservi.agendaservi`.
 2. **Cron:**
    1. En *Configuración del proyecto → Cuentas de servicio*, generar una clave privada (JSON).
-   2. Subirla al servidor del cron, fuera de la carpeta del repositorio.
-   3. Añadir `FCM_SERVICE_ACCOUNT_FILE` a `cron/.env`.
-   4. Reiniciar con `npx pm2 restart ecosystem.config.cjs`. El log dirá `[Push] FCM activo para el proyecto …`.
+   2. Dejar ese archivo, con el nombre que trae (`agendaservi-firebase-adminsdk-….json`), dentro de la carpeta `cron/` del servidor. Se detecta solo; `.gitignore` evita que se suba al repositorio. También se puede indicar la ruta con `FCM_SERVICE_ACCOUNT_FILE` en `cron/.env`.
+   3. Reiniciar con `npx pm2 restart ecosystem.config.cjs`. El log dirá `[Push] FCM activo para el proyecto …`.
 3. **App:** copiar `mobile/firebase.example.json` y llenarlo con los valores de las apps de Firebase (`apiKey`, `appId`, `messagingSenderId`, `projectId`).
    - En GitHub, pegar ese JSON en el secreto `FIREBASE_DART_DEFINES` (*Settings → Secrets and variables → Actions*).
    - En local: `flutter run --dart-define-from-file=firebase.json`.
