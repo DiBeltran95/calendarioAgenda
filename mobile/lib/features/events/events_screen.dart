@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme/app_module.dart';
 import '../../app/theme/palette.dart';
 import '../../app/theme/tokens.dart';
+import '../../core/widgets/fab_animado.dart';
 import '../../core/dates.dart';
 import '../../data/models.dart';
 import '../../core/holidays.dart';
@@ -24,8 +25,7 @@ const _especialColor = Color(0xFF60A5FA);
 const _cumpleColor = Color(0xFFF472B6);
 
 /// Cumpleaños que caen en un MM-DD dado.
-List<Cumple> cumplesDelDia(List<Cumple> todos, String fecha) =>
-    todos.where((c) => c.fecha.length >= 10 && c.fecha.substring(5) == fecha.substring(5)).toList();
+List<Cumple> cumplesDelDia(List<Cumple> todos, String fecha) => todos.where((c) => c.fecha.length >= 10 && c.fecha.substring(5) == fecha.substring(5)).toList();
 
 class EventsScreen extends ConsumerWidget {
   const EventsScreen({super.key});
@@ -49,12 +49,7 @@ class EventsScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'fab-eventos',
-        onPressed: crear,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Nuevo evento'),
-      ),
+      floatingActionButton: FabAnimado(heroTag: 'fab-eventos', onPressed: crear, icono: Icons.add_rounded, etiqueta: 'Nuevo evento'),
       body: SafeArea(
         bottom: false,
         child: ModuleLayout(
@@ -142,8 +137,7 @@ class _EventDayCell extends StatelessWidget {
 
     final markers = <Widget>[
       for (final e in anuales.take(2)) Icon(categoriaEvento(e.categoria).icon, size: 12, color: categoriaEvento(e.categoria).color),
-      if (anuales.length > 2)
-        Text('+${anuales.length - 2}', style: context.text.labelSmall?.copyWith(fontSize: 9, letterSpacing: 0)),
+      if (anuales.length > 2) Text('+${anuales.length - 2}', style: context.text.labelSmall?.copyWith(fontSize: 9, letterSpacing: 0)),
       for (final e in otros.take(anuales.isEmpty ? 3 : 1)) Dot(categoriaEvento(e.categoria).color),
     ];
 
@@ -155,10 +149,10 @@ class _EventDayCell extends StatelessWidget {
       corner: festivo != null
           ? const Icon(Icons.celebration_rounded, size: 11, color: _festivoColor)
           : cumples > 0
-              ? const Icon(Icons.cake_rounded, size: 11, color: _cumpleColor)
-              : especial != null
-                  ? const Icon(Icons.star_rounded, size: 11, color: _especialColor)
-                  : null,
+          ? const Icon(Icons.cake_rounded, size: 11, color: _cumpleColor)
+          : especial != null
+          ? const Icon(Icons.star_rounded, size: 11, color: _especialColor)
+          : null,
       markers: markers.isEmpty ? null : Row(mainAxisSize: MainAxisSize.min, children: markers),
     );
   }
@@ -169,11 +163,14 @@ class _Leyenda extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget item(Widget icon, String t) => Row(mainAxisSize: MainAxisSize.min, children: [
-          icon,
-          const SizedBox(width: 4),
-          Text(t, style: context.text.labelSmall?.copyWith(letterSpacing: 0)),
-        ]);
+    Widget item(Widget icon, String t) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        icon,
+        const SizedBox(width: 4),
+        Text(t, style: context.text.labelSmall?.copyWith(letterSpacing: 0)),
+      ],
+    );
     return Wrap(
       spacing: Gap.md,
       runSpacing: Gap.xs,
@@ -211,9 +208,13 @@ class _ResumenMes extends StatelessWidget {
     }
     return Row(
       children: [
-        Expanded(child: StatTile(label: 'Eventos', value: Text('${eventos.length}'), icon: Icons.event_rounded)),
+        Expanded(
+          child: StatTile(label: 'Eventos', value: Text('${eventos.length}'), icon: Icons.event_rounded),
+        ),
         const HGap.xs(),
-        Expanded(child: StatTile(label: 'Por pagar', value: AnimatedMoney(pendiente), icon: Icons.schedule_rounded, color: p.warning)),
+        Expanded(
+          child: StatTile(label: 'Por pagar', value: AnimatedMoney(pendiente), icon: Icons.schedule_rounded, color: p.warning),
+        ),
         const HGap.xs(),
         Expanded(
           child: StatTile(
@@ -291,7 +292,10 @@ class _DetalleDia extends ConsumerWidget {
         for (final e in eventos)
           Padding(
             padding: const EdgeInsets.only(bottom: Gap.xs),
-            child: Entrance(index: i++, child: EventTile(evento: e)),
+            child: Entrance(
+              index: i++,
+              child: EventTile(evento: e),
+            ),
           ),
         if (cumples.isNotEmpty) ...[
           const VGap.xs(),
@@ -299,7 +303,10 @@ class _DetalleDia extends ConsumerWidget {
           for (final c in cumples)
             Padding(
               padding: const EdgeInsets.only(bottom: Gap.xs),
-              child: Entrance(index: i++, child: BirthdayTile(cumple: c, anio: anio)),
+              child: Entrance(
+                index: i++,
+                child: BirthdayTile(cumple: c, anio: anio),
+              ),
             ),
         ],
         if (vacio)
@@ -374,7 +381,15 @@ class _InfoDia extends StatelessWidget {
 // ─────────────────────────── Agenda del mes ───────────────────────────
 
 class _ItemAgenda {
-  const _ItemAgenda({required this.fecha, required this.hora, required this.titulo, required this.detalle, required this.icon, required this.color, this.evento});
+  const _ItemAgenda({
+    required this.fecha,
+    required this.hora,
+    required this.titulo,
+    required this.detalle,
+    required this.icon,
+    required this.color,
+    this.evento,
+  });
   final String fecha;
   final String hora;
   final String titulo;
@@ -420,7 +435,14 @@ class _AgendaMes extends ConsumerWidget {
       for (final f in festivosColombia(mes.year).where((f) => f.fecha.startsWith(prefijo) && f.fecha.compareTo(desde) >= 0))
         _ItemAgenda(fecha: f.fecha, hora: '', titulo: f.nombre, detalle: 'Festivo · Día no laboral', icon: Icons.celebration_rounded, color: _festivoColor),
       for (final d in especiales.where((d) => d.fecha.startsWith(prefijo) && d.fecha.compareTo(desde) >= 0))
-        _ItemAgenda(fecha: d.fecha, hora: '', titulo: d.nombre, detalle: d.categoria.isEmpty ? 'Día especial' : d.categoria, icon: Icons.star_rounded, color: _especialColor),
+        _ItemAgenda(
+          fecha: d.fecha,
+          hora: '',
+          titulo: d.nombre,
+          detalle: d.categoria.isEmpty ? 'Día especial' : d.categoria,
+          icon: Icons.star_rounded,
+          color: _especialColor,
+        ),
       for (final c in cumples)
         if (c.fecha.length >= 10 && c.fecha.substring(5, 7) == prefijo.substring(5) && '$prefijo${c.fecha.substring(7)}'.compareTo(desde) >= 0)
           _ItemAgenda(
@@ -468,11 +490,15 @@ class _AgendaMes extends ConsumerWidget {
                         children: [
                           Text(items[i].titulo, style: context.text.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
                           const SizedBox(height: 2),
-                          Row(children: [
-                            Icon(items[i].icon, size: 13, color: items[i].color),
-                            const SizedBox(width: 4),
-                            Expanded(child: Text(items[i].detalle, style: context.text.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                          ]),
+                          Row(
+                            children: [
+                              Icon(items[i].icon, size: 13, color: items[i].color),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(items[i].detalle, style: context.text.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -506,7 +532,10 @@ class _FechaChip extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text('${d.day}', style: context.text.titleMedium?.copyWith(color: color, fontWeight: FontWeight.w800, height: 1)),
+          Text(
+            '${d.day}',
+            style: context.text.titleMedium?.copyWith(color: color, fontWeight: FontWeight.w800, height: 1),
+          ),
           Text(mesesCortos[d.month - 1].toUpperCase(), style: context.text.labelSmall?.copyWith(fontSize: 10)),
         ],
       ),

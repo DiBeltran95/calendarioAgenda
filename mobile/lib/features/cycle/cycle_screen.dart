@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme/app_module.dart';
 import '../../app/theme/palette.dart';
 import '../../app/theme/tokens.dart';
+import '../../core/widgets/fab_animado.dart';
 import '../../core/dates.dart';
 import '../../core/db/database.dart';
 import '../../core/motion.dart';
@@ -34,12 +35,7 @@ class CycleScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'fab-ciclo',
-        onPressed: registrar,
-        icon: const Icon(Icons.water_drop_rounded),
-        label: const Text('Registrar periodo'),
-      ),
+      floatingActionButton: FabAnimado(heroTag: 'fab-ciclo', onPressed: registrar, icono: Icons.water_drop_rounded, etiqueta: 'Registrar periodo'),
       body: SafeArea(
         bottom: false,
         child: ModuleLayout(
@@ -58,9 +54,7 @@ class CycleScreen extends ConsumerWidget {
             ),
             CargandoBarra(visible: ref.watch(bootstrapProvider).isLoading && !ref.watch(bootstrapProvider).hasValue),
             Entrance(
-              child: stats.vacio
-                  ? _SinRegistros(onRegistrar: registrar)
-                  : _Hero(fecha: sel, detalles: detalles, stats: stats),
+              child: stats.vacio ? _SinRegistros(onRegistrar: registrar) : _Hero(fecha: sel, detalles: detalles, stats: stats),
             ),
             const VGap.sm(),
             Entrance(
@@ -93,7 +87,9 @@ class CycleScreen extends ConsumerWidget {
           secondary: [
             const VGap.md(),
             if (!stats.vacio) ...[
-              SmoothSwitcher(child: _Consejo(key: ValueKey(sel), fecha: sel, detalles: detalles, sinDatos: stats.vacio)),
+              SmoothSwitcher(
+                child: _Consejo(key: ValueKey(sel), fecha: sel, detalles: detalles, sinDatos: stats.vacio),
+              ),
               const VGap.md(),
               _Pronostico(stats: stats),
               const VGap.md(),
@@ -136,44 +132,55 @@ class _Hero extends StatelessWidget {
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [Color.alphaBlend(color.withValues(alpha: context.isDark ? 0.14 : 0.1), p.surface), p.surface],
+        colors: [
+          Color.alphaBlend(color.withValues(alpha: context.isDark ? 0.14 : 0.1), p.surface),
+          p.surface,
+        ],
       ),
-      child: LayoutBuilder(builder: (context, c) {
-        // En columna (teléfono) la rueda puede ser más grande que en fila.
-        final ring = CycleRing(details: d, size: c.maxWidth < 420 ? (c.maxWidth * 0.72).clamp(180.0, 240.0) : 200);
-        final info = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(fecha == hoyYmd() ? 'HOY' : fechaConDia(fecha).toUpperCase(), style: context.text.labelSmall?.copyWith(color: p.accent)),
-            const SizedBox(height: 6),
-            _Dato(
-              icon: Icons.child_care_rounded,
-              label: 'Probabilidad de embarazo',
-              valor: d.probabilidad,
-              color: switch (d.probabilidad) { 'Máxima' => PhaseColors.ovulation, 'Alta' => PhaseColors.fertile, _ => p.text },
-            ),
-            const VGap.sm(),
-            _Dato(
-              icon: Icons.water_drop_outlined,
-              label: 'Próximo periodo',
-              valor: d.fase == Fase.periodoRetrasado
-                  ? '${d.diasRetraso} día${d.diasRetraso == 1 ? '' : 's'} de retraso'
-                  : 'En ${d.proximoPeriodoEn} día${d.proximoPeriodoEn == 1 ? '' : 's'}',
-              color: d.fase == Fase.periodoRetrasado ? PhaseColors.late : null,
-            ),
-            const VGap.sm(),
-            _Dato(
-              icon: Icons.loop_rounded,
-              label: d.esCicloObservado ? 'Ciclo de referencia' : 'Ciclo estimado',
-              valor: '${d.duracionCiclo} días',
-            ),
-          ],
-        );
-        if (c.maxWidth < 420) {
-          return Column(children: [ring, const VGap.md(), info]);
-        }
-        return Row(children: [ring, const HGap.md(), Expanded(child: info)]);
-      }),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          // En columna (teléfono) la rueda puede ser más grande que en fila.
+          final ring = CycleRing(details: d, size: c.maxWidth < 420 ? (c.maxWidth * 0.72).clamp(180.0, 240.0) : 200);
+          final info = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(fecha == hoyYmd() ? 'HOY' : fechaConDia(fecha).toUpperCase(), style: context.text.labelSmall?.copyWith(color: p.accent)),
+              const SizedBox(height: 6),
+              _Dato(
+                icon: Icons.child_care_rounded,
+                label: 'Probabilidad de embarazo',
+                valor: d.probabilidad,
+                color: switch (d.probabilidad) {
+                  'Máxima' => PhaseColors.ovulation,
+                  'Alta' => PhaseColors.fertile,
+                  _ => p.text,
+                },
+              ),
+              const VGap.sm(),
+              _Dato(
+                icon: Icons.water_drop_outlined,
+                label: 'Próximo periodo',
+                valor: d.fase == Fase.periodoRetrasado
+                    ? '${d.diasRetraso} día${d.diasRetraso == 1 ? '' : 's'} de retraso'
+                    : 'En ${d.proximoPeriodoEn} día${d.proximoPeriodoEn == 1 ? '' : 's'}',
+                color: d.fase == Fase.periodoRetrasado ? PhaseColors.late : null,
+              ),
+              const VGap.sm(),
+              _Dato(icon: Icons.loop_rounded, label: d.esCicloObservado ? 'Ciclo de referencia' : 'Ciclo estimado', valor: '${d.duracionCiclo} días'),
+            ],
+          );
+          if (c.maxWidth < 420) {
+            return Column(children: [ring, const VGap.md(), info]);
+          }
+          return Row(
+            children: [
+              ring,
+              const HGap.md(),
+              Expanded(child: info),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -197,7 +204,11 @@ class _Dato extends StatelessWidget {
             children: [
               Text(label, style: context.text.bodySmall),
               SmoothSwitcher(
-                child: Text(valor, key: ValueKey(valor), style: context.text.titleSmall?.copyWith(color: color)),
+                child: Text(
+                  valor,
+                  key: ValueKey(valor),
+                  style: context.text.titleSmall?.copyWith(color: color),
+                ),
               ),
             ],
           ),
@@ -255,10 +266,10 @@ class _CycleDayCell extends StatelessWidget {
       corner: esInicio
           ? const Icon(Icons.water_drop_rounded, size: 10, color: Colors.white)
           : f == Fase.ovulacion
-              ? const Icon(Icons.auto_awesome_rounded, size: 10, color: Colors.white)
-              : f == Fase.periodoRetrasado
-                  ? const Icon(Icons.hourglass_bottom_rounded, size: 10, color: PhaseColors.late)
-                  : null,
+          ? const Icon(Icons.auto_awesome_rounded, size: 10, color: Colors.white)
+          : f == Fase.periodoRetrasado
+          ? const Icon(Icons.hourglass_bottom_rounded, size: 10, color: PhaseColors.late)
+          : null,
       markers: tieneRegistro ? Dot(strong ? Colors.white : context.palette.accent2, size: 5) : null,
     );
   }
@@ -269,19 +280,22 @@ class _LeyendaCompacta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget item(Color c, String t, {bool outline = false}) => Row(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: outline ? Colors.transparent : c,
-              border: Border.all(color: c, width: 1.5),
-              borderRadius: BorderRadius.circular(3),
-            ),
+    Widget item(Color c, String t, {bool outline = false}) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: outline ? Colors.transparent : c,
+            border: Border.all(color: c, width: 1.5),
+            borderRadius: BorderRadius.circular(3),
           ),
-          const SizedBox(width: 4),
-          Text(t, style: context.text.labelSmall?.copyWith(letterSpacing: 0)),
-        ]);
+        ),
+        const SizedBox(width: 4),
+        Text(t, style: context.text.labelSmall?.copyWith(letterSpacing: 0)),
+      ],
+    );
     return Wrap(
       spacing: Gap.sm,
       runSpacing: Gap.xs,
@@ -502,10 +516,7 @@ class _RegistroDiaCard extends StatelessWidget {
                 for (final s in sintomas) Tag(etiqueta(sintomasDisponibles, s)),
               ],
             ),
-            if (r.nota.isNotEmpty) ...[
-              const VGap.xs(),
-              Text(r.nota, style: context.text.bodySmall),
-            ],
+            if (r.nota.isNotEmpty) ...[const VGap.xs(), Text(r.nota, style: context.text.bodySmall)],
           ],
         ],
       ),

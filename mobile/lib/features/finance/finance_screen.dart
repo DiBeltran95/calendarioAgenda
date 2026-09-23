@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme/app_module.dart';
 import '../../app/theme/palette.dart';
 import '../../app/theme/tokens.dart';
+import '../../core/widgets/fab_animado.dart';
 import '../../core/dates.dart';
 import '../../data/models.dart';
 import '../../core/money.dart';
@@ -49,15 +50,18 @@ class FinanceScreen extends ConsumerWidget {
       for (final e in eventos)
         if (e.tipoTransaccion != 'ninguno' && e.estadoPago == 'pendiente') e.fecha,
     };
-    final ingresosEsperados = {for (final o in ocurrencias) if (!o.verificado) o.fechaEsperada};
+    final ingresosEsperados = {
+      for (final o in ocurrencias)
+        if (!o.verificado) o.fechaEsperada,
+    };
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FabAnimado(
         heroTag: 'fab-finanzas',
         onPressed: () => abrirTransaccion(context, fecha: sel ?? hoyYmd()),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Movimiento'),
+        icono: Icons.add_rounded,
+        etiqueta: 'Movimiento',
       ),
       body: SafeArea(
         bottom: false,
@@ -77,11 +81,10 @@ class FinanceScreen extends ConsumerWidget {
               ],
             ),
             CargandoBarra(visible: ref.watch(monthProvider((mes.year, mes.month))).isLoading && !ref.watch(monthProvider((mes.year, mes.month))).hasValue),
-            Entrance(child: _Patrimonio(cuentas: cuentas, txMes: txMes)),
-            if (!prefs.onboardingFinanzasOculto) ...[
-              const VGap.sm(),
-              const _Onboarding(),
-            ],
+            Entrance(
+              child: _Patrimonio(cuentas: cuentas, txMes: txMes),
+            ),
+            if (!prefs.onboardingFinanzasOculto) ...[const VGap.sm(), const _Onboarding()],
             const VGap.sm(),
             Entrance(
               index: 1,
@@ -170,19 +173,19 @@ class _Patrimonio extends StatelessWidget {
           const VGap.md(),
           Row(
             children: [
-              Expanded(child: _Mini(icon: Icons.savings_rounded, label: 'Ahorros e inversiones', valor: r.ahorros, color: p.success)),
+              Expanded(
+                child: _Mini(icon: Icons.savings_rounded, label: 'Ahorros e inversiones', valor: r.ahorros, color: p.success),
+              ),
               Container(width: 1, height: 36, color: p.border),
               const HGap.md(),
-              Expanded(child: _Mini(icon: Icons.credit_card_rounded, label: 'Deuda tarjetas', valor: r.deudaTarjetas, color: p.danger)),
+              Expanded(
+                child: _Mini(icon: Icons.credit_card_rounded, label: 'Deuda tarjetas', valor: r.deudaTarjetas, color: p.danger),
+              ),
             ],
           ),
           if (r.cupoTarjetas > 0) ...[
             const VGap.sm(),
-            ProgressBar(
-              value: r.usoCredito / 100,
-              color: r.usoCredito > 50 ? p.danger : (r.usoCredito > 30 ? p.warning : p.success),
-              height: 6,
-            ),
+            ProgressBar(value: r.usoCredito / 100, color: r.usoCredito > 50 ? p.danger : (r.usoCredito > 30 ? p.warning : p.success), height: 6),
             const SizedBox(height: 4),
             Text('Uso de cupo: ${r.usoCredito.toStringAsFixed(0)}% de ${cop(r.cupoTarjetas)}', style: context.text.bodySmall),
           ],
@@ -252,8 +255,10 @@ class _Onboarding extends ConsumerWidget {
                 Icon(completo ? Icons.emoji_events_rounded : Icons.rocket_launch_rounded, color: p.accent),
                 const HGap.xs(),
                 Expanded(
-                  child: Text(completo ? '¡Todo listo! Tus finanzas están configuradas' : 'Configura tus finanzas · $hechos de 3',
-                      style: context.text.titleSmall),
+                  child: Text(
+                    completo ? '¡Todo listo! Tus finanzas están configuradas' : 'Configura tus finanzas · $hechos de 3',
+                    style: context.text.titleSmall,
+                  ),
                 ),
                 IconButton(
                   tooltip: 'Ocultar guía',
@@ -273,18 +278,11 @@ class _Onboarding extends ConsumerWidget {
                   leading: AnimatedSwitcher(
                     duration: Motion.of(context, Motion.medium),
                     transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
-                    child: Icon(
-                      hecho ? Icons.check_circle_rounded : icon,
-                      key: ValueKey(hecho),
-                      color: hecho ? p.success : p.textSecondary,
-                    ),
+                    child: Icon(hecho ? Icons.check_circle_rounded : icon, key: ValueKey(hecho), color: hecho ? p.success : p.textSecondary),
                   ),
                   title: Text(
                     texto,
-                    style: context.text.bodyMedium?.copyWith(
-                      decoration: hecho ? TextDecoration.lineThrough : null,
-                      color: hecho ? p.textSecondary : p.text,
-                    ),
+                    style: context.text.bodyMedium?.copyWith(decoration: hecho ? TextDecoration.lineThrough : null, color: hecho ? p.textSecondary : p.text),
                   ),
                   trailing: hecho ? null : Icon(Icons.chevron_right_rounded, color: p.textSecondary),
                   onTap: hecho ? null : accion,
@@ -317,18 +315,13 @@ class _FinDayCell extends StatelessWidget {
       corner: pagoPendiente
           ? Icon(Icons.schedule_rounded, size: 11, color: p.warning)
           : ingresoEsperado
-              ? Icon(Icons.savings_rounded, size: 11, color: p.gold)
-              : null,
+          ? Icon(Icons.savings_rounded, size: 11, color: p.gold)
+          : null,
       markers: n == null
           ? null
           : Text(
               '${n >= 0 ? '+' : '-'}${copCompacto(n.abs())}',
-              style: context.text.labelSmall?.copyWith(
-                fontSize: 9.5,
-                letterSpacing: 0,
-                fontWeight: FontWeight.w700,
-                color: n >= 0 ? p.success : p.danger,
-              ),
+              style: context.text.labelSmall?.copyWith(fontSize: 9.5, letterSpacing: 0, fontWeight: FontWeight.w700, color: n >= 0 ? p.success : p.danger),
             ),
     );
   }
@@ -340,11 +333,14 @@ class _LeyendaFin extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    Widget item(Widget i, String t) => Row(mainAxisSize: MainAxisSize.min, children: [
-          i,
-          const SizedBox(width: 4),
-          Text(t, style: context.text.labelSmall?.copyWith(letterSpacing: 0)),
-        ]);
+    Widget item(Widget i, String t) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        i,
+        const SizedBox(width: 4),
+        Text(t, style: context.text.labelSmall?.copyWith(letterSpacing: 0)),
+      ],
+    );
     return Wrap(
       spacing: Gap.md,
       runSpacing: Gap.xs,
@@ -396,44 +392,43 @@ class _TabsState extends ConsumerState<_Tabs> {
       height: 44,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        child: Row(children: [
-          for (final t in FinTab.values)
-            Padding(
-              key: _keys[t],
-              padding: const EdgeInsets.only(right: Gap.xs),
-              child: Semantics(
-                selected: t == actual,
-                button: true,
-                child: Pressable(
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    ref.read(finTabProvider.notifier).set(t);
-                  },
-                  child: AnimatedContainer(
-                    duration: Motion.of(context, Motion.medium),
-                    curve: Motion.enter,
-                    padding: const EdgeInsets.symmetric(horizontal: Gap.md),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: t == actual ? p.accent : p.surfaceHigh,
-                      borderRadius: BorderRadius.circular(Radii.pill),
-                      border: Border.all(color: t == actual ? p.accent : p.border),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(_iconos[t], size: IconSizes.sm, color: t == actual ? p.onAccent : p.textSecondary),
-                        const SizedBox(width: 6),
-                        Text(
-                          t.label,
-                          style: context.text.labelLarge?.copyWith(color: t == actual ? p.onAccent : p.text, fontSize: 13.5),
-                        ),
-                      ],
+        child: Row(
+          children: [
+            for (final t in FinTab.values)
+              Padding(
+                key: _keys[t],
+                padding: const EdgeInsets.only(right: Gap.xs),
+                child: Semantics(
+                  selected: t == actual,
+                  button: true,
+                  child: Pressable(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      ref.read(finTabProvider.notifier).set(t);
+                    },
+                    child: AnimatedContainer(
+                      duration: Motion.of(context, Motion.medium),
+                      curve: Motion.enter,
+                      padding: const EdgeInsets.symmetric(horizontal: Gap.md),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: t == actual ? p.accent : p.surfaceHigh,
+                        borderRadius: BorderRadius.circular(Radii.pill),
+                        border: Border.all(color: t == actual ? p.accent : p.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(_iconos[t], size: IconSizes.sm, color: t == actual ? p.onAccent : p.textSecondary),
+                          const SizedBox(width: 6),
+                          Text(t.label, style: context.text.labelLarge?.copyWith(color: t == actual ? p.onAccent : p.text, fontSize: 13.5)),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ]),
+          ],
+        ),
       ),
     );
   }
