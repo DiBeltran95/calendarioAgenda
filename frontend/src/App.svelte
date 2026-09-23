@@ -18,10 +18,24 @@
     import('./Landing.svelte').then((m) => { LandingComp = m.default; });
   }
 
+  // Páginas públicas de agendamiento (sin sesión), también cargadas a demanda.
+  const esReserva = (r: string) => /^\/agenda\/[^/]+\/?$/.test(r);
+  const esCita = (r: string) => /^\/cita\/[a-f0-9]{32}\/?$/.test(r);
+  let ReservarComp: any = null;
+  let CitaComp: any = null;
+  $: if (esReserva($currentRoute) && !ReservarComp) {
+    import('./reservas/Reservar.svelte').then((m) => { ReservarComp = m.default; });
+  }
+  $: if (esCita($currentRoute) && !CitaComp) {
+    import('./reservas/GestionarCita.svelte').then((m) => { CitaComp = m.default; });
+  }
+  const segmento = (r: string) => decodeURIComponent(r.replace(/\/$/, '').split('/').pop() ?? '');
+
   onMount(() => {
     const token = localStorage.getItem('token');
 
     if ($currentRoute.startsWith('/confirmar/')) return;
+    if (esReserva($currentRoute) || esCita($currentRoute)) return;
 
     if (IS_APK) {
       // App empaquetada: no hay landing; '/' entra directo a la app.
@@ -57,6 +71,14 @@
   <ModuleSelector />
 {:else if $currentRoute === '/dashboard'}
   <Dashboard />
+{:else if esReserva($currentRoute)}
+  {#if ReservarComp}
+    <svelte:component this={ReservarComp} slug={segmento($currentRoute).toLowerCase()} />
+  {/if}
+{:else if esCita($currentRoute)}
+  {#if CitaComp}
+    <svelte:component this={CitaComp} token={segmento($currentRoute)} />
+  {/if}
 {:else if $currentRoute.startsWith('/confirmar/')}
   {@const uuid = $currentRoute.split('/').pop()}
   <Confirmar {uuid} />

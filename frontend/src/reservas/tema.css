@@ -1,0 +1,235 @@
+/* Sistema visual de las páginas públicas de agendamiento (/agenda, /cita).
+ * Minimalista y claro (estilo Cal.com / Fresha): superficies blancas,
+ * tipografía Inter, el color de marca del negocio como acento y modo oscuro
+ * automático. Todo cuelga de .ag-root para no tocar el resto de la web. */
+
+.ag-root {
+  --marca: #2563eb;
+  --marca-texto: #ffffff;
+  --marca-suave: color-mix(in srgb, var(--marca) 12%, transparent);
+  --marca-borde: color-mix(in srgb, var(--marca) 40%, transparent);
+  /* Color de marca como TEXTO: se oscurece en claro y se aclara en oscuro
+     para mantener el contraste sea cual sea el color que elija el negocio. */
+  --marca-tinta: color-mix(in srgb, var(--marca) 78%, #000);
+  --bg: #f5f7fb;
+  --surface: #ffffff;
+  --surface-2: #f1f4f9;
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #64748b;
+  --border: #e2e8f0;
+  --ok: #059669;
+  --ok-suave: rgba(5, 150, 105, 0.12);
+  --danger: #dc2626;
+  --danger-suave: rgba(220, 38, 38, 0.1);
+  --warn: #b45309;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 12px 32px -12px rgba(15, 23, 42, 0.14);
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.05, 0.7, 0.1, 1);
+
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+  color: var(--text);
+  background: var(--bg);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ag-root {
+    --marca-suave: color-mix(in srgb, var(--marca) 22%, transparent);
+    --marca-borde: color-mix(in srgb, var(--marca) 55%, #fff 10%);
+    --marca-tinta: color-mix(in srgb, var(--marca) 45%, #fff);
+    --bg: #0a101c;
+    --surface: #111a2b;
+    --surface-2: #17223a;
+    --text: #e8eef8;
+    --text-2: #aab6c9;
+    --text-3: #8795ab;
+    --border: #22304a;
+    --ok: #34d399;
+    --ok-suave: rgba(52, 211, 153, 0.14);
+    --danger: #f87171;
+    --danger-suave: rgba(248, 113, 113, 0.14);
+    --warn: #fbbf24;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -16px rgba(0, 0, 0, 0.6);
+  }
+}
+
+.ag-root *,
+.ag-root *::before,
+.ag-root *::after {
+  box-sizing: border-box;
+}
+
+.ag-root .material-icons {
+  font-size: 20px;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.ag-root :focus-visible {
+  outline: 3px solid var(--marca-borde);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+/* ---- Botones ---- */
+.ag-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 160ms var(--ease), background-color 200ms var(--ease), box-shadow 200ms var(--ease), opacity 200ms;
+  text-decoration: none;
+  user-select: none;
+}
+.ag-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.ag-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ag-btn-primario {
+  background: var(--marca);
+  color: var(--marca-texto);
+  box-shadow: 0 8px 20px -10px var(--marca);
+}
+.ag-btn-primario:hover:not(:disabled) {
+  box-shadow: 0 12px 24px -10px var(--marca);
+}
+.ag-btn-secundario {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+.ag-btn-secundario:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.ag-btn-texto {
+  background: transparent;
+  color: var(--text-2);
+  min-height: 44px;
+  padding: 0 12px;
+}
+.ag-btn-texto:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.ag-btn-peligro {
+  background: var(--danger-suave);
+  color: var(--danger);
+}
+.ag-btn-bloque {
+  width: 100%;
+}
+
+/* ---- Tarjetas y textos ---- */
+.ag-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.ag-titulo {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  margin: 0;
+}
+.ag-subtitulo {
+  font-size: 14px;
+  color: var(--text-2);
+  margin: 4px 0 0;
+}
+.ag-etiqueta {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: 6px;
+}
+.ag-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Campos ---- */
+.ag-campo {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 16px; /* evita el zoom automático de iOS */
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: border-color 160ms, box-shadow 160ms;
+}
+.ag-campo:focus {
+  outline: none;
+  border-color: var(--marca);
+  box-shadow: 0 0 0 4px var(--marca-suave);
+}
+.ag-campo[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+.ag-ayuda {
+  font-size: 13px;
+  color: var(--text-3);
+  margin-top: 6px;
+}
+.ag-error {
+  font-size: 13px;
+  color: var(--danger);
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+/* ---- Avatares ---- */
+.ag-avatar {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  font-weight: 700;
+  color: #fff;
+  flex: none;
+}
+
+/* ---- Esqueletos de carga ---- */
+.ag-esqueleto {
+  background: linear-gradient(90deg, var(--surface-2) 0%, var(--border) 50%, var(--surface-2) 100%);
+  background-size: 200% 100%;
+  animation: ag-brillo 1.4s ease-in-out infinite;
+  border-radius: 10px;
+}
+@keyframes ag-brillo {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ag-root *,
+  .ag-root *::before,
+  .ag-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
