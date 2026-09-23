@@ -1,0 +1,28 @@
+# Pruebas del cron (mensajes push y candados por teléfono). Sin red ni base
+# de datos: FCM y MySQL se simulan.
+name: Cron · pruebas
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cron/**'
+      - '.github/workflows/cron.yml'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: cron
+
+jobs:
+  test:
+    name: node --test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm test

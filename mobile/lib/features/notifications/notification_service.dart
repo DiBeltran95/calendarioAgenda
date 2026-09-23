@@ -12,6 +12,7 @@ import '../../core/providers.dart';
 import '../../core/session.dart';
 import '../../data/models.dart';
 import '../../data/sync.dart';
+import 'push_registro.dart';
 import 'reminder_planner.dart';
 
 /// Estado del permiso de notificaciones del sistema.
@@ -26,6 +27,9 @@ abstract class ServicioAvisos {
   Future<void> cancelarTodo();
   Future<void> prueba();
 
+  /// Muestra un aviso de inmediato (p. ej. un push del servidor en Android).
+  Future<void> mostrarAhora(AvisoProgramado aviso);
+
   /// Payload de la notificación que abrió la app (si fue así).
   Future<String?> payloadDeInicio();
   int get programados;
@@ -33,6 +37,9 @@ abstract class ServicioAvisos {
 
 class ServicioAvisosInerte implements ServicioAvisos {
   List<AvisoProgramado> ultimos = const [];
+  final mostrados = <AvisoProgramado>[];
+  @override
+  Future<void> mostrarAhora(AvisoProgramado aviso) async => mostrados.add(aviso);
   @override
   Future<void> iniciar(void Function(String payload) alTocar) async {}
   @override
@@ -135,10 +142,17 @@ class ServicioAvisosLocal implements ServicioAvisos {
     return exacto ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexactAllowWhileIdle;
   }
 
+  NotificationDetails _detalles(CanalAviso canal) => NotificationDetails(
+        android: canal == CanalAviso.evento ? _canalEventos : _canalResumen,
+        iOS: _darwin,
+      );
+
   @override
   Future<void> reprogramar(List<AvisoProgramado> avisos) async {
     if (!_listo) return;
-    await _plugin.cancelAll();
+    // Solo los pendientes: las notificaciones ya mostradas se quedan en la
+    // bandeja hasta que el usuario las lea.
+    await _plugin.cancelAllPendingNotifications();
     final modo = await _modo();
     var n = 0;
     for (final a in avisos) {
@@ -148,10 +162,7 @@ class ServicioAvisosLocal implements ServicioAvisos {
           title: a.titulo,
           body: a.cuerpo,
           scheduledDate: tz.TZDateTime.from(a.cuando, tz.UTC),
-          notificationDetails: NotificationDetails(
-            android: a.canal == CanalAviso.evento ? _canalEventos : _canalResumen,
-            iOS: _darwin,
-          ),
+          notificationDetails: _detalles(a.canal),
           androidScheduleMode: modo,
           payload: a.payload,
         );
@@ -166,8 +177,15 @@ class ServicioAvisosLocal implements ServicioAvisos {
   @override
   Future<void> cancelarTodo() async {
     if (!_listo) return;
-    await _plugin.cancelAll();
+    await _plugin.cancelAllPendingNotifications();
     _programados = 0;
+  }
+
+  @override
+  Future<void> mostrarAhora(AvisoProgramado a) async {
+    if (!_listo) return;
+    // Si había un aviso local pendiente con la misma clave, este lo sustituye.
+    await _plugin.show(id: a.id, title: a.titulo, body: a.cuerpo, notificationDetails: _detalles(a.canal), payload: a.payload);
   }
 
   @override
@@ -215,16 +233,21 @@ class ProgramadosNotifier extends Notifier<int> {
 
 final avisosProgramadosProvider = NotifierProvider<ProgramadosNotifier, int>(ProgramadosNotifier.new);
 
-/// Mantiene las notificaciones sincronizadas con los datos: cada vez que
-/// cambian los eventos, cumpleaños, cuentas o las preferencias se recalcula
-/// el plan de los próximos 14 días (con un pequeño retardo para agrupar).
+/// Mantiene las notificaciones locales sincronizadas con los datos: cada vez
+/// que cambian los eventos, cumpleaños, cuentas o las preferencias se
+/// recalcula el plan de los próximos 14 días (con un pequeño retardo para
+/// agrupar).
+///
+/// Cuando el servidor ya entrega push a este teléfono los avisos locales se
+/// apagan: el cron avisa a la misma hora aunque el evento venga de la web.
 final programadorAvisosProvider = Provider<void>((ref) {
   final servicio = ref.watch(servicioAvisosProvider);
   final sesion = ref.watch(sesionProvider).value;
   final prefs = ref.watch(preferenciasProvider).value ?? const Preferencias();
   final permiso = ref.watch(permisoAvisosProvider).value;
+  final servidor = ref.watch(estadoPushProvider.select((e) => e.confirmado));
 
-  if (sesion == null || !prefs.notificaciones || permiso != PermisoAvisos.concedido) {
+  if (sesion == null || !prefs.notificaciones || permiso != PermisoAvisos.concedido || servidor) {
     unawaited(servicio.cancelarTodo().then((_) => ref.read(avisosProgramadosProvider.notifier).set(0)));
     return;
   }

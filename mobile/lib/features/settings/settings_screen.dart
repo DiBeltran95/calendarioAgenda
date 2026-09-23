@@ -13,6 +13,7 @@ import '../../core/widgets/ui.dart';
 import '../../data/sync.dart';
 import '../auth/auth_screens.dart' show whatsappEnmascarado;
 import '../notifications/notification_service.dart';
+import '../notifications/push_registro.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -25,6 +26,7 @@ class SettingsScreen extends ConsumerWidget {
     final repo = ref.read(ajustesRepoProvider);
     final permiso = ref.watch(permisoAvisosProvider).value;
     final programados = ref.watch(avisosProgramadosProvider);
+    final push = ref.watch(estadoPushProvider);
     var i = 0;
 
     return Scaffold(
@@ -102,8 +104,9 @@ class SettingsScreen extends ConsumerWidget {
                             if (v && permiso == PermisoAvisos.denegado) await ref.read(permisoAvisosProvider.notifier).pedir();
                           },
                           title: const Text('Avisos en este teléfono'),
-                          subtitle: Text(_estadoPermiso(permiso, prefs.notificaciones, programados), style: context.text.bodySmall),
+                          subtitle: Text(_estadoPermiso(permiso, prefs.notificaciones, programados, push), style: context.text.bodySmall),
                         ),
+                        if (prefs.notificaciones && permiso == PermisoAvisos.concedido) _CanalAvisos(push: push, programados: programados),
                         AnimatedSize(
                           duration: Motion.of(context, Motion.medium),
                           alignment: Alignment.topCenter,
@@ -221,7 +224,9 @@ class SettingsScreen extends ConsumerWidget {
                               destructivo: true,
                               icon: Icons.logout_rounded,
                             );
-                            if (ok) await ref.read(sesionProvider.notifier).cerrar();
+                            if (!ok) return;
+                            await ref.read(registroPushProvider).darDeBaja();
+                            await ref.read(sesionProvider.notifier).cerrar();
                           },
                           style: OutlinedButton.styleFrom(foregroundColor: p.danger, side: BorderSide(color: p.danger.withValues(alpha: 0.5))),
                           icon: const Icon(Icons.logout_rounded),
@@ -232,7 +237,7 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ),
                 const VGap.lg(),
-                Center(child: Text('Agendaservi 2.0 · Flutter + Riverpod + Drift', style: context.text.bodySmall)),
+                Center(child: Text('Agendaservi 2.1 · Flutter + Riverpod + Drift', style: context.text.bodySmall)),
               ],
             ),
           ),
@@ -241,13 +246,76 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  String _estadoPermiso(PermisoAvisos? p, bool activas, int programados) {
+  String _estadoPermiso(PermisoAvisos? p, bool activas, int programados, EstadoPush push) {
     if (!activas) return 'Desactivadas: solo recibirás los WhatsApp.';
     return switch (p) {
+      PermisoAvisos.concedido when push.confirmado => 'Activas · llegan desde el servidor a la misma hora que el WhatsApp.',
       PermisoAvisos.concedido => programados > 0 ? 'Activas · $programados aviso(s) programados para los próximos 14 días.' : 'Activas · sin avisos próximos.',
       PermisoAvisos.denegado => 'El sistema no ha dado permiso todavía.',
       PermisoAvisos.noSoportado => 'Este dispositivo no admite notificaciones locales (solo WhatsApp).',
       null => 'Comprobando permisos…',
     };
+  }
+}
+
+/// Explica por qué vía llegan los avisos a este teléfono.
+class _CanalAvisos extends StatelessWidget {
+  const _CanalAvisos({required this.push, required this.programados});
+  final EstadoPush push;
+  final int programados;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final (icono, color, titulo, detalle) = push.confirmado
+        ? (
+            Icons.cloud_done_rounded,
+            p.success,
+            'Al instante desde el servidor',
+            'Te avisamos aunque no abras la app o hayas creado el evento en la web.',
+          )
+        : push.registrado
+            ? (
+                Icons.cloud_sync_rounded,
+                p.accent,
+                'Conectando con el servidor…',
+                'Mientras llega la confirmación, los avisos quedan programados en el teléfono.',
+              )
+            : (
+                Icons.phone_iphone_rounded,
+                p.info,
+                'Programados en este teléfono',
+                'Se actualizan al abrir la app y, de vez en cuando, en segundo plano. El WhatsApp siempre llega.',
+              );
+    return Semantics(
+      container: true,
+      label: '$titulo. $detalle',
+      child: ExcludeSemantics(
+        child: AnimatedSwitcher(
+          duration: Motion.of(context, Motion.medium),
+          child: Container(
+            key: ValueKey(titulo),
+            margin: const EdgeInsets.only(bottom: Gap.xs),
+            padding: const EdgeInsets.all(Gap.sm),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(Radii.md),
+              border: Border.all(color: color.withValues(alpha: 0.25)),
+            ),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(icono, color: color, size: IconSizes.md),
+              const HGap.sm(),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(titulo, style: context.text.labelLarge),
+                  const SizedBox(height: 2),
+                  Text(detalle, style: context.text.bodySmall),
+                ]),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
   }
 }

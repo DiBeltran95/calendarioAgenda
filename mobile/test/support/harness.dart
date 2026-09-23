@@ -4,6 +4,8 @@ import 'package:agendaservi/core/providers.dart';
 import 'package:agendaservi/core/session.dart';
 import 'package:agendaservi/data/models.dart';
 import 'package:agendaservi/features/notifications/notification_service.dart';
+import 'package:agendaservi/features/notifications/push_service.dart';
+import 'package:agendaservi/features/notifications/refresco_fondo.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,12 +21,23 @@ const sesionDiego = Sesion(
 
 /// Overrides que conectan la app real con el backend falso y una base local
 /// en memoria. Sin red, sin notificaciones del sistema.
-List<Override> overridesDePrueba({required FakeBackend backend, required AppDatabase db, Sesion? sesion = sesionDiego, ServicioAvisos? avisos}) {
+List<Override> overridesDePrueba({
+  required FakeBackend backend,
+  required AppDatabase db,
+  Sesion? sesion = sesionDiego,
+  ServicioAvisos? avisos,
+  ServicioPush? push,
+  AlmacenAvisos? almacen,
+  TareasFondo? fondo,
+}) {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
   return [
     databaseProvider.overrideWithValue(db),
     tokenStoreProvider.overrideWithValue(MemoryTokenStore(sesion)),
     servicioAvisosProvider.overrideWithValue(avisos ?? ServicioAvisosInerte()),
+    servicioPushProvider.overrideWithValue(push ?? ServicioPushInerte()),
+    almacenAvisosProvider.overrideWithValue(almacen ?? AlmacenAvisos.memoria()),
+    tareasFondoProvider.overrideWithValue(fondo ?? TareasFondoInertes()),
     apiProvider.overrideWith((ref) => ApiClient(
           token: () async => ref.read(sesionProvider).value?.token,
           onUnauthorized: () => ref.read(sesionProvider.notifier).cerrar(motivo: 'Tu sesión expiró. Vuelve a iniciar sesión.'),

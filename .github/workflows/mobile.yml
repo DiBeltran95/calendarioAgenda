@@ -59,7 +59,18 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build apk --release
+      - name: Configuración de Firebase (push)
+        env:
+          FIREBASE_DART_DEFINES: ${{ secrets.FIREBASE_DART_DEFINES }}
+        run: |
+          if [ -n "$FIREBASE_DART_DEFINES" ]; then
+            printf '%s' "$FIREBASE_DART_DEFINES" > firebase.json
+            echo "DEFINES=--dart-define-from-file=firebase.json" >> "$GITHUB_ENV"
+            echo "Push del servidor activado para este build."
+          else
+            echo "::notice::Sin el secreto FIREBASE_DART_DEFINES: el build sale sin push (usa avisos locales + refresco en segundo plano)."
+          fi
+      - run: flutter build apk --release $DEFINES
       - uses: actions/upload-artifact@v4
         with:
           name: Agendaservi-android-apk
@@ -79,8 +90,19 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      - name: Configuración de Firebase (push)
+        env:
+          FIREBASE_DART_DEFINES: ${{ secrets.FIREBASE_DART_DEFINES }}
+        run: |
+          if [ -n "$FIREBASE_DART_DEFINES" ]; then
+            printf '%s' "$FIREBASE_DART_DEFINES" > firebase.json
+            echo "DEFINES=--dart-define-from-file=firebase.json" >> "$GITHUB_ENV"
+            echo "Push del servidor activado para este build."
+          else
+            echo "::notice::Sin el secreto FIREBASE_DART_DEFINES: el build sale sin push (usa avisos locales + refresco en segundo plano)."
+          fi
       - name: Build iOS (sin firma)
-        run: flutter build ios --release --no-codesign
+        run: flutter build ios --release --no-codesign $DEFINES
       # `--no-codesign` deja el .app listo; el .ipa es ese .app dentro de una
       # carpeta Payload comprimida en zip.
       - name: Empaquetar IPA

@@ -8,6 +8,8 @@ import 'app/router.dart';
 import 'core/dates.dart';
 import 'core/providers.dart';
 import 'features/notifications/notification_service.dart';
+import 'features/notifications/push_service.dart';
+import 'features/notifications/refresco_fondo.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,11 +40,20 @@ Future<void> main() async {
   } catch (e) {
     debugPrint('Notificaciones no disponibles: $e');
   }
+  // Push del servidor (si este build trae la configuración de Firebase) y
+  // refresco en segundo plano como respaldo cuando no hay push.
+  final push = container.read(servicioPushProvider);
+  await push.iniciar(alTocar: abrirDia);
+  try {
+    await container.read(tareasFondoProvider).iniciar();
+  } catch (e) {
+    debugPrint('Tareas en segundo plano no disponibles: $e');
+  }
 
   runApp(UncontrolledProviderScope(container: container, child: const AgendaApp()));
 
   // Si la app se abrió desde una notificación, se navega tras el primer frame.
-  final inicial = await avisos.payloadDeInicio();
+  final inicial = await avisos.payloadDeInicio() ?? await push.payloadDeInicio();
   if (inicial != null) {
     WidgetsBinding.instance.addPostFrameCallback((_) => abrirDia(inicial));
   }

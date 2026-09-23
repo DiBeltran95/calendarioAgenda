@@ -49,6 +49,15 @@ class FakeBackend implements HttpClientAdapter {
   final metas = <Map<String, dynamic>>[];
   final presupuestos = <Map<String, dynamic>>[];
   final categorias = <Map<String, dynamic>>[];
+  final dispositivos = <Map<String, dynamic>>[];
+
+  /// Lo que hace el cron al entregar la notificación de bienvenida.
+  void confirmarBienvenidas() {
+    for (final d in dispositivos) {
+      d['bienvenida_pendiente'] = 0;
+      d['confirmado'] = 1;
+    }
+  }
 
   /// Peticiones recibidas ("GET /api/...") para verificar en las pruebas.
   final log = <String>[];
@@ -139,6 +148,30 @@ class FakeBackend implements HttpClientAdapter {
         return _editarEvento(uid, idEn(2)!, b, '${q['editMode'] ?? 'instance'}');
       case ('DELETE', 'events'):
         return _borrarEvento(uid, idEn(2)!, '${q['deleteMode'] ?? 'instance'}');
+      case ('POST', 'dispositivos') when seg.length == 3 && seg[2] == 'baja':
+        dispositivos.removeWhere((d) => d['token'] == b['token'] && d['user_id'] == uid);
+        return const _Resp(200, {'ok': true});
+      case ('POST', 'dispositivos'):
+        final token = '${b['token'] ?? ''}';
+        if (token.length < 20) return _err(400, 'Token de notificaciones inválido');
+        if (b['plataforma'] != 'android' && b['plataforma'] != 'ios') return _err(400, 'Plataforma no soportada');
+        final d = dispositivos.where((x) => x['token'] == token).firstOrNull;
+        final datos = {
+          'user_id': uid,
+          'token': token,
+          'plataforma': b['plataforma'],
+          'avisos': b['avisos'] == false ? 0 : 1,
+          'aviso_30m': b['aviso_30m'] == false ? 0 : 1,
+          'resumen': b['resumen'] == false ? 0 : 1,
+        };
+        if (d == null) {
+          dispositivos.add({...datos, 'id': _id(), 'bienvenida_pendiente': 1, 'confirmado': 0});
+        } else {
+          if (d['user_id'] != uid) d.addAll({'bienvenida_pendiente': 1, 'confirmado': 0});
+          d.addAll(datos);
+        }
+        final r = dispositivos.firstWhere((x) => x['token'] == token);
+        return _Resp(200, {'ok': true, 'pendiente': r['bienvenida_pendiente'] == 1, 'confirmado': r['confirmado'] == 1});
       case ('GET', 'important-days'):
         final y = q['year'];
         return _Resp(200, [

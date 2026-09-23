@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Configuración de Firebase (se inyecta con --dart-define-from-file; en CI
+# viene del secreto FIREBASE_DART_DEFINES)
+/firebase.json

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Notificaciones push (APNs). Requiere firmar con una cuenta del Apple
+	     Developer Program; con un Apple ID gratuito se ignora y la app usa sus
+	     avisos locales + refresco en segundo plano. -->
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>

@@ -267,8 +267,15 @@ class _Proximo extends StatelessWidget {
         children: [
           Row(children: [
             Tag('PRÓXIMO', color: cat.color, icon: Icons.bolt_rounded),
-            const Spacer(),
-            _CuentaRegresiva(cuando: instanteBogota(e.fecha, e.hora)),
+            const HGap.sm(),
+            // Con texto grande y cuentas largas ("en 23 h 59 min") se reduce
+            // en vez de desbordar la fila.
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: FittedBox(fit: BoxFit.scaleDown, child: _CuentaRegresiva(cuando: instanteBogota(e.fecha, e.hora))),
+              ),
+            ),
           ]),
           const VGap.md(),
           Row(children: [

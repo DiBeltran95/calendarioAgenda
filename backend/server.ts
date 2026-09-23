@@ -819,6 +819,69 @@ server.post('/api/public/events/confirmar/:uuid/costo', async (request: any, rep
     }
 });
 
+// --- DISPOSITIVOS (NOTIFICACIONES PUSH DE LA APP MÓVIL) ---
+// La app registra aquí su token de Firebase Cloud Messaging. El cron lo usa
+// para avisar al teléfono a la misma hora que envía el WhatsApp, aunque la app
+// esté cerrada. `pendiente` indica que aún no se ha enviado la notificación de
+// bienvenida (la app mantiene sus avisos locales hasta que el servidor confirma).
+const PLATAFORMAS_PUSH = new Set(['android', 'ios']);
+
+function tokenPushValido(token: any): token is string {
+    return typeof token === 'string' && token.length >= 20 && token.length <= 255 && !/\s/.test(token);
+}
+
+server.post('/api/dispositivos', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
+    const userId = request.user.id;
+    const { token, plataforma, avisos = true, aviso_30m = true, resumen = true } = request.body || {};
+    if (!tokenPushValido(token)) return reply.status(400).send({ message: 'Token de notificaciones inválido' });
+    if (!PLATAFORMAS_PUSH.has(plataforma)) return reply.status(400).send({ message: 'Plataforma no soportada' });
+    try {
+        // Si el token ya existía para otro usuario (cambio de cuenta en el mismo
+        // teléfono) pasa al usuario actual y vuelve a esperar la bienvenida.
+        await pool.execute(
+            `INSERT INTO dispositivos_push (user_id, token, plataforma, avisos, aviso_30m, resumen, bienvenida_pendiente)
+             VALUES (?, ?, ?, ?, ?, ?, 1)
+             ON DUPLICATE KEY UPDATE
+                bienvenida_pendiente = IF(user_id = VALUES(user_id), bienvenida_pendiente, 1),
+                confirmado = IF(user_id = VALUES(user_id), confirmado, 0),
+                user_id = VALUES(user_id),
+                plataforma = VALUES(plataforma),
+                avisos = VALUES(avisos),
+                aviso_30m = VALUES(aviso_30m),
+                resumen = VALUES(resumen),
+                actualizado = CURRENT_TIMESTAMP`,
+            [userId, token, plataforma, avisos ? 1 : 0, aviso_30m ? 1 : 0, resumen ? 1 : 0]
+        );
+        const [rows]: any = await pool.execute(
+            'SELECT bienvenida_pendiente, confirmado FROM dispositivos_push WHERE token = ?',
+            [token]
+        );
+        return reply.send({
+            ok: true,
+            pendiente: !!rows[0]?.bienvenida_pendiente,
+            confirmado: !!rows[0]?.confirmado
+        });
+    } catch (err) {
+        server.log.error(err);
+        return reply.status(500).send({ message: 'Error al registrar el dispositivo' });
+    }
+});
+
+// Baja del dispositivo al cerrar sesión (POST con cuerpo para no exponer el
+// token en la URL ni en los logs de acceso).
+server.post('/api/dispositivos/baja', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
+    const userId = request.user.id;
+    const { token } = request.body || {};
+    if (!tokenPushValido(token)) return reply.status(400).send({ message: 'Token de notificaciones inválido' });
+    try {
+        await pool.execute('DELETE FROM dispositivos_push WHERE token = ? AND user_id = ?', [token, userId]);
+        return reply.send({ ok: true });
+    } catch (err) {
+        server.log.error(err);
+        return reply.status(500).send({ message: 'Error al dar de baja el dispositivo' });
+    }
+});
+
 // --- RUTAS DE CICLOS MENSTRUALES ---
 server.get('/api/cycles', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
     try {
@@ -2434,6 +2497,33 @@ async function runMigrations() {
         }
     } catch (err: any) {
         server.log.error('[Ciclos] Error asegurando unicidad de fecha_inicio:', err);
+    }
+
+    // Dispositivos de la app móvil para notificaciones push (FCM). El cron
+    // crea la misma tabla si arranca primero.
+    try {
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS dispositivos_push (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                token VARCHAR(255) NOT NULL,
+                plataforma VARCHAR(10) NOT NULL,
+                avisos BOOLEAN NOT NULL DEFAULT TRUE,
+                aviso_30m BOOLEAN NOT NULL DEFAULT TRUE,
+                resumen BOOLEAN NOT NULL DEFAULT TRUE,
+                bienvenida_pendiente BOOLEAN NOT NULL DEFAULT TRUE,
+                confirmado BOOLEAN NOT NULL DEFAULT FALSE,
+                ultimo_envio TIMESTAMP NULL DEFAULT NULL,
+                creado TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                actualizado TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_token (token),
+                KEY idx_dispositivos_user (user_id),
+                FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
+            )
+        `);
+        server.log.info('Ensured dispositivos_push table exists');
+    } catch (err: any) {
+        server.log.error('Error creating dispositivos_push table:', err);
     }
 
     // Índices compuestos (user_id, fecha) para que las consultas por mes sean

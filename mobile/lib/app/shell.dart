@@ -7,6 +7,8 @@ import '../core/motion.dart';
 import '../core/providers.dart';
 import '../data/sync.dart';
 import '../features/notifications/notification_service.dart';
+import '../features/notifications/push_registro.dart';
+import '../features/notifications/refresco_fondo.dart';
 import 'theme/app_module.dart';
 import 'theme/palette.dart';
 import 'theme/tokens.dart';
@@ -50,6 +52,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     _ciclo = AppLifecycleListener(onResume: () {
       ref.read(sincronizadorProvider).refrescarTodo();
       ref.read(permisoAvisosProvider.notifier).revisar();
+      ref.read(registroPushProvider).sincronizar();
     });
   }
 
@@ -70,6 +73,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   Widget build(BuildContext context) {
     // Programación de notificaciones siempre activa mientras hay sesión.
     ref.watch(programadorAvisosProvider);
+    ref.watch(sincronizadorPushProvider);
+    ref.watch(refrescoFondoProvider);
 
     final shell = widget.shell;
     final m = _destinos[shell.currentIndex].module;

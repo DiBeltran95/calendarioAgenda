@@ -2,6 +2,7 @@ require('dotenv').config();
 const mysql = require('mysql2/promise');
 const fs = require('fs');
 const path = require('path');
+const push = require('./push');
 
 // Ensure log folder exists
 const logDir = path.join(__dirname, 'logs');
@@ -168,6 +169,106 @@ function buildTimedPreMsg(event) {
     return `⏰ *Faltan 30 minutos* ${meta.emoji}\n\nTu ${meta.nombre.toLowerCase()} *${event.titulo}* comienza a las *${hora}*.${ubic}\n\n💡 Te avisaremos de nuevo a la hora exacta.`;
 }
 
+// --- Notificaciones push (app móvil): mismos textos que los avisos locales ---
+
+function pushExacto(event) {
+    const meta = metaCategoria(event.categoria);
+    // Se reutiliza el WhatsApp sin su primera línea (va en el título) ni el
+    // enlace de confirmación (la notificación abre la app en ese día).
+    const cuerpo = push.textoPlano(buildTimedExactMsg(event))
+        .split('\n\n')
+        .slice(1)
+        .filter(p => !p.startsWith('🔗'))
+        .join('\n\n');
+    return { clave: `ev:${event.id}:exacto`, titulo: `${meta.emoji} ${event.titulo}`, cuerpo, canal: 'eventos', fecha: String(event.fecha), ttlSeg: 3600 };
+}
+
+function pushPrevio(event) {
+    const meta = metaCategoria(event.categoria);
+    const ubic = event.ubicacion ? ` · ${event.ubicacion}` : '';
+    return {
+        clave: `ev:${event.id}:30m`,
+        titulo: `⏰ En 30 minutos: ${event.titulo}`,
+        cuerpo: `Tu ${meta.nombre.toLowerCase()} comienza a las ${formatTime12h(event.hora)}${ubic}.`,
+        canal: 'eventos',
+        fecha: String(event.fecha),
+        ttlSeg: 30 * 60
+    };
+}
+
+function pushResumen({ todayStr, bdays, recordatorios, creditos, todayHoliday, puente }) {
+    const n = bdays.length + recordatorios.length + creditos.length;
+    let titulo = '☀️ Buenos días';
+    if (todayHoliday && n === 0) titulo = `🇨🇴 Hoy es festivo: ${todayHoliday.localName}`;
+    else if (n > 0) titulo = `☀️ Buenos días · ${n} ${n === 1 ? 'pendiente' : 'pendientes'} hoy`;
+
+    const l = [];
+    if (todayHoliday) l.push(`🇨🇴 Festivo: ${todayHoliday.localName}`);
+    for (const b of bdays) l.push(`🎂 Cumpleaños de ${b.nombre}`);
+    for (const e of recordatorios) {
+        l.push(`${metaCategoria(e.categoria).emoji} ${e.titulo}${Number(e.costo) > 0 ? ` · ${formatCOP(e.costo)}` : ''}`);
+    }
+    for (const e of creditos) l.push(`💳 ${e.titulo}${Number(e.costo) > 0 ? ` · ${formatCOP(e.costo)}` : ''}`);
+    if (puente) l.push(`🏖️ Puente festivo: el lunes es ${puente.holiday.localName}`);
+    return { clave: `resumen:${todayStr}`, titulo, cuerpo: l.join('\n'), canal: 'resumen', fecha: todayStr, ttlSeg: push.segundosHastaFinDelDia(todayStr) };
+}
+
+function pushCdt(c, todayStr) {
+    return {
+        clave: `cdt:${c.id}:${todayStr}`,
+        titulo: `⏰ Tu CDT ${c.nombre} vence hoy`,
+        cuerpo: `Monto disponible: ${formatCOP(c.saldo)} · ${c.interes_tasa}% E.A. a ${c.plazo_dias} días. Ya puedes cobrarlo o reinvertirlo.`,
+        canal: 'resumen',
+        fecha: todayStr,
+        ttlSeg: push.segundosHastaFinDelDia(todayStr)
+    };
+}
+
+/**
+ * Envía un aviso a todos los teléfonos del usuario con notificaciones activas.
+ * Cada teléfono tiene su propio candado en notificaciones_enviadas, así un
+ * fallo temporal en uno se reintenta sin duplicar el aviso en los demás.
+ * Devuelve true si no queda nada pendiente de reintentar.
+ */
+async function enviarPushUsuario(connection, { userId, tipo, refId, fechaRef, aviso, filtro = '' }) {
+    if (!push.configurado()) return true;
+    const [devs] = await connection.query(
+        `SELECT id, token FROM dispositivos_push WHERE user_id = ? AND avisos = 1 ${filtro}`,
+        [userId]
+    );
+    let completo = true;
+    for (const d of devs) {
+        const fecha = `${fechaRef}#${d.id}`;
+        try {
+            await connection.query(
+                'INSERT INTO notificaciones_enviadas (tipo, referencia_id, fecha_referencia) VALUES (?, ?, ?)',
+                [tipo, refId, fecha]
+            );
+        } catch (dbErr) {
+            if (dbErr.code === 'ER_DUP_ENTRY') continue; // ya enviado a este teléfono
+            throw dbErr;
+        }
+        const r = await push.enviar(push.construirMensaje(d.token, aviso));
+        if (r === 'ok') {
+            await connection.query('UPDATE dispositivos_push SET ultimo_envio = NOW(), confirmado = 1 WHERE id = ?', [d.id]);
+            console.log(`[Push] ${tipo} ${refId} enviado al dispositivo ${d.id}`);
+            continue;
+        }
+        // Sin enviar: se libera el candado para reintentar en la siguiente vuelta.
+        await connection.query(
+            'DELETE FROM notificaciones_enviadas WHERE tipo = ? AND referencia_id = ? AND fecha_referencia = ?',
+            [tipo, refId, fecha]
+        );
+        if (r === 'invalido') {
+            await connection.query('DELETE FROM dispositivos_push WHERE id = ?', [d.id]);
+            console.log(`[Push] Token del dispositivo ${d.id} ya no es válido: eliminado.`);
+        } else {
+            completo = false;
+        }
+    }
+    return completo;
+}
+
 // WhatsApp Send Message Function
 async function sendWhatsAppMessage(whatsapp, text) {
     try {
@@ -213,6 +314,32 @@ async function getHolidays(year) {
     return [];
 }
 
+async function enviarWhatsAppEvento(connection, event, tipo, triggerISO, message) {
+    // Try inserting first to lock it (optimistic locking / unique constraint)
+    try {
+        await connection.query(
+            "INSERT INTO notificaciones_enviadas (tipo, referencia_id, fecha_referencia) VALUES (?, ?, ?)",
+            [tipo, event.id, triggerISO]
+        );
+    } catch (dbErr) {
+        if (dbErr.code === 'ER_DUP_ENTRY') return; // already sent or claimed by another process
+        throw dbErr;
+    }
+
+    // If we reached here, the INSERT succeeded. We are the unique owner of this notification trigger.
+    const success = await sendWhatsAppMessage(event.whatsapp, message);
+    if (!success) {
+        // Delete the lock so it can be retried on next execution if WhatsApp failed
+        await connection.query(
+            "DELETE FROM notificaciones_enviadas WHERE tipo = ? AND referencia_id = ? AND fecha_referencia = ?",
+            [tipo, event.id, triggerISO]
+        );
+        console.log(`[Cron] Failed to send WhatsApp message. Lock released for event ${event.id}`);
+    } else {
+        console.log(`[Cron] Successfully sent and saved ${tipo} reminder for event ${event.id}`);
+    }
+}
+
 // Helper to execute and double-check trigger status
 async function executeEventReminder(event, tipo, triggerISO, message) {
     const connection = await pool.getConnection();
@@ -245,32 +372,17 @@ async function executeEventReminder(event, tipo, triggerISO, message) {
             return;
         }
 
-        // Try inserting first to lock it (optimistic locking / unique constraint)
-        try {
-            await connection.query(
-                "INSERT INTO notificaciones_enviadas (tipo, referencia_id, fecha_referencia) VALUES (?, ?, ?)",
-                [tipo, event.id, triggerISO]
-            );
-        } catch (dbErr) {
-            if (dbErr.code === 'ER_DUP_ENTRY') {
-                console.log(`[Cron] Notification ${tipo} for event ${event.id} at ${triggerISO} already sent or claimed by another process.`);
-                return;
-            }
-            throw dbErr;
-        }
-
-        // If we reached here, the INSERT succeeded. We are the unique owner of this notification trigger.
-        const success = await sendWhatsAppMessage(event.whatsapp, message);
-        if (!success) {
-            // Delete the lock so it can be retried on next execution if WhatsApp failed
-            await connection.query(
-                "DELETE FROM notificaciones_enviadas WHERE tipo = ? AND referencia_id = ? AND fecha_referencia = ?",
-                [tipo, event.id, triggerISO]
-            );
-            console.log(`[Cron] Failed to send WhatsApp message. Lock released for event ${event.id}`);
-        } else {
-            console.log(`[Cron] Successfully sent and saved ${tipo} reminder for event ${event.id}`);
-        }
+        // WhatsApp y push son canales independientes: cada uno con su candado,
+        // así un fallo en uno no bloquea ni duplica el otro.
+        await enviarWhatsAppEvento(connection, event, tipo, triggerISO, message);
+        await enviarPushUsuario(connection, {
+            userId: event.user_id,
+            tipo: `push_${tipo}`,
+            refId: event.id,
+            fechaRef: triggerISO,
+            aviso: tipo === 'evento_30m' ? pushPrevio(event) : pushExacto(event),
+            filtro: tipo === 'evento_30m' ? 'AND aviso_30m = 1' : ''
+        });
     } catch (err) {
         console.error(`[Cron] Error executing event reminder for ${event.id}:`, err);
     } finally {
@@ -287,7 +399,7 @@ async function checkEventReminders() {
 
         // Fetch events for today and tomorrow for verified users
         const [events] = await connection.query(
-            `SELECT e.id, e.titulo, DATE_FORMAT(e.fecha, '%Y-%m-%d') as fecha, e.hora, e.categoria, e.ubicacion, e.costo, e.tipo_transaccion, e.tarjeta_credito_id, e.uuid_confirmacion, u.whatsapp
+            `SELECT e.id, e.user_id, e.titulo, DATE_FORMAT(e.fecha, '%Y-%m-%d') as fecha, e.hora, e.categoria, e.ubicacion, e.costo, e.tipo_transaccion, e.tarjeta_credito_id, e.uuid_confirmacion, u.whatsapp
              FROM eventos e
              JOIN usuarios u ON e.user_id = u.id
              WHERE e.fecha IN (?, ?) AND u.verificado = true`,
@@ -450,6 +562,39 @@ function construirResumen({ todayStr, bdays, recordatorios, creditos, todayHolid
     return partes.join('\n');
 }
 
+// Usuarios cuyo resumen de hoy ya salió por todos los canales (evita repetir
+// sus consultas cada 30 s durante el resto del día).
+const resumenesListos = new Set();
+
+// Envía el resumen por WhatsApp (una vez al día). Devuelve true si ya quedó
+// enviado; false si falló y se reintentará en la siguiente vuelta.
+async function enviarResumenWhatsApp(connection, user, datos) {
+    const { todayStr, bdays, recordatorios, creditos } = datos;
+    // Lock único por usuario y día: garantiza UN solo resumen diario
+    try {
+        await connection.query(
+            "INSERT INTO notificaciones_enviadas (tipo, referencia_id, fecha_referencia) VALUES ('resumen_diario', ?, ?)",
+            [user.id, todayStr]
+        );
+    } catch (dbErr) {
+        if (dbErr.code === 'ER_DUP_ENTRY') return true; // Ya se envió hoy
+        throw dbErr;
+    }
+
+    const msg = construirResumen(datos);
+    const success = await sendWhatsAppMessage(user.whatsapp, msg);
+    if (!success) {
+        await connection.query(
+            "DELETE FROM notificaciones_enviadas WHERE tipo = 'resumen_diario' AND referencia_id = ? AND fecha_referencia = ?",
+            [user.id, todayStr]
+        );
+        console.log(`[Digest] Falló el envío; lock liberado para user ${user.id}`);
+        return false;
+    }
+    console.log(`[Digest] Resumen diario enviado a user ${user.id} (${bdays.length} cumple, ${recordatorios.length} recordatorios, ${creditos.length} créditos)`);
+    return true;
+}
+
 async function checkDailyDigest() {
     const colNow = getColombianNow();
     if (colNow.getHours() < 7) return; // Sólo a partir de las 7:00 a.m. (hora Colombia)
@@ -477,6 +622,8 @@ async function checkDailyDigest() {
         const [users] = await connection.query("SELECT id, whatsapp FROM usuarios WHERE verificado = true");
 
         for (const user of users) {
+            if (resumenesListos.has(`${todayStr}:${user.id}`)) continue;
+
             // Cumpleaños de hoy de este usuario
             const [bdays] = await connection.query(
                 `SELECT id, nombre, mensaje, telefono FROM cumpleanos WHERE user_id = ? AND DATE_FORMAT(fecha, '%m-%d') = ?`,
@@ -497,28 +644,18 @@ async function checkDailyDigest() {
             const hayContenido = bdays.length > 0 || todoElDia.length > 0 || todayHoliday || puente;
             if (!hayContenido) continue;
 
-            // Lock único por usuario y día: garantiza UN solo resumen diario
-            try {
-                await connection.query(
-                    "INSERT INTO notificaciones_enviadas (tipo, referencia_id, fecha_referencia) VALUES ('resumen_diario', ?, ?)",
-                    [user.id, todayStr]
-                );
-            } catch (dbErr) {
-                if (dbErr.code === 'ER_DUP_ENTRY') continue; // Ya se envió hoy
-                throw dbErr;
-            }
-
-            const msg = construirResumen({ todayStr, bdays, recordatorios, creditos, todayHoliday, puente });
-            const success = await sendWhatsAppMessage(user.whatsapp, msg);
-            if (!success) {
-                await connection.query(
-                    "DELETE FROM notificaciones_enviadas WHERE tipo = 'resumen_diario' AND referencia_id = ? AND fecha_referencia = ?",
-                    [user.id, todayStr]
-                );
-                console.log(`[Digest] Falló el envío; lock liberado para user ${user.id}`);
-            } else {
-                console.log(`[Digest] Resumen diario enviado a user ${user.id} (${bdays.length} cumple, ${recordatorios.length} recordatorios, ${creditos.length} créditos)`);
-            }
+            const datos = { todayStr, bdays, recordatorios, creditos, todayHoliday, puente };
+            const whatsappListo = await enviarResumenWhatsApp(connection, user, datos);
+            const pushListo = await enviarPushUsuario(connection, {
+                userId: user.id,
+                tipo: 'push_resumen',
+                refId: user.id,
+                fechaRef: todayStr,
+                aviso: pushResumen(datos),
+                filtro: 'AND resumen = 1'
+            });
+            // Ambos canales resueltos: no se vuelve a consultar a este usuario hoy.
+            if (whatsappListo && pushListo) resumenesListos.add(`${todayStr}:${user.id}`);
         }
     } catch (error) {
         console.error('[Digest] Error en el resumen diario:', error);
@@ -626,6 +763,14 @@ async function checkCDTYields() {
                         }
                         // Lock already acquired (already sent)
                     }
+                    await enviarPushUsuario(connection, {
+                        userId: c.user_id,
+                        tipo: 'push_cdt',
+                        refId: c.id,
+                        fechaRef: todayStr,
+                        aviso: pushCdt(c, todayStr),
+                        filtro: 'AND resumen = 1'
+                    });
                 }
             } catch (cdtErr) {
                 console.error(`[CDT Cron] Error processing CDT ID ${c.id}:`, cdtErr);
@@ -635,6 +780,72 @@ async function checkCDTYields() {
         console.error('[CDT Cron] Error checking CDT yields:', error);
     } finally {
         connection.release();
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  DISPOSITIVOS PUSH: bienvenida y limpieza
+// ---------------------------------------------------------------------------
+
+// Próximo intento por dispositivo cuando FCM falla (evita insistir cada 30 s).
+const reintentoBienvenida = new Map();
+
+// Primera notificación a cada teléfono recién registrado. Confirma de extremo a
+// extremo que el push funciona: hasta entonces la app conserva sus avisos
+// locales como respaldo.
+async function procesarBienvenidas() {
+    if (!push.configurado()) return;
+    const connection = await pool.getConnection();
+    try {
+        const [devs] = await connection.query(
+            `SELECT d.id, d.token FROM dispositivos_push d
+             JOIN usuarios u ON u.id = d.user_id
+             WHERE d.bienvenida_pendiente = 1 AND d.avisos = 1 AND u.verificado = true
+             LIMIT 50`
+        );
+        for (const d of devs) {
+            if ((reintentoBienvenida.get(d.id) || 0) > Date.now()) continue;
+            const r = await push.enviar(push.construirMensaje(d.token, {
+                tipo: 'bienvenida',
+                clave: 'bienvenida',
+                titulo: '🔔 Notificaciones activadas',
+                cuerpo: 'Desde ahora te avisaremos aquí de tus eventos, pagos y cumpleaños, aunque no abras la app.',
+                canal: 'eventos',
+                ttlSeg: 24 * 3600
+            }));
+            if (r === 'ok') {
+                await connection.query(
+                    'UPDATE dispositivos_push SET bienvenida_pendiente = 0, confirmado = 1, ultimo_envio = NOW() WHERE id = ?',
+                    [d.id]
+                );
+                reintentoBienvenida.delete(d.id);
+                console.log(`[Push] Bienvenida enviada al dispositivo ${d.id}`);
+            } else if (r === 'invalido') {
+                await connection.query('DELETE FROM dispositivos_push WHERE id = ?', [d.id]);
+                reintentoBienvenida.delete(d.id);
+            } else {
+                reintentoBienvenida.set(d.id, Date.now() + 10 * 60 * 1000);
+            }
+        }
+    } catch (err) {
+        console.error('[Push] Error enviando bienvenidas:', err);
+    } finally {
+        connection.release();
+    }
+}
+
+// Una vez al día: borra teléfonos que no abren la app hace más de 120 días
+// (la app renueva su registro cada vez que se abre).
+let ultimaLimpieza = '';
+async function limpiarDispositivos() {
+    const hoy = getColombianDateString(0);
+    if (ultimaLimpieza === hoy) return;
+    ultimaLimpieza = hoy;
+    try {
+        const [r] = await pool.query('DELETE FROM dispositivos_push WHERE actualizado < NOW() - INTERVAL 120 DAY');
+        if (r.affectedRows) console.log(`[Push] ${r.affectedRows} dispositivo(s) inactivo(s) eliminados.`);
+    } catch (err) {
+        console.error('[Push] Error limpiando dispositivos:', err);
     }
 }
 
@@ -653,6 +864,27 @@ async function initDb() {
             )
         `);
         console.log('[Init] ensured notificaciones_enviadas table exists.');
+        // Misma definición que en el backend (el primero que arranque la crea).
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS dispositivos_push (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                token VARCHAR(255) NOT NULL,
+                plataforma VARCHAR(10) NOT NULL,
+                avisos BOOLEAN NOT NULL DEFAULT TRUE,
+                aviso_30m BOOLEAN NOT NULL DEFAULT TRUE,
+                resumen BOOLEAN NOT NULL DEFAULT TRUE,
+                bienvenida_pendiente BOOLEAN NOT NULL DEFAULT TRUE,
+                confirmado BOOLEAN NOT NULL DEFAULT FALSE,
+                ultimo_envio TIMESTAMP NULL DEFAULT NULL,
+                creado TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                actualizado TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_token (token),
+                KEY idx_dispositivos_user (user_id),
+                FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
+            )
+        `);
+        console.log('[Init] ensured dispositivos_push table exists.');
     } catch (err) {
         console.error('[Init] Error verifying notificaciones_enviadas table:', err);
     } finally {
@@ -666,6 +898,7 @@ async function main() {
     await initDb();
 
     // Check immediately on startup
+    await procesarBienvenidas();
     await checkEventReminders();
     await checkCDTYields();
     // El resumen diario se autolimita a partir de las 7:00 a.m. (hora Colombia)
@@ -676,11 +909,13 @@ async function main() {
     setInterval(async () => {
         try {
             console.log(`[Cron] Running polling loop... Timestamp: ${new Date().toLocaleString()}`);
+            await procesarBienvenidas();
             await checkEventReminders();
             await checkCDTYields();
             // Resumen matutino consolidado (cumpleaños + recordatorios + créditos
             // + festivos + puente). Internamente sólo actúa desde las 7:00 a.m.
             await checkDailyDigest();
+            await limpiarDispositivos();
         } catch (err) {
             console.error('[Cron] Error in polling loop:', err);
         }
@@ -701,6 +936,11 @@ module.exports = {
     construirResumen,
     buildTimedExactMsg,
     buildTimedPreMsg,
+    pushExacto,
+    pushPrevio,
+    pushResumen,
+    pushCdt,
+    enviarPushUsuario,
     esTodoElDia,
     esCreditoEvent,
     metaCategoria,

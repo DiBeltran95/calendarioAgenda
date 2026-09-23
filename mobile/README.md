@@ -1,20 +1,20 @@
-# Agendaservi (Flutter) · v2
+# Agendaservi (Flutter) · v2.1
 
 Esta es la app móvil de Agendaservi, construida con **Flutter, Dart, Riverpod y Drift (SQLite)**. Tiene tres calendarios: eventos, ciclo menstrual y control financiero.
 
 Es un cliente del **mismo backend que usa la web** (`../backend`, en `dibeltran05.alwaysdata.net`):
 - Cada usuario inicia sesión con su cuenta.
 - Sus datos son los mismos en agendaservi.com y en el teléfono.
-- Los eventos que registra son los que el **cron** (`../cron`) envía por WhatsApp.
+- Los eventos que registra son los que el **cron** (`../cron`) envía por WhatsApp y por **push** al teléfono.
 
-La app **no requiere cambios en el backend**: solo usa los endpoints que ya existen.
+Del backend solo usa los endpoints de la web, más `POST /api/dispositivos` y `POST /api/dispositivos/baja` para registrar el teléfono en el push.
 
 | | |
 |---|---|
 | Estado | Riverpod 3 (`AsyncNotifier`, familias por mes, `ref.mounted` en los saltos asíncronos) |
 | Red | Dio 5, con el token JWT en `flutter_secure_storage` (Keychain / Keystore) |
 | Caché | Drift 2 + SQLite: copia local por usuario para abrir al instante y consultar sin internet |
-| Avisos | `flutter_local_notifications` + `timezone` (hora de Bogotá, igual que el cron) |
+| Avisos | Push del servidor con `firebase_messaging`. Respaldo: `flutter_local_notifications` + `timezone` y `workmanager` |
 | Navegación | go_router 18 con `StatefulShellRoute` y redirección según la sesión |
 | UI | Material 3 con sistema de diseño propio, Inter, fl_chart, flutter_animate |
 
@@ -67,7 +67,35 @@ La app **no requiere cambios en el backend**: solo usa los endpoints que ya exis
 - **Resumen** con la regla 50/30/20 y **gráficos**: patrimonio, flujo, gastos por categoría, top de gastos e ingresos por categoría (de 7 días a 1 año).
 
 ## Notificaciones en el teléfono
-Los avisos por WhatsApp los envía el cron desde el servidor. La app programa **además** avisos locales con las **mismas reglas y los mismos textos**, en `lib/features/notifications/reminder_planner.dart` y `lib/features/events/mensajes.dart`:
+
+### Push del servidor (principal)
+El cron envía cada aviso por WhatsApp **y por push** a la misma hora. El teléfono avisa aunque la app esté cerrada, lleve días sin abrirse o el evento se haya creado en la web. La app no consulta al servidor en segundo plano para esto.
+
+**Registro del teléfono:**
+- Al iniciar sesión, la app envía su token de Firebase y sus preferencias a `POST /api/dispositivos`: avisos activos, 30 min antes y resumen.
+- Vuelve a enviarlos cada vez que cambian, cuando se renueva el token y, como máximo, cada 12 h al abrir la app.
+- Al cerrar sesión, lo da de baja.
+
+**Bienvenida:** el cron envía un primer push ("🔔 Notificaciones activadas"). Cuando FCM lo acepta, o cuando llega uno con la app abierta, la app apaga sus avisos locales para no duplicar. Perfil muestra por qué vía llegan los avisos.
+
+**Android:**
+- Llegan mensajes de datos de prioridad alta, que la app muestra con sus propios canales, texto expandible y el **mismo id** que el aviso local equivalente (`idAviso`, igual en `cron/push.js`).
+- Si coinciden, uno reemplaza al otro en vez de duplicarse.
+
+**iOS:**
+- Llega una alerta de APNs con `apns-collapse-id`.
+- Requiere firmar la app con una cuenta del Apple Developer Program. Con un Apple ID gratuito, iOS no entrega push y la app sigue con el respaldo.
+
+**Configuración:** no se sube al repositorio. Se inyecta al compilar con `--dart-define-from-file=firebase.json` (plantilla en `firebase.example.json`; en CI viene del secreto `FIREBASE_DART_DEFINES`). Sin ella la app compila y funciona solo con el respaldo. Los pasos completos están en el README principal, en *Notificaciones push*.
+
+### Respaldo en el teléfono (sin push)
+Mientras el push no esté confirmado, la app programa avisos locales y se refresca en segundo plano:
+- En Android con WorkManager, cada ~2 h y solo con internet.
+- En iOS con Background App Refresh, cuando el sistema lo decide.
+
+En cada refresco descarga los eventos y reprograma los avisos. Así un evento creado en la web también avisa sin abrir la app, aunque con menos garantía de hora que el push.
+
+Los avisos locales siguen las **mismas reglas y los mismos textos** del cron (`lib/features/notifications/reminder_planner.dart` y `lib/features/events/mensajes.dart`):
 
 | Qué | Cuándo |
 |---|---|
@@ -130,7 +158,7 @@ lib/
     ├── events/             # repositorio, pantalla, formulario, mensajes del cron
     ├── cycle/              # motor, repositorio, rueda
     ├── finance/            # repositorio, providers, lógica, pestañas, hojas
-    ├── notifications/      # planificador (reglas del cron) y servicio local
+    ├── notifications/      # push (FCM), registro del teléfono, respaldo local y de fondo
     └── settings/           # perfil, avisos, apariencia, sesión
 ```
 
@@ -142,6 +170,12 @@ flutter pub get
 
 ```bash
 flutter run
+```
+
+Con push (necesita `firebase.json`, ver `firebase.example.json`):
+
+```bash
+flutter run --dart-define-from-file=firebase.json
 ```
 
 Por defecto la app apunta a `https://dibeltran05.alwaysdata.net` (`ApiClient` en `lib/core/net/api_client.dart`).
@@ -168,6 +202,7 @@ Las pruebas **nunca tocan el servidor real**, así que no crean cuentas ni enví
 | Archivo | Qué cubre |
 |---|---|
 | `api_test` | Sesión, 401, verificación, caché sin conexión, series, pagos, cuotas, transferencias, metas, presupuestos y ciclos |
+| `push_test` | Registro del teléfono y preferencias, paso de avisos locales a push del servidor, token renovado, baja al cerrar sesión, refresco en segundo plano |
 | `planner_test` | Avisos del teléfono con las reglas del cron: 30 min, resumen de las 7:00, puentes festivos, CDT, límite de iOS |
 | `app_smoke_test` | Recorre la app completa en teléfono, tablet y modo claro con texto al 130 %, más los flujos de login y registro con código. Falla ante cualquier excepción o desbordamiento |
 | `cycle_engine_test`, `holidays_test` | Motor del ciclo y festivos de Colombia |
@@ -179,7 +214,9 @@ Las pruebas **nunca tocan el servidor real**, así que no crean cuentas ni enví
 2. APK de Android (artefacto).
 3. `.ipa` de iOS **sin firmar**, como artefacto y como *release* `mobile-build-N`. Se instala firmándolo con tu Apple ID desde Sideloadly o AltStore.
 
-## Límites conocidos (por no modificar el backend)
+Si existe el secreto `FIREBASE_DART_DEFINES`, ambos builds salen con push.
+
+## Límites conocidos
 - Los **ingresos planificados** se pueden crear, confirmar y borrar, pero no editar: no existe ese endpoint.
 - Los eventos no tienen **notas**: la tabla del backend no tiene ese campo.
 - **Aportar a una meta desde una cuenta** hace dos llamadas (movimiento + meta), así que no es atómico.

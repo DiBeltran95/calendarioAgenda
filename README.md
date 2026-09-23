@@ -82,6 +82,8 @@ DB_USER=
 DB_PASS=
 DB_NAME=
 WHATSAPP_API_KEY=
+# Opcional: notificaciones push a la app móvil (ver "Notificaciones push")
+FCM_SERVICE_ACCOUNT_FILE=/home/<cuenta>/firebase-service-account.json
 ```
 
 **`frontend/.env`** / **`frontend/.env.production`** (ver `frontend/.env.example`)
@@ -120,6 +122,8 @@ npm start
 ```bash
 cd backend && npm test      # validación de ciclos
 cd frontend && npm test     # ciclo menstrual + outbox offline
+cd cron && npm test         # mensajes push y candados por teléfono
+cd mobile && flutter test   # app móvil contra un backend falso
 ```
 
 ---
@@ -151,8 +155,7 @@ App Flutter con los calendarios de **eventos**, **ciclo menstrual** y **control 
 
 - Usa el **mismo backend** que la web (`dibeltran05.alwaysdata.net`) sin modificarlo.
 - Cada usuario inicia sesión y ve los mismos datos que en agendaservi.com.
-- Los eventos que registra los avisa el **cron** por WhatsApp.
-- La app también programa **notificaciones en el teléfono** con las mismas reglas del cron.
+- Los eventos que registra los avisa el **cron** por WhatsApp **y por push al teléfono**, aunque la app esté cerrada o el evento se haya creado en la web (ver abajo).
 - Guarda una caché en SQLite para abrir al instante y funcionar sin conexión.
 
 **Generar el `.ipa` (GitHub Actions):** el workflow [`.github/workflows/mobile.yml`](.github/workflows/mobile.yml) corre en cada push a `main` que modifique `mobile/`, o a mano desde **Actions → "Mobile (Flutter) · IPA y APK" → Run workflow**. Hace tres cosas:
@@ -165,6 +168,54 @@ Desarrollo local:
 ```bash
 cd mobile && flutter pub get && flutter run
 ```
+
+---
+
+## 🔔 Notificaciones push (app móvil)
+
+El **cron** envía cada aviso por dos canales independientes, a la misma hora:
+- por **WhatsApp**, como siempre;
+- por **push** a cada teléfono con la app (Firebase Cloud Messaging).
+
+Por eso el teléfono avisa aunque el evento se haya creado desde la web y la app lleve días sin abrirse. La app no consulta el servidor constantemente.
+
+```
+app ── POST /api/dispositivos (token FCM + preferencias) ──► backend ──► tabla dispositivos_push
+                                                                               │
+cron (cada 30 s, timers exactos) ── WhatsApp ──► usuario                       │
+                                 └─ FCM v1 ────► teléfono(s) ◄─────────────────┘
+```
+
+**Qué se envía y cuándo:**
+- Eventos con hora: 30 minutos antes (si el usuario lo tiene activo) y a la hora exacta.
+- Resumen de las 7:00 a. m.
+- Vencimiento de CDT.
+
+**Cómo se mantiene fiable:**
+- Cada teléfono tiene su propio candado en `notificaciones_enviadas`: un fallo temporal se reintenta sin duplicar el aviso en los demás.
+- Los tokens que FCM declara inválidos se borran solos.
+- Los teléfonos que no abren la app en 120 días se eliminan.
+- Al registrarse un teléfono, el cron le envía una notificación de **bienvenida**. Solo cuando FCM la acepta, la app apaga sus avisos locales. Mientras tanto, o si no hay push, la app programa avisos locales y se refresca en segundo plano (WorkManager en Android, Background App Refresh en iOS).
+- Sin la configuración de Firebase todo sigue funcionando como antes: WhatsApp más avisos locales.
+
+### Activar el push (una sola vez)
+1. Crear un proyecto en [Firebase](https://console.firebase.google.com) y dentro de él:
+   - una app **Android** con el paquete `com.agendaservi.agendaservi`;
+   - una app **iOS** con el bundle `com.agendaservi.agendaservi`.
+2. **Cron:**
+   1. En *Configuración del proyecto → Cuentas de servicio*, generar una clave privada (JSON).
+   2. Subirla al servidor del cron, fuera de la carpeta del repositorio.
+   3. Añadir `FCM_SERVICE_ACCOUNT_FILE` a `cron/.env`.
+   4. Reiniciar con `npx pm2 restart ecosystem.config.cjs`. El log dirá `[Push] FCM activo para el proyecto …`.
+3. **App:** copiar `mobile/firebase.example.json` y llenarlo con los valores de las apps de Firebase (`apiKey`, `appId`, `messagingSenderId`, `projectId`).
+   - En GitHub, pegar ese JSON en el secreto `FIREBASE_DART_DEFINES` (*Settings → Secrets and variables → Actions*).
+   - En local: `flutter run --dart-define-from-file=firebase.json`.
+4. **iPhone:** Apple solo permite push con una cuenta del **Apple Developer Program** (de pago).
+   1. Crear una llave APNs (.p8) y subirla en Firebase → *Cloud Messaging → Apple app configuration*.
+   2. Firmar la app con esa cuenta.
+   - Con un Apple ID gratuito (Sideloadly/AltStore) iOS no entrega push. La app lo detecta y usa sus avisos locales más el refresco en segundo plano, y el WhatsApp llega siempre.
+
+El backend crea la tabla `dispositivos_push` al arrancar (el cron también, si arranca primero). No hace falta ninguna migración manual.
 
 ---
 
