@@ -46,3 +46,5 @@ backend/downloads/
 # Credenciales de Firebase (cuenta de servicio del cron / config de la app)
 *service-account*.json
 firebase-adminsdk*.json
+google-services.json
+GoogleService-Info.plist
