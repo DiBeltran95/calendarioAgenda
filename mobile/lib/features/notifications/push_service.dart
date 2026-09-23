@@ -31,15 +31,49 @@ class ConfigFirebase {
   static const iosAppId = String.fromEnvironment('FIREBASE_IOS_APP_ID');
   static const iosBundleId = 'com.agendaservi.agendaservi';
 
-  static FirebaseOptions? opciones() {
-    if (kIsWeb || projectId.isEmpty || senderId.isEmpty) return null;
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.android when androidApiKey.isNotEmpty && androidAppId.isNotEmpty =>
-        const FirebaseOptions(apiKey: androidApiKey, appId: androidAppId, messagingSenderId: senderId, projectId: projectId),
-      TargetPlatform.iOS when iosApiKey.isNotEmpty && iosAppId.isNotEmpty =>
-        const FirebaseOptions(apiKey: iosApiKey, appId: iosAppId, messagingSenderId: senderId, projectId: projectId, iosBundleId: iosBundleId),
+  static FirebaseOptions? opciones() => construir(
+        web: kIsWeb,
+        plataforma: defaultTargetPlatform,
+        projectId: projectId,
+        senderId: senderId,
+        androidApiKey: androidApiKey,
+        androidAppId: androidAppId,
+        iosApiKey: iosApiKey,
+        iosAppId: iosAppId,
+      );
+
+  // Mismos formatos que exige el SDK nativo. En iOS, una clave mal formada
+  // lanza una excepción de Objective-C (FIRInstallations validateAPIKey) que
+  // Dart no puede atrapar y cierra la app al abrirla: por eso se valida aquí
+  // y, si algo no cuadra, la app arranca sin push (con avisos locales).
+  static final _apiKey = RegExp(r'^A[0-9A-Za-z_-]{38}$');
+  static final _projectId = RegExp(r'^[a-z0-9-]{4,40}$');
+  static final _senderId = RegExp(r'^\d{6,20}$');
+
+  static FirebaseOptions? construir({
+    required bool web,
+    required TargetPlatform plataforma,
+    required String projectId,
+    required String senderId,
+    required String androidApiKey,
+    required String androidAppId,
+    required String iosApiKey,
+    required String iosAppId,
+  }) {
+    if (web || !_projectId.hasMatch(projectId) || !_senderId.hasMatch(senderId)) return null;
+    bool valida(String apiKey, String appId, String so) =>
+        _apiKey.hasMatch(apiKey) && RegExp('^1:$senderId:$so:[0-9a-f]+\$').hasMatch(appId);
+    final opciones = switch (plataforma) {
+      TargetPlatform.android when valida(androidApiKey, androidAppId, 'android') =>
+        FirebaseOptions(apiKey: androidApiKey, appId: androidAppId, messagingSenderId: senderId, projectId: projectId),
+      TargetPlatform.iOS when valida(iosApiKey, iosAppId, 'ios') =>
+        FirebaseOptions(apiKey: iosApiKey, appId: iosAppId, messagingSenderId: senderId, projectId: projectId, iosBundleId: iosBundleId),
       _ => null,
     };
+    if (opciones == null && (androidApiKey.isNotEmpty || iosApiKey.isNotEmpty)) {
+      debugPrint('Configuración de Firebase inválida para $plataforma: se desactiva el push.');
+    }
+    return opciones;
   }
 }
 

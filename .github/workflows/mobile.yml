@@ -65,6 +65,9 @@ jobs:
         run: |
           if [ -n "$FIREBASE_DART_DEFINES" ]; then
             printf '%s' "$FIREBASE_DART_DEFINES" > firebase.json
+            # Un valor mal copiado cierra la app en iOS al abrirla: se valida
+            # aquí y se dice exactamente cuál está mal.
+            python3 ../.github/scripts/validar_firebase.py firebase.json
             echo "DEFINES=--dart-define-from-file=firebase.json" >> "$GITHUB_ENV"
             echo "Push del servidor activado para este build."
           else
@@ -96,6 +99,9 @@ jobs:
         run: |
           if [ -n "$FIREBASE_DART_DEFINES" ]; then
             printf '%s' "$FIREBASE_DART_DEFINES" > firebase.json
+            # Un valor mal copiado cierra la app en iOS al abrirla: se valida
+            # aquí y se dice exactamente cuál está mal.
+            python3 ../.github/scripts/validar_firebase.py firebase.json
             echo "DEFINES=--dart-define-from-file=firebase.json" >> "$GITHUB_ENV"
             echo "Push del servidor activado para este build."
           else
