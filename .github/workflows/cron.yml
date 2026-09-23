@@ -4,7 +4,6 @@ name: Cron · pruebas
 
 on:
   push:
-    branches: [main]
     paths:
       - 'cron/**'
       - '.github/workflows/cron.yml'

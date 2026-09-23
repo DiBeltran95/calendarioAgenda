@@ -10,7 +10,7 @@ name: Mobile (Flutter) · IPA y APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'feature/**']
     paths:
       - 'mobile/**'
       - '.github/workflows/mobile.yml'

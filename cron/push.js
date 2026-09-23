@@ -126,13 +126,13 @@ function recortar(texto, maxBytes = MAX_BYTES_CUERPO) {
  *   propio canal y estilo (texto expandible) aunque esté cerrada.
  * - iOS: alerta visible (APNs), con `apns-collapse-id` = id de la app.
  */
-function construirMensaje(token, { clave, titulo, cuerpo, canal = 'eventos', fecha, ttlSeg = 3600, tipo = 'aviso' }) {
+function construirMensaje(token, { clave, titulo, cuerpo, canal = 'eventos', fecha, ruta, ttlSeg = 3600, tipo = 'aviso' }) {
     const body = recortar(cuerpo);
     const ttl = Math.max(60, Math.floor(ttlSeg));
     return {
         message: {
             token,
-            data: { tipo, clave, titulo, cuerpo: body, canal, ruta: fecha ? `dia:${fecha}` : '' },
+            data: { tipo, clave, titulo, cuerpo: body, canal, ruta: ruta ?? (fecha ? `dia:${fecha}` : '') },
             android: { priority: 'HIGH', ttl: `${ttl}s` },
             apns: {
                 headers: {

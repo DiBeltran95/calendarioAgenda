@@ -3,6 +3,7 @@ const mysql = require('mysql2/promise');
 const fs = require('fs');
 const path = require('path');
 const push = require('./push');
+const { tareasCitas } = require('./citas');
 
 // Ensure log folder exists
 const logDir = path.join(__dirname, 'logs');
@@ -87,7 +88,8 @@ const CATEGORIA_META = {
     cita_amor:    { emoji: '❤️', nombre: 'Cita romántica' },
     aniversario:  { emoji: '💑', nombre: 'Aniversario' },
     matrimonio:   { emoji: '💍', nombre: 'Matrimonio' },
-    mesiversario: { emoji: '🌹', nombre: 'Mesiversario' }
+    mesiversario: { emoji: '🌹', nombre: 'Mesiversario' },
+    cita:         { emoji: '🗓️', nombre: 'Cita' }
 };
 function metaCategoria(cat) {
     return CATEGORIA_META[cat] || { emoji: '📌', nombre: 'Recordatorio' };
@@ -150,6 +152,9 @@ function buildTimedExactMsg(event) {
             break;
         case 'matrimonio':
             cuerpo = `Hoy es el gran momento: *${event.titulo}*. 💍`;
+            break;
+        case 'cita':
+            cuerpo = `Es la hora de tu cita agendada: *${event.titulo}*. Tu cliente te espera. 🗓️`;
             break;
         default:
             cuerpo = `Tu compromiso *${event.titulo}* es ahora mismo.`;
@@ -916,6 +921,8 @@ async function main() {
             // + festivos + puente). Internamente sólo actúa desde las 7:00 a.m.
             await checkDailyDigest();
             await limpiarDispositivos();
+            // Agendamiento: avisos a la app, recordatorios y reservas vencidas.
+            await tareasCitas(pool, sendWhatsAppMessage);
         } catch (err) {
             console.error('[Cron] Error in polling loop:', err);
         }

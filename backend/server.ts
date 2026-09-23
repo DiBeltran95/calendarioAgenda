@@ -9,6 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import { generateExcelReport } from './lib/excelService';
 import { validarFechaCiclo, validarDiasSangrado, normalizarDiasSangrado } from './lib/cycleValidation';
+import { migrarAgenda, registrarAgenda } from './lib/agenda/rutas';
 
 dotenv.config();
 
@@ -73,6 +74,26 @@ async function ensureDefaultCategories(conn: any, userId: number): Promise<void>
     }
 }
 
+const WHATSAPP_API_KEY = process.env.WHATSAPP_API_KEY || 'e0015f66b77a90f580860d1f3abe4dd6426f7320852416f815515a1323c515d8';
+
+/** Envía un texto por la API de WhatsApp. Devuelve false si no se pudo. */
+async function enviarWhatsApp(numero: string, texto: string): Promise<boolean> {
+    try {
+        const jid = String(numero).replace(/\D/g, '');
+        if (!jid) return false;
+        const response = await fetch('https://whatsapp.alwaysdata.net/api/messages/text', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': WHATSAPP_API_KEY },
+            body: JSON.stringify({ jid, text: texto })
+        });
+        server.log.info({ jid, status: response.status }, 'WhatsApp enviado');
+        return response.ok;
+    } catch (error) {
+        server.log.error(error, 'Error enviando WhatsApp');
+        return false;
+    }
+}
+
 async function sendWhatsAppVerificationCode(whatsapp: string, code: string): Promise<boolean> {
     try {
         const cleanedJid = whatsapp.replace(/\D/g, '');
@@ -81,7 +102,7 @@ async function sendWhatsAppVerificationCode(whatsapp: string, code: string): Pro
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': 'e0015f66b77a90f580860d1f3abe4dd6426f7320852416f815515a1323c515d8'
+                'x-api-key': WHATSAPP_API_KEY
             },
             body: JSON.stringify({
                 jid: cleanedJid,
@@ -300,6 +321,13 @@ server.decorate('authenticate', async (request: any, reply: any) => {
     } catch (err) {
         reply.send(err);
     }
+});
+
+// --- AGENDAMIENTO DE CITAS (lib/agenda) ---
+registrarAgenda(server, {
+    pool,
+    enviarWhatsApp,
+    webBase: (process.env.WEB_BASE_URL || 'https://agendaservi.com').replace(/\/+$/, '')
 });
 
 // --- RUTAS DE EVENTOS ---
@@ -2525,6 +2553,9 @@ async function runMigrations() {
     } catch (err: any) {
         server.log.error('Error creating dispositivos_push table:', err);
     }
+
+    // Agendamiento de citas (tablas agenda_* y push_cola).
+    await migrarAgenda(pool, server.log);
 
     // Índices compuestos (user_id, fecha) para que las consultas por mes sean
     // casi instantáneas aun con mucho histórico. Se crean sólo si no existen.

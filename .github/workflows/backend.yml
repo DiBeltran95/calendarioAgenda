@@ -1,0 +1,49 @@
+# Pruebas del backend. Las de agendamiento corren contra una MariaDB real
+# (misma familia de motor que usa AlwaysData) creada solo para la prueba.
+name: Backend · pruebas
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  test:
+    name: npm test (con MariaDB)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: prueba
+          MARIADB_DATABASE: agenda_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      AGENDA_DB_HOST: 127.0.0.1
+      AGENDA_DB_PORT: 3306
+      AGENDA_DB_USER: root
+      AGENDA_DB_PASS: prueba
+      AGENDA_DB_NAME: agenda_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm test
