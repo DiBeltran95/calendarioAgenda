@@ -18,7 +18,10 @@ import '../../core/net/api_client.dart';
 import '../../core/net/json.dart';
 import '../../core/providers.dart';
 import '../../core/session.dart';
+import '../../core/dates.dart';
 import '../../data/models.dart';
+import '../citas/citas_en_vivo.dart' show AvisoVivo, cambiosDesde, fotoCitas;
+import '../citas/citas_models.dart';
 import 'notification_service.dart';
 import 'push_registro.dart';
 import 'push_service.dart';
@@ -61,7 +64,29 @@ Future<int?> refrescarAvisosEnSegundoPlano({
     resumen: cfg.resumen,
   );
   await avisos.reprogramar(plan);
+  await avisarCambiosDeCitas(api: api, almacen: almacen, avisos: avisos);
   return avisos.programados;
+}
+
+/// Sin push, las citas nuevas o canceladas mientras la app estaba cerrada se
+/// descubren aquí: se comparan con lo último que se vio y se avisa con una
+/// notificación local.
+Future<int> avisarCambiosDeCitas({required ApiClient api, required AlmacenAvisos almacen, required ServicioAvisos avisos}) async {
+  final List<CitaAgenda> citas;
+  try {
+    final hoy = hoyYmd();
+    citas = parseList(await api.get('/api/agenda/citas', query: {'desde': sumarDiasYmd(hoy, -60), 'hasta': sumarDiasYmd(hoy, 120)}), CitaAgenda.fromJson);
+  } catch (_) {
+    return 0; // Sin página de citas o sin red.
+  }
+  final previa = await almacen.leerFotoCitas();
+  // La primera vez solo se guarda (no se anuncia la agenda entera).
+  final cambios = previa == null ? const <AvisoVivo>[] : cambiosDesde({for (final e in previa.entries) e.key: EstadoCita.desde(e.value)}, citas);
+  for (final a in cambios) {
+    await avisos.mostrarAhora(AvisoProgramado(id: idAviso(a.clave), cuando: DateTime.now().toUtc(), titulo: a.titulo, cuerpo: a.cuerpo, payload: 'citas', canal: CanalAviso.evento));
+  }
+  await almacen.guardarFotoCitas(fotoCitas(citas));
+  return cambios.length;
 }
 
 /// Punto de entrada del isolate que lanza el sistema.

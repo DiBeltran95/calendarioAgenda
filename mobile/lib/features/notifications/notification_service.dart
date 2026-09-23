@@ -25,7 +25,9 @@ abstract class ServicioAvisos {
   Future<PermisoAvisos> pedirPermiso();
   Future<void> reprogramar(List<AvisoProgramado> avisos);
   Future<void> cancelarTodo();
+  /// Notificación de prueba: llega a los [esperaPrueba].
   Future<void> prueba();
+  static const esperaPrueba = Duration(seconds: 5);
 
   /// Muestra un aviso de inmediato (p. ej. un push del servidor en Android).
   Future<void> mostrarAhora(AvisoProgramado aviso);
@@ -188,14 +190,23 @@ class ServicioAvisosLocal implements ServicioAvisos {
     await _plugin.show(id: a.id, title: a.titulo, body: a.cuerpo, notificationDetails: _detalles(a.canal), payload: a.payload);
   }
 
+  /// Se programa a 5 s por el mismo camino que los recordatorios (que sí
+  /// llegan con la app minimizada). Mostrarla "ya" con la app en pantalla
+  /// depende de que iOS la presente en primer plano, y con Firebase instalado
+  /// eso no siempre ocurre: parecía que el botón no hacía nada.
   @override
-  Future<void> prueba() => _plugin.show(
-        id: 1,
-        title: '🔔 ¡Las notificaciones funcionan!',
-        body: 'Así te avisaremos de tus eventos, pagos y cumpleaños.',
-        notificationDetails: const NotificationDetails(android: _canalEventos, iOS: _darwin),
-        payload: 'dia:${hoyYmd()}',
-      );
+  Future<void> prueba() async {
+    if (!_listo) throw StateError('Las notificaciones aún no están listas');
+    await _plugin.zonedSchedule(
+      id: 1,
+      title: '🔔 ¡Las notificaciones funcionan!',
+      body: 'Así te avisaremos de tus eventos, pagos, cumpleaños y citas.',
+      scheduledDate: tz.TZDateTime.now(tz.UTC).add(ServicioAvisos.esperaPrueba),
+      notificationDetails: const NotificationDetails(android: _canalEventos, iOS: _darwin),
+      androidScheduleMode: await _modo(),
+      payload: 'dia:${hoyYmd()}',
+    );
+  }
 
   @override
   Future<String?> payloadDeInicio() async {

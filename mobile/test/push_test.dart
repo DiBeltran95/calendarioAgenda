@@ -186,6 +186,33 @@ void main() {
       expect(a.ultimos.map((x) => x.id), contains(idAviso('ev:999:exacto')));
     });
 
+    test('sin push: una cita nueva o cancelada con la app cerrada se avisa con una notificación local', () async {
+      // Página de citas con una cita confirmada que el usuario ya vio.
+      backend.agenda.negocios[1] = {'id': 50, 'user_id': 1, 'nombre': 'Barbería', 'slug': 'barberia', 'color': '#2563EB', 'activo': 1, 'intervalo_min': 30};
+      backend.agenda.profesionales.add({'id': 60, 'negocio': 50, 'nombre': 'Diego', 'color': '#2563EB', 'usuario_id': 1, 'activo': 1});
+      final dia = sumarDiasYmd(hoyYmd(), 2);
+      Map<String, dynamic> cita(int id, String nombre, String estado) => {
+            'id': id, 'token': 't$id', 'negocio': 50, 'profesional_id': 60, 'servicio_id': 1, 'servicio_nombre': 'Corte', 'duracion_min': 30,
+            'precio': '0.00', 'fecha': dia, 'hora_inicio': '10:00', 'hora_fin': '10:30', 'cliente_nombre': nombre, 'estado': estado, 'origen': 'web',
+          };
+      backend.agenda.citas.add(cita(1, 'Ana', 'confirmada'));
+      final almacen = AlmacenAvisos.memoria();
+      final a = AvisosConPermiso();
+      final api = cliente(sesionDiego.token);
+      // Primera revisión: solo guarda lo que hay (no anuncia toda la agenda).
+      expect(await avisarCambiosDeCitas(api: api, almacen: almacen, avisos: a), 0);
+
+      // Con la app cerrada: Ana cancela y Luis reserva.
+      backend.agenda.citas.first['estado'] = 'cancelada';
+      backend.agenda.citas.add(cita(2, 'Luis', 'confirmada'));
+      expect(await avisarCambiosDeCitas(api: api, almacen: almacen, avisos: a), 2);
+      expect(a.mostrados.map((x) => x.titulo), ['Cita cancelada: Ana', 'Nueva cita: Luis']);
+      expect(a.mostrados.first.id, idAviso('cita:1:cancelada'));
+
+      // La siguiente revisión no repite nada.
+      expect(await avisarCambiosDeCitas(api: api, almacen: almacen, avisos: a), 0);
+    });
+
     test('no hace nada sin sesión, con avisos apagados o si el servidor ya avisa', () async {
       final a = AvisosConPermiso();
       expect(await refrescarAvisosEnSegundoPlano(sesiones: MemoryTokenStore(), almacen: AlmacenAvisos.memoria(), avisos: a, cliente: cliente), isNull);

@@ -119,6 +119,8 @@ El cron envía cada aviso por WhatsApp **y por push** a la misma hora. El teléf
 **Configuración:** no se sube al repositorio. Se inyecta al compilar con `--dart-define-from-file=firebase.json` (plantilla en `firebase.example.json`; en CI viene del secreto `FIREBASE_DART_DEFINES`). Sin ella la app compila y funciona solo con el respaldo. Los pasos completos están en el README principal, en *Notificaciones push*.
 
 ### Respaldo en el teléfono (sin push)
+
+En un iPhone instalado con Sideloadly (Apple ID gratuito) **no existen las notificaciones push**: Apple no da ese permiso a las firmas gratuitas. Ahí funcionan los recordatorios locales y la revisión en segundo plano. Esa revisión también detecta **citas nuevas o canceladas** desde la última vez y las avisa con una notificación local, pero **iOS decide cuándo la ejecuta** (puede tardar horas). La prueba de *Perfil → Enviar una notificación de prueba* llega a los 5 s; minimiza la app para verla.
 Mientras el push no esté confirmado, la app programa avisos locales y se refresca en segundo plano:
 - En Android con WorkManager, cada ~2 h y solo con internet.
 - En iOS con Background App Refresh, cuando el sistema lo decide.

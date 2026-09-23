@@ -151,8 +151,11 @@ AvisoVivo? avisoDeEvento(String tipo, CitaAgenda c) {
 }
 
 /// Lo que cambió entre dos versiones de la agenda (al sincronizar sin canal en vivo).
-List<AvisoVivo> cambiosEntre(List<CitaAgenda> antes, List<CitaAgenda> despues, {String? hoy}) {
-  final previo = {for (final c in antes) c.id: c.estado};
+List<AvisoVivo> cambiosEntre(List<CitaAgenda> antes, List<CitaAgenda> despues, {String? hoy}) =>
+    cambiosDesde({for (final c in antes) c.id: c.estado}, despues, hoy: hoy);
+
+/// Igual, a partir del estado guardado de cada cita (id → estado).
+List<AvisoVivo> cambiosDesde(Map<int, EstadoCita> previo, List<CitaAgenda> despues, {String? hoy}) {
   final desde = hoy ?? hoyYmd();
   final avisos = <AvisoVivo>[];
   for (final c in despues) {
@@ -174,6 +177,12 @@ final citasEnVivoProvider = Provider<CitasEnVivo>((ref) {
   final c = CitasEnVivo(ref, uid);
   if (uid == 0) return c;
   final vivo = ref.read(tiempoRealProvider);
+  // Lo que el usuario ya vio no se le vuelve a anunciar desde segundo plano.
+  final almacen = ref.read(almacenAvisosProvider);
+  ref.listen(citasAgendaProvider, (_, n) {
+    final l = n.value;
+    if (l != null) unawaited(almacen.guardarFotoCitas(fotoCitas(l)));
+  });
   final subs = [
     vivo.eventos.listen(c.aplicar),
     vivo.sincronizar.listen((_) => c.refrescar()),
@@ -186,6 +195,9 @@ final citasEnVivoProvider = Provider<CitasEnVivo>((ref) {
   });
   return c;
 });
+
+/// Estado de cada cita, para comparar más tarde.
+Map<int, String> fotoCitas(List<CitaAgenda> citas) => {for (final c in citas) c.id: c.estado.api};
 
 // ─────────────────────── Aviso dentro de la app ───────────────────────
 

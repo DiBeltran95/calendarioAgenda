@@ -146,8 +146,14 @@ class SettingsScreen extends ConsumerWidget {
                                     const VGap.xs(),
                                     OutlinedButton.icon(
                                       onPressed: () async {
-                                        await ref.read(servicioAvisosProvider).prueba();
-                                        HapticFeedback.lightImpact();
+                                        final toaster = Toaster.of(context);
+                                        try {
+                                          await ref.read(servicioAvisosProvider).prueba();
+                                          HapticFeedback.lightImpact();
+                                          toaster.show('Llegará en ${ServicioAvisos.esperaPrueba.inSeconds} segundos. Minimiza la app para verla como te llegarán los avisos.');
+                                        } catch (_) {
+                                          toaster.show('No se pudo programar la prueba. Revisa el permiso de notificaciones en Ajustes del teléfono.', error: true);
+                                        }
                                       },
                                       icon: const Icon(Icons.notification_add_rounded),
                                       label: const Text('Enviar una notificación de prueba'),

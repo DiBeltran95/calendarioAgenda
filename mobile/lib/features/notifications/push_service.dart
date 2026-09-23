@@ -307,6 +307,11 @@ abstract class AlmacenAvisos {
   Future<ConfigAvisos> leer();
   Future<void> guardar(ConfigAvisos c);
   Future<void> marcarPushRecibido();
+
+  /// Estado de cada cita la última vez que el usuario las vio (o que se
+  /// revisaron en segundo plano): así se sabe qué cambió desde entonces.
+  Future<Map<int, String>?> leerFotoCitas();
+  Future<void> guardarFotoCitas(Map<int, String> foto);
 }
 
 class _AlmacenSeguro implements AlmacenAvisos {
@@ -332,6 +337,26 @@ class _AlmacenSeguro implements AlmacenAvisos {
 
   @override
   Future<void> marcarPushRecibido() async => guardar((await leer()).copyWith(pushRecibido: true));
+
+  static const _kCitas = 'citas_foto';
+
+  @override
+  Future<Map<int, String>?> leerFotoCitas() async {
+    try {
+      final v = await _s.read(key: _kCitas);
+      if (v == null) return null;
+      return {for (final e in (jsonDecode(v) as Map<String, dynamic>).entries) int.parse(e.key): '${e.value}'};
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> guardarFotoCitas(Map<int, String> foto) async {
+    try {
+      await _s.write(key: _kCitas, value: jsonEncode({for (final e in foto.entries) '${e.key}': e.value}));
+    } catch (_) {}
+  }
 }
 
 class _AlmacenMemoria implements AlmacenAvisos {
@@ -342,6 +367,11 @@ class _AlmacenMemoria implements AlmacenAvisos {
   Future<void> guardar(ConfigAvisos c) async => _c = c;
   @override
   Future<void> marcarPushRecibido() async => _c = _c.copyWith(pushRecibido: true);
+  Map<int, String>? _foto;
+  @override
+  Future<Map<int, String>?> leerFotoCitas() async => _foto;
+  @override
+  Future<void> guardarFotoCitas(Map<int, String> foto) async => _foto = foto;
 }
 
 final almacenAvisosProvider = Provider<AlmacenAvisos>((ref) => AlmacenAvisos.seguro());
