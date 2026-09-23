@@ -73,6 +73,14 @@ Del backend solo usa los endpoints de la web, más `POST /api/dispositivos` y `P
   - tiempo bloqueado.
 - **Reservar desde la app:** los enlaces `agendaservi.com/agenda/<slug>` y `agendaservi://app/agenda/<slug>` abren la reserva en la app, con tu nombre y WhatsApp ya llenos. La reserva queda en **Mis reservas**.
 - Las citas confirmadas también aparecen en el calendario de eventos, con sus recordatorios.
+- **En vivo:** con la app abierta, las reservas y cancelaciones llegan solas por el canal SSE `GET /api/tiempo-real` (`lib/core/net/tiempo_real.dart` y `lib/features/citas/citas_en_vivo.dart`):
+  - la cita entra a la lista al instante, con la etiqueta **Nueva** durante 2 minutos;
+  - un aviso flotante arriba (sobre cualquier pantalla) lleva al detalle al tocarlo, se descarta deslizando hacia arriba y se oculta solo a los 6 s;
+  - si el detalle de esa cita está abierto, se actualiza solo;
+  - las reservas sin confirmar pasan a "Sin confirmar" a los 15 minutos, sin consultar al servidor;
+  - robustez: reconexión con espera creciente, vigía de 60 s sin datos y sincronización al reconectar, al volver a la app y al entrar a Citas;
+  - si el canal no funciona en esa red, consulta cada 20 s;
+  - en segundo plano se desconecta y avisa el push; con la app abierta, un push de cita se convierte en el mismo aviso, sin duplicarse.
 
 ### 💳 Control financiero
 - **Cuentas y tarjetas:**
@@ -231,6 +239,7 @@ Las pruebas **nunca tocan el servidor real**, así que no crean cuentas ni enví
 | `api_test` | Sesión, 401, verificación, caché sin conexión, series, pagos, cuotas, transferencias, metas, presupuestos y ciclos |
 | `push_test` | Registro del teléfono y preferencias, paso de avisos locales a push del servidor, token renovado, baja al cerrar sesión, refresco en segundo plano |
 | `citas_test` | Página de citas, servicios, equipo, bloqueos, citas a mano y estados; reserva con código; asistente completo y reserva desde la app (interfaz) |
+| `tiempo_real_test` | Canal SSE: lector, reconexión y resincronización, modo respaldo, cierre. Agenda en vivo: la reserva aparece sola, avisos sin duplicados ni por acciones propias, detección de cambios sin canal, push de cita. Interfaz: aviso, tocarlo abre el detalle, que se actualiza al cancelar |
 | `fab_animado_test` | Botón flotante que se despliega y se recoge |
 | `planner_test` | Avisos del teléfono con las reglas del cron: 30 min, resumen de las 7:00, puentes festivos, CDT, límite de iOS |
 | `app_smoke_test` | Recorre la app completa en teléfono, tablet y modo claro con texto al 130 %, más los flujos de login y registro con código. Falla ante cualquier excepción o desbordamiento |

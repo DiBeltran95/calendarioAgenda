@@ -10,6 +10,7 @@ import jwt from '@fastify/jwt';
 import mysql, { type Pool } from 'mysql2/promise';
 import { migrarAgenda, registrarAgenda } from './rutas';
 import { ahoraBogota, diaSemana, sumarDias } from './disponibilidad';
+import { alPublicar } from '../tiempoReal';
 
 const HOST = process.env.AGENDA_DB_HOST;
 const omitir = !HOST ? 'sin base de pruebas (define AGENDA_DB_HOST)' : false;
@@ -19,6 +20,11 @@ let app: FastifyInstance;
 const whatsapps: { numero: string; texto: string }[] = [];
 let tokenDueno = '';
 let tokenEmpresa = '';
+// Lo que la app recibiría en vivo por /api/tiempo-real.
+const enVivo: { usuario: number; tipo: string; estado: string; rol: string; actor: number | null }[] = [];
+alPublicar((usuario, evento, d) => {
+    if (evento === 'cita') enVivo.push({ usuario, tipo: d.tipo, estado: d.cita.estado, rol: d.cita.rol, actor: d.actor });
+});
 
 /** Próximo lunes a más de 2 días (dentro de la ventana de 30 días). */
 function proximoLunes(): string {
@@ -144,14 +150,19 @@ test('reserva con código por WhatsApp: aparta el turno, confirma y crea el even
     assert.equal(mal.status, 400);
     assert.match(mal.body.message, /Te quedan 4 intentos/);
 
+    assert.deepEqual(enVivo.at(-1), { usuario: 1, tipo: 'pendiente', estado: 'pendiente', rol: 'dueno', actor: null });
+
     const ok = await api('POST', `/api/public/agenda/citas/${r.body.token}/confirmar`, { codigo });
     assert.equal(ok.status, 200, JSON.stringify(ok.body));
+    assert.deepEqual(enVivo.at(-1), { usuario: 1, tipo: 'confirmada', estado: 'confirmada', rol: 'dueno', actor: null });
+    const antes = enVivo.length;
     assert.equal(ok.body.estado, 'confirmada');
     assert.match(whatsapps.at(-1)!.texto, /Cita confirmada/);
 
     // Confirmar de nuevo (el enlace del WhatsApp tocado dos veces) no duplica nada.
     const otra = await api('POST', `/api/public/agenda/citas/${r.body.token}/confirmar`, { codigo });
     assert.equal(otra.body.estado, 'confirmada');
+    assert.equal(enVivo.length, antes, 'no repite el aviso en vivo');
 
     const [eventos]: any = await pool.query("SELECT user_id, titulo, categoria, TIME_FORMAT(hora, '%H:%i') AS hora FROM eventos WHERE cita_id IS NOT NULL");
     assert.deepEqual(eventos, [{ user_id: 1, titulo: 'Consulta psicológica · Ana Pérez', categoria: 'cita', hora: '09:00' }]);
@@ -183,6 +194,7 @@ test('el cliente cancela desde su enlace y el turno se libera', { skip: omitir }
     assert.equal(v.body.puede_cancelar, true);
     const c = await api('POST', `/api/public/agenda/citas/${cita.token}/cancelar`, { motivo: 'Me surgió un viaje' });
     assert.equal(c.body.estado, 'cancelada');
+    assert.deepEqual(enVivo.at(-1), { usuario: 1, tipo: 'cancelada', estado: 'cancelada', rol: 'dueno', actor: null });
     const [eventos]: any = await pool.query('SELECT id FROM eventos WHERE cita_id IS NOT NULL');
     assert.equal(eventos.length, 0);
     const servicio = (await api('GET', '/api/public/agenda/psicologa-laura')).body.servicios[0].id;
@@ -226,6 +238,10 @@ test('empresa con equipo: "cualquier profesional" reparte y respeta bloqueos', {
     assert.equal(c.status, 409);
     assert.notEqual(a.body.profesional.nombre, b.body.profesional.nombre);
 
+    // Luis no ve reservas sin confirmar; el dueño sí, en vivo.
+    assert.ok(!enVivo.some((e) => e.usuario === 3));
+    assert.equal(enVivo.filter((e) => e.usuario === 2 && e.tipo === 'pendiente').length, 2);
+
     // Confirmar la de Pedro (sin cuenta) le avisa por WhatsApp; la de Luis va a su app.
     for (const r of [a, b]) {
         const [[fila]]: any = await pool.query('SELECT codigo FROM agenda_citas WHERE token = ?', [r.body.token]);
@@ -237,6 +253,7 @@ test('empresa con equipo: "cualquier profesional" reparte y respeta bloqueos', {
     assert.equal(colaLuis.length, 1);
     const [eventoLuis]: any = await pool.query('SELECT id FROM eventos WHERE user_id = 3 AND cita_id IS NOT NULL');
     assert.equal(eventoLuis.length, 1);
+    assert.deepEqual(enVivo.filter((e) => e.usuario === 3).map((e) => [e.tipo, e.rol]), [['confirmada', 'equipo']]);
 
     // Luis ve la cita como profesional del equipo.
     const deLuis = await api('GET', '/api/agenda/citas', undefined, app.jwt.sign({ id: 3 }));
@@ -262,6 +279,7 @@ test('el negocio agenda a mano, completa y cancela avisando al cliente', { skip:
     assert.equal(nueva.status, 200, JSON.stringify(nueva.body));
     assert.equal(nueva.body.estado, 'confirmada');
     assert.equal(nueva.body.origen, 'negocio');
+    assert.deepEqual(enVivo.at(-1), { usuario: 1, tipo: 'nueva', estado: 'confirmada', rol: 'dueno', actor: 1 });
 
     const choque = await api('POST', '/api/agenda/citas', { servicio_id: servicio, profesional_id: prof, fecha: martes, hora: '10:30', cliente_nombre: 'Otro' }, tokenDueno);
     assert.equal(choque.status, 409);
@@ -272,6 +290,7 @@ test('el negocio agenda a mano, completa y cancela avisando al cliente', { skip:
     assert.equal(hecha.body.estado, 'completada');
     const cancel = await api('PUT', `/api/agenda/citas/${forzada.body.id}`, { estado: 'cancelada', motivo: 'Agenda llena' }, tokenDueno);
     assert.equal(cancel.body.estado, 'cancelada');
+    assert.deepEqual(enVivo.at(-1), { usuario: 1, tipo: 'cancelada', estado: 'cancelada', rol: 'dueno', actor: 1 });
 
     // Otro usuario no puede tocar citas ajenas.
     const ajena = await api('PUT', `/api/agenda/citas/${nueva.body.id}`, { estado: 'cancelada' }, tokenEmpresa);

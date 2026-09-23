@@ -91,6 +91,14 @@ class FakeAgenda {
     return out..sort();
   }
 
+  /// Como `emitirCita` del backend: avisa en vivo al dueño y al cliente con app.
+  void _emitir(Map<String, dynamic> c, String tipo, int? actor) {
+    final dueno = negocios.entries.where((e) => e.value['id'] == c['negocio']).firstOrNull?.key;
+    _b.emitir(dueno, 'cita', {'tipo': tipo, 'actor': actor, 'cita': _filaCita(c, 'dueno')});
+    final cliente = c['cliente_usuario_id'] as int?;
+    if (cliente != null) _b.emitir(cliente, 'cita', {'tipo': tipo, 'actor': actor, 'cita': _filaCita(c, 'cliente')});
+  }
+
   _Resp _publica(String m, List<String> seg, Map<String, dynamic> q, Map<String, dynamic> b, int? uid) {
     // seg: api, public, agenda, <slug|citas>, ...
     if (seg.length >= 5 && seg[3] == 'citas') {
@@ -102,11 +110,13 @@ class FakeAgenda {
         if ('${b['codigo']}' != codigo) return _b._err(400, 'Código incorrecto. Te quedan 4 intentos.');
         c['estado'] = 'confirmada';
         whatsapps.add((c['cliente_whatsapp'] as String, '✅ *¡Cita confirmada!*'));
+        _emitir(c, 'confirmada', c['cliente_usuario_id'] as int?);
         return _Resp(200, _vista(c));
       }
       if (m == 'POST' && accion == 'reenviar') return const _Resp(200, {'ok': true});
       if (m == 'POST' && accion == 'cancelar') {
         c['estado'] = 'cancelada';
+        _emitir(c, 'cancelada', c['cliente_usuario_id'] as int?);
         return _Resp(200, _vista(c));
       }
       return _Resp(200, _vista(c));
@@ -174,8 +184,10 @@ class FakeAgenda {
         'nota': b['nota'],
         'estado': 'pendiente',
         'origen': uid == null ? 'web' : 'app',
+        'creado': DateTime.now().toUtc().toIso8601String(),
       };
       citas.add(c);
+      _emitir(c, 'pendiente', uid);
       whatsapps.add((wa, 'Tu código de confirmación es:\n*$codigo*'));
       return _Resp(200, _vista(c));
     }
@@ -323,13 +335,16 @@ class FakeAgenda {
           'nota': b['nota'],
           'estado': 'confirmada',
           'origen': 'negocio',
+          'creado': DateTime.now().toUtc().toIso8601String(),
         };
         citas.add(c);
+        _emitir(c, 'nueva', uid);
         return _Resp(200, _filaCita(c, 'dueno'));
       case ('PUT', 'citas'):
         final c = citas.firstWhere((x) => x['id'] == id);
         c['estado'] = b['estado'];
         if (b['motivo'] != null) c['motivo_cancelacion'] = b['motivo'];
+        _emitir(c, b['estado'] == 'cancelada' ? 'cancelada' : 'actualizada', uid);
         return _Resp(200, _filaCita(c, 'dueno'));
     }
     return _b._err(404, 'Ruta de agenda no encontrada: $m ${seg.join('/')}');

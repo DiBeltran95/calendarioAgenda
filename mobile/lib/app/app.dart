@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/motion.dart';
 import '../core/providers.dart';
+import 'aviso_vivo.dart';
 import 'module_theme.dart';
 import 'router.dart';
 
@@ -36,7 +37,8 @@ class AgendaApp extends ConsumerWidget {
         final mq = MediaQuery.of(context);
         return MediaQuery(
           data: mq.copyWith(disableAnimations: mq.disableAnimations || prefs.reducirMovimiento),
-          child: child!,
+          // Avisos en vivo (cita nueva / cancelada) por encima de cualquier pantalla.
+          child: CapaAvisoVivo(child: child!),
         );
       },
     );

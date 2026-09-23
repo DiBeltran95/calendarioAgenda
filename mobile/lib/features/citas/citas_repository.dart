@@ -64,21 +64,39 @@ class CitasNotifier extends AsyncNotifier<List<CitaAgenda>> with CacheRed<List<C
   @override
   Future<List<CitaAgenda>> build() {
     ref.watch(usuarioIdProvider);
+    listenSelf((_, next) => _programarVencimiento(next.value));
+    ref.onDispose(() => _vence?.cancel());
     return cargar();
   }
 
-  void reemplazar(CitaAgenda c) {
-    final l = state.value ?? const <CitaAgenda>[];
-    final i = l.indexWhere((x) => x.id == c.id);
-    final nueva = [...l];
-    if (i >= 0) {
-      nueva[i] = c;
-    } else {
-      nueva.add(c);
-    }
-    nueva.sort((a, b) => '${a.fecha}${a.horaInicio}'.compareTo('${b.fecha}${b.horaInicio}'));
-    state = AsyncData(nueva);
+  Timer? _vence;
+
+  /// Una reserva sin confirmar aparta el turno 15 minutos. Cuando vence, la
+  /// lista se actualiza sola (el servidor no avisa de esto: es solo el tiempo).
+  void _programarVencimiento(List<CitaAgenda>? citas) {
+    _vence?.cancel();
+    final proximo = citas?.map((c) => c.vence).nonNulls.fold<DateTime?>(null, (m, v) => m == null || v.isBefore(m) ? v : m);
+    if (proximo == null) return;
+    final espera = proximo.difference(DateTime.now().toUtc()) + const Duration(seconds: 1);
+    _vence = Timer(espera.isNegative ? Duration.zero : espera, () {
+      final l = state.value;
+      if (l != null && ref.mounted) fijar([for (final c in l) c.vigente()]);
+    });
   }
+
+  void reemplazar(CitaAgenda c) => fijar(_conCita(state.value, c, (a, b) => '${a.fecha}${a.horaInicio}'.compareTo('${b.fecha}${b.horaInicio}')));
+}
+
+/// Inserta o actualiza una cita en la lista, conservando el orden.
+List<CitaAgenda> _conCita(List<CitaAgenda>? lista, CitaAgenda c, int Function(CitaAgenda, CitaAgenda) orden) {
+  final nueva = [...?lista];
+  final i = nueva.indexWhere((x) => x.id == c.id);
+  if (i >= 0) {
+    nueva[i] = c;
+  } else {
+    nueva.add(c);
+  }
+  return nueva..sort(orden);
 }
 
 final citasAgendaProvider = AsyncNotifierProvider<CitasNotifier, List<CitaAgenda>>(CitasNotifier.new, retry: sinReintento);
@@ -102,6 +120,8 @@ class MisReservasNotifier extends AsyncNotifier<List<CitaAgenda>> with CacheRed<
     ref.watch(usuarioIdProvider);
     return cargar();
   }
+
+  void reemplazar(CitaAgenda c) => fijar(_conCita(state.value, c, (a, b) => '${b.fecha}${b.horaInicio}'.compareTo('${a.fecha}${a.horaInicio}')));
 }
 
 final misReservasProvider = AsyncNotifierProvider<MisReservasNotifier, List<CitaAgenda>>(MisReservasNotifier.new, retry: sinReintento);

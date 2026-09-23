@@ -106,6 +106,9 @@ class MensajePush {
   /// Mismo id que el aviso local equivalente: si ambos llegan, uno reemplaza
   /// al otro en vez de duplicarse.
   int get id => idAviso(clave);
+
+  /// Con la app abierta, las citas se anuncian con el aviso de la app.
+  bool get seMuestraDentroDeLaApp => tipo == 'cita';
 }
 
 abstract class ServicioPush {
@@ -182,12 +185,15 @@ class ServicioPushFirebase implements ServicioPush {
       if (Firebase.apps.isEmpty) await Firebase.initializeApp(options: opciones);
       FirebaseMessaging.onBackgroundMessage(manejarPushEnSegundoPlano);
       final fm = FirebaseMessaging.instance;
-      // iOS: con la app abierta el sistema también muestra la alerta.
-      await fm.setForegroundNotificationPresentationOptions(alert: true, sound: true);
+      // Con la app abierta la app decide cómo mostrar cada push (en iOS el
+      // sistema no muestra la alerta por su cuenta): las citas llegan como
+      // aviso dentro de la app (ver `citasEnVivoProvider`) y lo demás como
+      // notificación local, con el mismo id (sin duplicados).
+      await fm.setForegroundNotificationPresentationOptions(alert: false, sound: false);
       FirebaseMessaging.onMessage.listen((r) async {
         final m = MensajePush.desde(r.data);
         if (m == null) return;
-        if (plataforma == 'android') await mostrarPush(_avisos, m);
+        if (!m.seMuestraDentroDeLaApp) await mostrarPush(_avisos, m);
         _recibidos.add(m);
       });
       // Toques en alertas de iOS (en Android las muestra el plugin local, que

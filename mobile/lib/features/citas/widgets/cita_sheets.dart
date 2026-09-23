@@ -95,6 +95,15 @@ class _CitaDetalleSheetState extends ConsumerState<CitaDetalleSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // Si la cita cambia mientras está abierta (la cancelan, la confirman), el
+    // detalle se actualiza en vivo.
+    void seguir(List<CitaAgenda>? l) {
+      final nueva = l?.where((x) => x.id == _cita.id).firstOrNull;
+      if (nueva != null && nueva.estado != _cita.estado && !_ocupado) setState(() => _cita = nueva);
+    }
+
+    ref.listen(citasAgendaProvider, (_, n) => seguir(n.value));
+    ref.listen(misReservasProvider, (_, n) => seguir(n.value));
     final p = context.palette;
     final c = _cita;
     final (color, icono) = estiloEstado(context, c.estado);

@@ -12,6 +12,7 @@ import '../../core/motion.dart';
 import '../../core/widgets/fab_animado.dart';
 import '../../core/widgets/sheets.dart';
 import '../../core/widgets/ui.dart';
+import 'citas_en_vivo.dart';
 import 'citas_models.dart';
 import 'citas_repository.dart';
 import 'widgets/cita_sheets.dart';
@@ -39,6 +40,20 @@ class CitasScreen extends ConsumerWidget {
     final cargando = config == null && configAsync.isLoading;
 
     Future<void> refrescar() => ref.read(agendaRepoProvider).refrescar();
+
+    // Al tocar un aviso en vivo: se abre esa cita en cuanto esté en la lista.
+    final porAbrir = ref.watch(citaPorAbrirProvider);
+    if (porAbrir != null) {
+      final todas = [...?ref.watch(citasAgendaProvider).value, ...misReservas];
+      final cita = todas.where((c) => c.id == porAbrir).firstOrNull;
+      if (cita != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!context.mounted || ref.read(citaPorAbrirProvider) != porAbrir) return;
+          ref.read(citaPorAbrirProvider.notifier).set(null);
+          showAppSheet(context, (_) => CitaDetalleSheet(cita: cita));
+        });
+      }
+    }
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -414,16 +429,18 @@ class _TiraDias extends ConsumerWidget {
 
 const _dias = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
 
-class _TarjetaCita extends StatelessWidget {
+class _TarjetaCita extends ConsumerWidget {
   const _TarjetaCita({required this.cita, required this.conEquipo});
   final CitaAgenda cita;
   final bool conEquipo;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final (colorEstado, iconoEstado) = estiloEstado(context, cita.estado);
     final apagada = cita.estado == EstadoCita.cancelada || cita.estado == EstadoCita.noAsistio;
+    // Recién llegada en vivo: borde de acento y etiqueta "Nueva" por 2 minutos.
+    final reciente = !apagada && ref.watch(citasRecientesProvider.select((s) => s.contains(cita.id)));
     return Padding(
       padding: const EdgeInsets.only(bottom: Gap.sm),
       child: IntrinsicHeight(
@@ -444,7 +461,8 @@ class _TarjetaCita extends StatelessWidget {
               child: AppCard(
                 padding: EdgeInsets.zero,
                 onTap: () => showAppSheet(context, (_) => CitaDetalleSheet(cita: cita)),
-                semanticLabel: '${hora12(cita.horaInicio)}, ${cita.clienteNombre}, ${cita.servicioNombre}, ${cita.estado.etiqueta}',
+                borderColor: reciente ? p.success.withValues(alpha: 0.7) : null,
+                semanticLabel: '${reciente ? 'Nueva. ' : ''}${hora12(cita.horaInicio)}, ${cita.clienteNombre}, ${cita.servicioNombre}, ${cita.estado.etiqueta}',
                 child: ClipRRect(
                   borderRadius: Radii.rLg,
                   child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -462,6 +480,13 @@ class _TarjetaCita extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            if (reciente) ...[
+                              Tag('Nueva', color: p.success, icon: Icons.fiber_new_rounded)
+                                  .animate()
+                                  .fadeIn(duration: Motion.of(context, Motion.medium))
+                                  .scale(begin: const Offset(0.8, 0.8), curve: Curves.easeOutBack, duration: Motion.of(context, Motion.slow)),
+                              const HGap(Gap.xxs),
+                            ],
                             Tag(cita.estado.etiqueta, color: colorEstado, icon: iconoEstado),
                           ]),
                           const SizedBox(height: 2),

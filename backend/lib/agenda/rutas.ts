@@ -40,6 +40,7 @@ import {
     type Rango
 } from './disponibilidad';
 import * as M from './mensajes';
+import { publicar } from '../tiempoReal';
 
 export interface DepsAgenda {
     pool: Pool;
@@ -451,6 +452,33 @@ export function registrarAgenda(server: FastifyInstance, deps: DepsAgenda) {
         };
     }
 
+    /**
+     * Avisa en tiempo real (SSE) a quienes ven esta cita: el dueño, el
+     * profesional con cuenta y el cliente que reservó desde la app. Cada uno
+     * la recibe con su rol. `actor` es quien hizo el cambio (no se le avisa a
+     * sí mismo con un banner). Nunca interrumpe la operación si falla.
+     */
+    async function emitirCita(id: number, tipo: 'pendiente' | 'confirmada' | 'nueva' | 'cancelada' | 'actualizada', actor: number | null) {
+        try {
+            // Misma forma que GET /api/agenda/citas, más a quién hay que avisar.
+            const [filas]: any = await pool.query(
+                `${SELECT_CITAS.replace(' FROM agenda_citas', ', n.user_id AS dueno_id, p.usuario_id AS profesional_usuario_id, c.cliente_usuario_id FROM agenda_citas')} WHERE c.id = ?`,
+                [id]
+            );
+            const f = filas[0];
+            if (!f) return;
+            const { dueno_id, profesional_usuario_id, cliente_usuario_id, ...cita } = f;
+            publicar(dueno_id, 'cita', { tipo, actor, cita: filaCita(cita, 'dueno') });
+            // El equipo no ve reservas sin confirmar (igual que en GET /api/agenda/citas).
+            if (profesional_usuario_id && profesional_usuario_id !== dueno_id && cita.estado !== 'pendiente' && cita.estado !== 'expirada') {
+                publicar(profesional_usuario_id, 'cita', { tipo, actor, cita: filaCita(cita, 'equipo') });
+            }
+            if (cliente_usuario_id) publicar(cliente_usuario_id, 'cita', { tipo, actor, cita: filaCita(cita, 'cliente') });
+        } catch (err) {
+            server.log.error(err, '[TiempoReal] No se pudo emitir el cambio de la cita');
+        }
+    }
+
     /** Evento en el calendario del profesional con cuenta (recordatorios del cron). */
     async function crearEvento(c: PoolConnection, r: any): Promise<number | null> {
         if (!r.profesional_usuario_id) return null;
@@ -670,6 +698,7 @@ export function registrarAgenda(server: FastifyInstance, deps: DepsAgenda) {
                 await pool.query('DELETE FROM agenda_citas WHERE id = ?', [citaId]);
                 throw new Falla(502, 'No pudimos enviarte el WhatsApp. Revisa el número e inténtalo de nuevo.');
             }
+            await emitirCita(citaId, 'pendiente', clienteUsuarioId);
             return { ...vistaPublica(r), minutos_codigo: MINUTOS_CODIGO };
         })
     );
@@ -716,7 +745,10 @@ export function registrarAgenda(server: FastifyInstance, deps: DepsAgenda) {
             }, { leidoConfirmado: true });
             if ((confirmada as any).expirada) throw new Falla(410, 'El código venció. Vuelve a elegir tu horario.', { estado: 'expirada' });
             if ((confirmada as any).error) throw new Falla(400, (confirmada as any).error);
-            if (confirmada.nueva) await avisarConfirmada(confirmada.r);
+            if (confirmada.nueva) {
+                await emitirCita(confirmada.r.id, 'confirmada', confirmada.r.cliente_usuario_id ?? null);
+                await avisarConfirmada(confirmada.r);
+            }
             return vistaPublica(await cargarCita(pool, 'c.id = ?', [confirmada.r.id]));
         })
     );
@@ -749,6 +781,7 @@ export function registrarAgenda(server: FastifyInstance, deps: DepsAgenda) {
                 await borrarEvento(c, r);
                 return r;
             });
+            await emitirCita(r.id, 'cancelada', r.cliente_usuario_id ?? null);
             await avisarCancelada(r, false, motivo);
             return vistaPublica(await cargarCita(pool, 'c.id = ?', [r.id]));
         })
@@ -1162,6 +1195,7 @@ export function registrarAgenda(server: FastifyInstance, deps: DepsAgenda) {
                 return res.insertId as number;
             }, { leidoConfirmado: true });
             const r = await cargarCita(pool, 'c.id = ?', [id]);
+            await emitirCita(id, 'nueva', userId);
             if (whatsapp && bool(b.notificar, true)) await enviarWhatsApp(whatsapp, M.mensajeConfirmada(datos(r)));
             if (r.profesional_usuario_id && r.profesional_usuario_id !== userId) {
                 await encolarPush(pool, r.profesional_usuario_id, { clave: `cita:${id}:nueva`, ...M.pushNuevaCita(datos(r)) });
@@ -1198,6 +1232,7 @@ export function registrarAgenda(server: FastifyInstance, deps: DepsAgenda) {
                 }
                 return r;
             });
+            await emitirCita(r.id, estado === 'cancelada' ? 'cancelada' : 'actualizada', userId);
             if (estado === 'cancelada') await avisarCancelada(r, true, motivo);
             const [fila]: any = await pool.query(`${SELECT_CITAS} WHERE c.id = ?`, [r.id]);
             return filaCita(fila[0], r.dueno_id === userId ? 'dueno' : 'equipo');

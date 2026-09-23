@@ -245,6 +245,15 @@ Cada usuario puede publicar su **página de citas**: `agendaservi.com/agenda/<en
 - **Dueño y profesionales con la app:** notificación en la app al instante por cada cita nueva o cancelada (`push_cola` → cron → FCM). Si no tienen push, les llega por WhatsApp.
 - **Calendario del profesional:** la cita confirmada aparece como **evento**, así le llegan los recordatorios de siempre.
 
+**En vivo (sin refrescar):** con la app abierta, cada cita nueva, confirmada o cancelada aparece **al instante** en la pestaña Citas, con un aviso dentro de la app.
+- **Cómo:** `GET /api/tiempo-real` es un canal **SSE** (Server-Sent Events, HTTP normal). No usa servicios externos ni tiene costo. El servidor manda un latido de pocos bytes cada 25 s (`backend/lib/tiempoReal.ts`).
+- **Quién recibe cada cambio:** el dueño, el profesional del equipo con cuenta (solo citas confirmadas) y el cliente que reservó desde la app.
+- **Si se cae la red:** la app reconecta con espera creciente y vuelve a pedir la agenda.
+- **Si el hosting bloquea conexiones largas:** la app pasa sola a consultar cada 20 s.
+- **En segundo plano:** la app suelta la conexión y avisan las notificaciones push.
+- **Sin avisos repetidos:** un push de una cita que ya se anunció en vivo no se repite. Lo que hace uno mismo no se le anuncia.
+- **Límite:** el canal vive en la memoria del proceso de Node. Si algún día el backend corre en varios procesos, hará falta un bus compartido (por ejemplo Redis pub/sub).
+
 **Rutas nuevas:**
 
 | Pública (sin sesión) | Con sesión |
@@ -262,13 +271,14 @@ Cada usuario puede publicar su **página de citas**: `agendaservi.com/agenda/<en
 **Dónde está cada parte:**
 - **Web:** `frontend/src/reservas/`, rutas `/agenda/<slug>` y `/cita/<token>`.
 - **App:** pestaña **Citas** y `/agenda/<slug>`.
-- **Backend:** `backend/lib/agenda/`.
+- **Backend:** `backend/lib/agenda/` y `backend/lib/tiempoReal.ts`.
 - **Cron:** `cron/citas.js`.
 
 **Pruebas:**
-- `backend/lib/agenda/*.test.ts`: disponibilidad y rutas de extremo a extremo contra **MariaDB real** en Actions.
+- `backend/lib/agenda/*.test.ts`: disponibilidad y rutas de extremo a extremo contra **MariaDB real** en Actions, incluidos los eventos en vivo que genera cada cambio.
+- `backend/lib/tiempoReal.test.ts`: canal SSE real (sesión, eventos por usuario, cierre).
 - `cron/citas.test.js`.
-- `mobile/test/citas_test.dart`.
+- `mobile/test/citas_test.dart` y `mobile/test/tiempo_real_test.dart`.
 
 **Para publicarlo:** despliega `backend/` (y define `WEB_BASE_URL=https://agendaservi.com` si el dominio es otro), `cron/` y el build de `frontend/`.
 

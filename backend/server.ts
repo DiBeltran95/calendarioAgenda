@@ -10,6 +10,7 @@ import path from 'path';
 import { generateExcelReport } from './lib/excelService';
 import { validarFechaCiclo, validarDiasSangrado, normalizarDiasSangrado } from './lib/cycleValidation';
 import { migrarAgenda, registrarAgenda } from './lib/agenda/rutas';
+import { registrarTiempoReal } from './lib/tiempoReal';
 
 dotenv.config();
 
@@ -322,6 +323,9 @@ server.decorate('authenticate', async (request: any, reply: any) => {
         reply.send(err);
     }
 });
+
+// --- TIEMPO REAL (SSE): la app recibe los cambios al instante ---
+registrarTiempoReal(server);
 
 // --- AGENDAMIENTO DE CITAS (lib/agenda) ---
 registrarAgenda(server, {

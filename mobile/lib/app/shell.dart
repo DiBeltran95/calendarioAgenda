@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/motion.dart';
+import '../core/net/tiempo_real.dart';
 import '../core/providers.dart';
 import '../data/sync.dart';
+import '../features/citas/citas_en_vivo.dart';
 import '../features/notifications/notification_service.dart';
 import '../features/notifications/push_registro.dart';
 import '../features/notifications/refresco_fondo.dart';
@@ -45,11 +47,17 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   void initState() {
     super.initState();
-    _ciclo = AppLifecycleListener(onResume: () {
-      ref.read(sincronizadorProvider).refrescarTodo();
-      ref.read(permisoAvisosProvider.notifier).revisar();
-      ref.read(registroPushProvider).sincronizar();
-    });
+    _ciclo = AppLifecycleListener(
+      onResume: () {
+        ref.read(sincronizadorProvider).refrescarTodo();
+        ref.read(permisoAvisosProvider.notifier).revisar();
+        ref.read(registroPushProvider).sincronizar();
+        // Reabre el canal en vivo (y sincroniza lo que llegó mientras tanto).
+        ref.read(tiempoRealProvider).reanudar();
+      },
+      // En segundo plano no se mantiene la conexión: allí avisan los push.
+      onPause: () => ref.read(tiempoRealProvider).pausar(),
+    );
   }
 
   @override
@@ -62,6 +70,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     HapticFeedback.selectionClick();
     final m = _destinos[i].module;
     if (m != null) ref.read(moduloActivoProvider.notifier).set(m);
+    // Al entrar a Citas se trae lo último (por si el canal en vivo se perdió algo).
+    if (m == AppModule.citas) ref.read(citasEnVivoProvider).refrescar();
     widget.shell.goBranch(i, initialLocation: i == widget.shell.currentIndex);
   }
 
@@ -71,6 +81,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     ref.watch(programadorAvisosProvider);
     ref.watch(sincronizadorPushProvider);
     ref.watch(refrescoFondoProvider);
+    // Cambios en vivo del servidor (citas nuevas o canceladas al instante).
+    ref.watch(canalVivoProvider);
+    ref.watch(citasEnVivoProvider);
 
     final shell = widget.shell;
     final m = _destinos[shell.currentIndex].module;

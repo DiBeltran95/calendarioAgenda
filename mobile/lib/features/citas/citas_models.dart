@@ -337,7 +337,11 @@ class CitaAgenda {
     required this.negocioColor,
     required this.rol,
     this.motivoCancelacion,
+    this.creado,
   });
+
+  /// Minutos que una reserva sin confirmar aparta el turno (igual que el servidor).
+  static const minutosCodigo = 15;
 
   final int id;
   final String token;
@@ -366,6 +370,19 @@ class CitaAgenda {
   final String rol;
   final String? motivoCancelacion;
 
+  /// Cuándo se pidió (UTC). Con él la app sabe cuándo vence una reserva sin
+  /// confirmar sin tener que preguntarle al servidor.
+  final DateTime? creado;
+
+  /// Momento en que una reserva pendiente deja de apartar el turno.
+  DateTime? get vence => estado == EstadoCita.pendiente ? creado?.add(const Duration(minutes: minutosCodigo)) : null;
+
+  /// La misma cita con el estado al día: una pendiente vencida pasa a "Sin confirmar".
+  CitaAgenda vigente([DateTime? ahora]) {
+    final v = vence;
+    return v != null && !v.isAfter(ahora ?? DateTime.now().toUtc()) ? copyWith(estado: EstadoCita.expirada) : this;
+  }
+
   CitaAgenda copyWith({EstadoCita? estado}) => CitaAgenda(
         id: id,
         token: token,
@@ -389,6 +406,7 @@ class CitaAgenda {
         negocioColor: negocioColor,
         rol: rol,
         motivoCancelacion: motivoCancelacion,
+        creado: creado,
       );
 
   factory CitaAgenda.fromJson(Map<String, dynamic> j) => CitaAgenda(
@@ -414,7 +432,8 @@ class CitaAgenda {
         negocioColor: colorDesdeHex(j['negocio_color'], fallback: 0xFF2563EB),
         rol: asString(j['rol'], fallback: 'dueno'),
         motivoCancelacion: asStringOrNull(j['motivo_cancelacion']),
-      );
+        creado: DateTime.tryParse(asString(j['creado']))?.toUtc(),
+      ).vigente();
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -439,6 +458,7 @@ class CitaAgenda {
         'negocio_color': colorAHex(negocioColor),
         'rol': rol,
         'motivo_cancelacion': motivoCancelacion,
+        'creado': creado?.toIso8601String(),
       };
 }
 

@@ -5,6 +5,7 @@
 // 401 de @fastify/jwt. Se conecta a Dio como HttpClientAdapter, así las
 // pruebas ejercitan el cliente real sin tocar la red.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -69,6 +70,59 @@ class FakeBackend implements HttpClientAdapter {
   /// Simula que el servidor no responde (error de conexión).
   bool caido = false;
 
+  // ── Tiempo real (imita backend/lib/tiempoReal.ts) ──
+
+  /// Conexiones abiertas a /api/tiempo-real por usuario.
+  final vivos = <int, List<StreamController<Uint8List>>>{};
+
+  /// Simula un servidor sin la ruta de tiempo real (404).
+  bool sinTiempoReal = false;
+
+  int conexionesVivas([int? uid]) => uid == null ? vivos.values.fold(0, (n, l) => n + l.length) : (vivos[uid]?.length ?? 0);
+
+  /// Envía un evento SSE a las conexiones abiertas del usuario.
+  void emitir(int? uid, String evento, Object datos) {
+    for (final c in [...?vivos[uid]]) {
+      c.add(Uint8List.fromList(utf8.encode('id: ${_id()}\nevent: $evento\ndata: ${jsonEncode(datos)}\n\n')));
+    }
+  }
+
+  /// Envía un latido (comentario SSE).
+  void latido() {
+    for (final l in vivos.values) {
+      for (final c in [...l]) {
+        c.add(Uint8List.fromList(utf8.encode(': latido\n\n')));
+      }
+    }
+  }
+
+  /// Corta todas las conexiones en vivo (como una caída de la red).
+  Future<void> cortarVivos() async {
+    final todas = [for (final l in vivos.values) ...l];
+    vivos.clear();
+    for (final c in todas) {
+      await c.close();
+    }
+  }
+
+  ResponseBody _tiempoReal(RequestOptions o, Future<void>? cancelFuture) {
+    final uid = _usuario(o.headers['Authorization']?.toString());
+    if (uid == null || sinTiempoReal) {
+      return ResponseBody.fromString(jsonEncode({'message': uid == null ? 'Unauthorized' : 'Route GET:/api/tiempo-real not found'}), uid == null ? 401 : 404,
+          headers: {Headers.contentTypeHeader: [Headers.jsonContentType]});
+    }
+    final c = StreamController<Uint8List>();
+    (vivos[uid] ??= []).add(c);
+    void quitar() => vivos[uid]?.remove(c);
+    c.onCancel = quitar;
+    cancelFuture?.whenComplete(() {
+      quitar();
+      unawaited(c.close());
+    });
+    c.add(Uint8List.fromList(utf8.encode('retry: 5000\n\nevent: hola\ndata: {"latido":25000}\n\n')));
+    return ResponseBody(c.stream, 200, headers: {Headers.contentTypeHeader: ['text/event-stream; charset=utf-8']});
+  }
+
   int _seq = 100;
   int _id() => ++_seq;
 
@@ -83,6 +137,7 @@ class FakeBackend implements HttpClientAdapter {
       throw DioException.connectionError(requestOptions: o, reason: 'servidor caído');
     }
     log.add('${o.method} ${o.path}');
+    if (o.method == 'GET' && o.path == '/api/tiempo-real') return _tiempoReal(o, cancelFuture);
     final body = o.data is Map ? Map<String, dynamic>.from(o.data as Map) : <String, dynamic>{};
     final r = _rutear(o.method, o.path, o.queryParameters, body, o.headers['Authorization']?.toString());
     return ResponseBody.fromString(jsonEncode(r.body), r.status, headers: {

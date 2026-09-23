@@ -71,6 +71,15 @@ mixin CacheRed<T> on AsyncNotifier<T> {
     }
   }
 
+  /// Muestra un valor ya conocido (p. ej. llegado en vivo) y lo guarda en caché.
+  void fijar(T valor) {
+    if (!ref.mounted) return;
+    state = AsyncData(valor);
+    final uid = ref.read(usuarioIdProvider);
+    if (uid == 0) return;
+    unawaited(ref.read(databaseProvider).escribirCache(_clave, jsonEncode(serializar(valor))).catchError((Object _) {}));
+  }
+
   /// Pide la versión fresca; si falla se conserva lo que ya se mostraba.
   Future<void> refrescar() async {
     if (!ref.mounted || ref.read(usuarioIdProvider) == 0) return;
