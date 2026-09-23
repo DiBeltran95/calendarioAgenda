@@ -52,6 +52,28 @@ Del backend solo usa los endpoints de la web, más `POST /api/dispositivos` y `P
 - Motor del ciclo idéntico al de la web: fases, periodo previsto, retraso, ventana fértil y ovulación. Incluye una rueda animada.
 - **Registro diario** de flujo, ánimo y síntomas. Es un extra de la app: se guarda **solo en el teléfono**, separado por usuario, porque el backend no tiene ese endpoint.
 
+### 🗓️ Citas (agendamiento)
+- **Tu página de citas:** un asistente de 4 pasos:
+  1. independiente o con equipo;
+  2. nombre, enlace verificado al instante, rubro y color;
+  3. primer servicio sugerido por el rubro;
+  4. horario con plantillas.
+- **Compartir:** la tarjeta del enlace permite compartir (WhatsApp, Instagram…), copiar o mostrar un **código QR** con el color de la marca.
+- **Agenda:**
+  - resumen de hoy, la semana e ingresos estimados;
+  - próxima cita;
+  - tira de 3 semanas con un punto por cita;
+  - línea de tiempo del día con el color de cada profesional.
+- **En cada cita:** escribir al cliente por WhatsApp, marcar **Asistió / No asistió** (con deshacer) o **cancelar** (se le avisa por WhatsApp).
+- **Nueva cita** a mano, para quien llama o llega: sugiere las horas libres, permite otra hora y avisa si hay choque.
+- **Ajustes de citas:**
+  - datos y reglas de la página: anticipación, ventana, intervalo, respetar tu calendario, pausar;
+  - servicios;
+  - equipo, con cuenta vinculada o solo WhatsApp, y el horario de cada uno;
+  - tiempo bloqueado.
+- **Reservar desde la app:** los enlaces `agendaservi.com/agenda/<slug>` y `agendaservi://app/agenda/<slug>` abren la reserva en la app, con tu nombre y WhatsApp ya llenos. La reserva queda en **Mis reservas**.
+- Las citas confirmadas también aparecen en el calendario de eventos, con sus recordatorios.
+
 ### 💳 Control financiero
 - **Cuentas y tarjetas:**
   - Ahorros y corriente (tarjeta débito) y efectivo.
@@ -114,6 +136,11 @@ Los avisos locales siguen las **mismas reglas y los mismos textos** del cron (`l
   - pedir permiso;
   - enviar una notificación de prueba.
 - En Android se usan alarmas exactas cuando el sistema lo permite, y los avisos sobreviven al reinicio del teléfono.
+
+## Navegación
+- **Barra inferior** con 5 módulos: Hoy, Eventos, Citas, Finanzas y Ciclo (el máximo recomendado).
+- **Perfil y ajustes** se abren desde el avatar en la esquina de cada módulo, como una pantalla que se desliza.
+- **Botones flotantes** (Nuevo evento, Movimiento, Registrar periodo, Nueva cita): al entrar al módulo muestran su texto con un destello y luego se recogen al ícono. Si los mantienes presionados, se vuelven a desplegar.
 
 ## Sin conexión y sincronización
 - **Primero la caché:** cada pantalla muestra al instante la última copia guardada y la actualiza desde el servidor en segundo plano.
@@ -203,6 +230,8 @@ Las pruebas **nunca tocan el servidor real**, así que no crean cuentas ni enví
 |---|---|
 | `api_test` | Sesión, 401, verificación, caché sin conexión, series, pagos, cuotas, transferencias, metas, presupuestos y ciclos |
 | `push_test` | Registro del teléfono y preferencias, paso de avisos locales a push del servidor, token renovado, baja al cerrar sesión, refresco en segundo plano |
+| `citas_test` | Página de citas, servicios, equipo, bloqueos, citas a mano y estados; reserva con código; asistente completo y reserva desde la app (interfaz) |
+| `fab_animado_test` | Botón flotante que se despliega y se recoge |
 | `planner_test` | Avisos del teléfono con las reglas del cron: 30 min, resumen de las 7:00, puentes festivos, CDT, límite de iOS |
 | `app_smoke_test` | Recorre la app completa en teléfono, tablet y modo claro con texto al 130 %, más los flujos de login y registro con código. Falla ante cualquier excepción o desbordamiento |
 | `cycle_engine_test`, `holidays_test` | Motor del ciclo y festivos de Colombia |

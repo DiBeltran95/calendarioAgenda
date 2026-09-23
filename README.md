@@ -219,6 +219,61 @@ El backend crea la tabla `dispositivos_push` al arrancar (el cron también, si a
 
 ---
 
+## 📅 Agendamiento de citas
+
+Cada usuario puede publicar su **página de citas**: `agendaservi.com/agenda/<enlace>`. Cualquier persona agenda ahí sin crear cuenta. Si tiene la app instalada, el enlace abre la reserva dentro de la app.
+
+**Referencias de diseño:** Cal.com y Calendly (enlace, QR, "añadir a calendario") y Fresha / Booksy (servicios, profesionales, horas por franja, barra inferior fija).
+
+**Tipos de página:**
+- **Profesional independiente** (psicólogos, entrenadores, consultores…): el dueño atiende con su propio horario.
+- **Negocio con equipo** (peluquerías, spas, clínicas…): cada profesional tiene su horario y sus servicios. Puede ser:
+  - una **cuenta de Agendaservi vinculada por correo**: recibe sus citas en la app y se cruzan con su calendario;
+  - **solo un número de WhatsApp**: le avisamos por WhatsApp.
+
+**Servicios:** cada uno tiene nombre, duración y precio. Esa duración es la que se marca como ocupada en el calendario público.
+
+**Flujo del cliente:** servicio → profesional ("cualquiera" primero) → fecha y hora → nombre y WhatsApp → **código de 6 dígitos por WhatsApp** (o tocar el enlace del mensaje) → confirmada. Después puede añadirla a Google Calendar, Outlook o Apple (.ics), o cancelarla desde su enlace.
+
+**Reglas:**
+- **Nunca hay dobles reservas.** La reserva bloquea al profesional (`SELECT … FOR UPDATE` con `READ COMMITTED`) y recalcula la disponibilidad dentro de la transacción.
+- **Qué ocupa el horario:** citas confirmadas, reservas pendientes (15 min), bloqueos (vacaciones, horas libres) y, si el negocio lo activa, los eventos con hora del calendario personal del profesional (1 h cada uno).
+- **Qué define el negocio:** anticipación mínima, hasta cuántos días adelante se puede agendar, intervalo de los turnos (10–60 min) y pausar la página.
+
+**Avisos:**
+- **Cliente:** código y confirmación por WhatsApp, recordatorio **2 h antes** y aviso si el negocio cancela.
+- **Dueño y profesionales con la app:** notificación en la app al instante por cada cita nueva o cancelada (`push_cola` → cron → FCM). Si no tienen push, les llega por WhatsApp.
+- **Calendario del profesional:** la cita confirmada aparece como **evento**, así le llegan los recordatorios de siempre.
+
+**Rutas nuevas:**
+
+| Pública (sin sesión) | Con sesión |
+|---|---|
+| `GET /api/public/agenda/:slug` | `GET /api/agenda` (configuración) · `GET /api/agenda/slug` |
+| `GET /api/public/agenda/:slug/disponibilidad` | `PUT /api/agenda/negocio` |
+| `POST /api/public/agenda/:slug/reservas` | `POST/PUT/DELETE /api/agenda/servicios[/:id]` |
+| `GET /api/public/agenda/citas/:token` | `POST/PUT/DELETE /api/agenda/profesionales[/:id]` |
+| `POST /api/public/agenda/citas/:token/confirmar` | `POST/DELETE /api/agenda/bloqueos[/:id]` |
+| `POST /api/public/agenda/citas/:token/reenviar` | `GET/POST /api/agenda/citas` · `PUT /api/agenda/citas/:id` |
+| `POST /api/public/agenda/citas/:token/cancelar` | `GET /api/agenda/mis-reservas` |
+
+**Tablas:** `agenda_negocios`, `agenda_profesionales`, `agenda_servicios`, `agenda_servicio_profesional`, `agenda_horarios`, `agenda_bloqueos`, `agenda_citas`, `push_cola` y la columna `eventos.cita_id`. **El backend las crea solo al arrancar.**
+
+**Dónde está cada parte:**
+- **Web:** `frontend/src/reservas/`, rutas `/agenda/<slug>` y `/cita/<token>`.
+- **App:** pestaña **Citas** y `/agenda/<slug>`.
+- **Backend:** `backend/lib/agenda/`.
+- **Cron:** `cron/citas.js`.
+
+**Pruebas:**
+- `backend/lib/agenda/*.test.ts`: disponibilidad y rutas de extremo a extremo contra **MariaDB real** en Actions.
+- `cron/citas.test.js`.
+- `mobile/test/citas_test.dart`.
+
+**Para publicarlo:** despliega `backend/` (y define `WEB_BASE_URL=https://agendaservi.com` si el dominio es otro), `cron/` y el build de `frontend/`.
+
+---
+
 ## 📌 Funcionalidades
 
 - Registro con verificación por código de WhatsApp y login con JWT.

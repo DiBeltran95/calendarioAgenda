@@ -1,3 +1,4 @@
+import 'boton_perfil.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/theme/palette.dart';
@@ -154,9 +155,14 @@ class Tag extends StatelessWidget {
             Icon(icon, size: 13, color: filled ? context.palette.onAccent : c),
             const SizedBox(width: 3),
           ],
-          Text(
-            label,
-            style: context.text.labelSmall?.copyWith(color: filled ? context.palette.onAccent : c, letterSpacing: 0.2),
+          // Si no cabe (texto grande, espacio estrecho) se recorta con "…".
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.text.labelSmall?.copyWith(color: filled ? context.palette.onAccent : c, letterSpacing: 0.2),
+            ),
           ),
         ],
       ),
@@ -207,11 +213,14 @@ class StatTile extends StatelessWidget {
 
 /// Cabecera grande de cada módulo: saludo, título y acciones.
 class ModuleHeader extends StatelessWidget {
-  const ModuleHeader({super.key, required this.title, this.overline, this.actions = const []});
+  const ModuleHeader({super.key, required this.title, this.overline, this.actions = const [], this.perfil = true});
 
   final String title;
   final String? overline;
   final List<Widget> actions;
+
+  /// Muestra el avatar que abre Perfil (todas las cabeceras menos la propia).
+  final bool perfil;
 
   @override
   Widget build(BuildContext context) {
@@ -232,6 +241,7 @@ class ModuleHeader extends StatelessWidget {
             ),
           ),
           ...actions,
+          if (perfil) ...[const HGap.xs(), const Padding(padding: EdgeInsets.only(bottom: 2), child: BotonPerfil())],
         ],
       ),
     );

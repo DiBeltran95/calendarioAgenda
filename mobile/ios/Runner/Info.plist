@@ -52,6 +52,20 @@
 			</array>
 		</dict>
 	</dict>
+	<!-- Enlaces de reserva: agendaservi://app/agenda/<slug> -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.agendaservi.agendaservi</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>agendaservi</string>
+			</array>
+		</dict>
+	</array>
+	<key>FlutterDeepLinkingEnabled</key>
+	<true/>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.agendaservi.refrescar-avisos</string>

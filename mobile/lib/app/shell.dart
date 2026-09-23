@@ -23,11 +23,7 @@ class _Destino {
 
 /// Orden de las pestañas (coincide con las ramas del router).
 final _destinos = [
-  _Destino(AppModule.inicio.label, AppModule.inicio.icon, AppModule.inicio.iconSelected, AppModule.inicio),
-  _Destino(AppModule.eventos.label, AppModule.eventos.icon, AppModule.eventos.iconSelected, AppModule.eventos),
-  _Destino(AppModule.finanzas.label, AppModule.finanzas.icon, AppModule.finanzas.iconSelected, AppModule.finanzas),
-  _Destino(AppModule.ciclo.label, AppModule.ciclo.icon, AppModule.ciclo.iconSelected, AppModule.ciclo),
-  const _Destino('Perfil', Icons.person_outline_rounded, Icons.person_rounded, null),
+  for (final m in [AppModule.inicio, AppModule.eventos, AppModule.citas, AppModule.finanzas, AppModule.ciclo]) _Destino(m.label, m.icon, m.iconSelected, m),
 ];
 
 /// Contenedor principal: navegación inferior en teléfono y riel lateral en

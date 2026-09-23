@@ -35,6 +35,16 @@ enum AppModule {
     secondaryDark: Color(0xFFA78BFA),
     secondaryLight: Color(0xFF7C3AED),
   ),
+  citas(
+    label: 'Citas',
+    titulo: 'Agenda de citas',
+    icon: Icons.book_online_outlined,
+    iconSelected: Icons.book_online_rounded,
+    accentDark: Color(0xFFA78BFA),
+    accentLight: Color(0xFF6D28D9),
+    secondaryDark: Color(0xFF60A5FA),
+    secondaryLight: Color(0xFF2563EB),
+  ),
   finanzas(
     label: 'Finanzas',
     titulo: 'Control financiero',

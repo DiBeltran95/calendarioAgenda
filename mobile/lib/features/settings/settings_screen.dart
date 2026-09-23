@@ -30,7 +30,6 @@ class SettingsScreen extends ConsumerWidget {
     var i = 0;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: SafeArea(
         bottom: false,
         child: Center(
@@ -39,7 +38,15 @@ class SettingsScreen extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(Gap.md, Gap.xs, Gap.md, Gap.xxxl),
               children: [
-                const ModuleHeader(overline: 'Tu cuenta', title: 'Perfil'),
+                ModuleHeader(
+                  overline: 'Tu cuenta',
+                  title: 'Perfil',
+                  perfil: false,
+                  actions: [
+                    if (Navigator.of(context).canPop())
+                      IconButton(tooltip: 'Cerrar', onPressed: () => Navigator.of(context).maybePop(), icon: const Icon(Icons.close_rounded)),
+                  ],
+                ),
                 // ── Perfil ──
                 Entrance(
                   index: i++,

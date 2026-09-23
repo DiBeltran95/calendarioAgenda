@@ -23,8 +23,14 @@ Future<void> main() async {
 
   final container = ProviderContainer();
 
-  /// Al tocar una notificación se abre el calendario en ese día.
+  /// Al tocar una notificación se abre el calendario en ese día (o la
+  /// agenda de citas, si el aviso es de una reserva).
   void abrirDia(String payload) {
+    if (payload == 'citas' || payload.startsWith('cita:')) {
+      container.read(rutaPendienteProvider.notifier).set('/citas');
+      container.read(routerProvider).go('/citas');
+      return;
+    }
     final fecha = fechaDePayload(payload);
     if (fecha == null) return;
     container.read(mesEventosProvider.notifier).ir(parseYmd(fecha));

@@ -12,6 +12,7 @@ import '../../core/money.dart';
 import '../../core/motion.dart';
 import '../../core/providers.dart';
 import '../../core/session.dart';
+import '../../core/widgets/boton_perfil.dart';
 import '../../core/widgets/ui.dart';
 import '../../data/models.dart';
 import '../../data/sync.dart';
@@ -157,23 +158,7 @@ class _Cabecera extends StatelessWidget {
               ],
             ),
           ),
-          Semantics(
-            button: true,
-            label: 'Perfil y ajustes',
-            child: Pressable(
-              onTap: () => context.go('/perfil'),
-              child: Container(
-                width: 48,
-                height: 48,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(colors: [p.accent, p.accent2]),
-                ),
-                child: Text(usuario?.iniciales ?? '', style: context.text.titleMedium?.copyWith(color: p.onAccent, fontWeight: FontWeight.w800)),
-              ),
-            ),
-          ),
+          const BotonPerfil(size: 48),
         ],
       ),
     );

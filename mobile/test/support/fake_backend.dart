@@ -11,7 +11,10 @@ import 'dart:typed_data';
 
 import 'package:agendaservi/features/events/events_repository.dart' show fechaOcurrencia, maxOcurrencias;
 import 'package:agendaservi/features/finance/finance_logic.dart' show cobrosTarjeta, esCredito;
+import 'package:agendaservi/core/dates.dart' show sumarDiasYmd;
 import 'package:dio/dio.dart';
+
+part 'fake_agenda.dart';
 
 String _dec(num v) => v.toDouble().toStringAsFixed(2);
 
@@ -50,6 +53,7 @@ class FakeBackend implements HttpClientAdapter {
   final presupuestos = <Map<String, dynamic>>[];
   final categorias = <Map<String, dynamic>>[];
   final dispositivos = <Map<String, dynamic>>[];
+  late final agenda = FakeAgenda(this);
 
   /// Lo que hace el cron al entregar la notificación de bienvenida.
   void confirmarBienvenidas() {
@@ -100,6 +104,9 @@ class FakeBackend implements HttpClientAdapter {
     if (m == 'POST' && path == '/api/register/verify') return _verificar(b);
     if (m == 'POST' && path == '/api/register/resend-code') return const _Resp(200, {'message': 'Nuevo código de verificación enviado'});
 
+    final segPub = path.split('/').where((s) => s.isNotEmpty).toList();
+    if (path.startsWith('/api/public/agenda/')) return agenda._publica(m, segPub, q, b, _usuario(auth));
+
     final uid = _usuario(auth);
     if (uid == null) {
       return const _Resp(401, {'statusCode': 401, 'code': 'FST_JWT_NO_AUTHORIZATION_IN_HEADER', 'error': 'Unauthorized', 'message': 'No Authorization was found in request.headers'});
@@ -108,6 +115,7 @@ class FakeBackend implements HttpClientAdapter {
     int? idEn(int i) => seg.length > i ? int.tryParse(seg[i]) : null;
     List<Map<String, dynamic>> de(List<Map<String, dynamic>> t) => t.where((r) => r['user_id'] == uid).toList();
 
+    if (seg.length > 1 && seg[1] == 'agenda') return agenda._privada(m, seg, q, b, uid);
     switch ((m, seg.length > 1 ? seg[1] : '')) {
       case ('GET', 'dashboard') when seg[2] == 'bootstrap':
         return _Resp(200, {

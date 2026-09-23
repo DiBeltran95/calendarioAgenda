@@ -35,10 +35,10 @@ final redProvider = NotifierProvider<RedNotifier, EstadoRed>(RedNotifier.new);
 
 /// Sin reintentos automáticos de Riverpod: la caché cubre los fallos y el
 /// usuario puede reintentar (arrastrar para refrescar o el aviso sin conexión).
-Duration? _sinReintento(int _, Object _) => null;
+Duration? sinReintento(int _, Object _) => null;
 
 /// Base común: lee la caché, pide al servidor y guarda la respuesta.
-mixin _CacheRed<T> on AsyncNotifier<T> {
+mixin CacheRed<T> on AsyncNotifier<T> {
   String get claveCache;
   Future<Object?> pedir();
   T parsear(Object? json);
@@ -85,7 +85,7 @@ mixin _CacheRed<T> on AsyncNotifier<T> {
 
 // ─────────────────────────── Bootstrap ───────────────────────────
 
-class BootstrapNotifier extends AsyncNotifier<Bootstrap> with _CacheRed<Bootstrap> {
+class BootstrapNotifier extends AsyncNotifier<Bootstrap> with CacheRed<Bootstrap> {
   @override
   String get claveCache => 'bootstrap';
 
@@ -105,11 +105,11 @@ class BootstrapNotifier extends AsyncNotifier<Bootstrap> with _CacheRed<Bootstra
   }
 }
 
-final bootstrapProvider = AsyncNotifierProvider<BootstrapNotifier, Bootstrap>(BootstrapNotifier.new, retry: _sinReintento);
+final bootstrapProvider = AsyncNotifierProvider<BootstrapNotifier, Bootstrap>(BootstrapNotifier.new, retry: sinReintento);
 
 // ─────────────────────────── Mes ───────────────────────────
 
-class MonthNotifier extends AsyncNotifier<MonthData> with _CacheRed<MonthData> {
+class MonthNotifier extends AsyncNotifier<MonthData> with CacheRed<MonthData> {
   MonthNotifier(this.clave);
   final (int, int) clave;
 
@@ -145,12 +145,12 @@ class MonthNotifier extends AsyncNotifier<MonthData> with _CacheRed<MonthData> {
 }
 
 final monthProvider =
-    AsyncNotifierProvider.autoDispose.family<MonthNotifier, MonthData, (int, int)>(MonthNotifier.new, retry: _sinReintento);
+    AsyncNotifierProvider.autoDispose.family<MonthNotifier, MonthData, (int, int)>(MonthNotifier.new, retry: sinReintento);
 
 // ─────────────────────────── Presupuestos (todos) ───────────────────────────
 
 /// Todos los presupuestos: permiten "arrastrar" el límite de un mes al siguiente.
-class PresupuestosNotifier extends AsyncNotifier<List<Presupuesto>> with _CacheRed<List<Presupuesto>> {
+class PresupuestosNotifier extends AsyncNotifier<List<Presupuesto>> with CacheRed<List<Presupuesto>> {
   @override
   String get claveCache => 'presupuestos';
 
@@ -171,11 +171,11 @@ class PresupuestosNotifier extends AsyncNotifier<List<Presupuesto>> with _CacheR
 }
 
 final presupuestosProvider =
-    AsyncNotifierProvider<PresupuestosNotifier, List<Presupuesto>>(PresupuestosNotifier.new, retry: _sinReintento);
+    AsyncNotifierProvider<PresupuestosNotifier, List<Presupuesto>>(PresupuestosNotifier.new, retry: sinReintento);
 
 // ─────────────────────────── Analítica ───────────────────────────
 
-class AnaliticaNotifier extends AsyncNotifier<List<Transaccion>> with _CacheRed<List<Transaccion>> {
+class AnaliticaNotifier extends AsyncNotifier<List<Transaccion>> with CacheRed<List<Transaccion>> {
   AnaliticaNotifier(this.dias);
   final int dias;
 
@@ -201,11 +201,11 @@ class AnaliticaNotifier extends AsyncNotifier<List<Transaccion>> with _CacheRed<
 }
 
 final analiticaProvider =
-    AsyncNotifierProvider.autoDispose.family<AnaliticaNotifier, List<Transaccion>, int>(AnaliticaNotifier.new, retry: _sinReintento);
+    AsyncNotifierProvider.autoDispose.family<AnaliticaNotifier, List<Transaccion>, int>(AnaliticaNotifier.new, retry: sinReintento);
 
 // ─────────────────────────── Días importantes ───────────────────────────
 
-class DiasImportantesNotifier extends AsyncNotifier<List<DiaImportante>> with _CacheRed<List<DiaImportante>> {
+class DiasImportantesNotifier extends AsyncNotifier<List<DiaImportante>> with CacheRed<List<DiaImportante>> {
   DiasImportantesNotifier(this.anio);
   final int anio;
 
@@ -234,7 +234,7 @@ class DiasImportantesNotifier extends AsyncNotifier<List<DiaImportante>> with _C
 }
 
 final diasImportantesProvider =
-    AsyncNotifierProvider.family<DiasImportantesNotifier, List<DiaImportante>, int>(DiasImportantesNotifier.new, retry: _sinReintento);
+    AsyncNotifierProvider.family<DiasImportantesNotifier, List<DiaImportante>, int>(DiasImportantesNotifier.new, retry: sinReintento);
 
 /// Día importante en una fecha (con los datos del servidor del año).
 DiaImportante? diaImportanteEn(List<DiaImportante> lista, String fecha) {
@@ -258,6 +258,7 @@ class Sincronizador {
     final tareas = <Future<void>>[];
     if (meses) {
       await (db.delete(db.cacheEntries)..where((c) => c.clave.like('u$uid:mes:%') | c.clave.like('u$uid:analitica:%'))).go();
+      if (!_ref.mounted) return;
       for (final k in MonthNotifier.activos.toList()) {
         tareas.add(_ref.read(monthProvider(k).notifier).refrescar());
       }

@@ -8,12 +8,14 @@ import 'package:agendaservi/app/theme/app_theme.dart';
 import 'package:agendaservi/core/dates.dart';
 import 'package:agendaservi/core/providers.dart';
 import 'package:agendaservi/core/session.dart';
+import 'package:agendaservi/features/citas/citas_repository.dart';
 import 'package:agendaservi/features/cycle/cycle_repository.dart';
 import 'package:agendaservi/features/events/events_repository.dart';
 import 'package:agendaservi/features/finance/finance_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'support/fake_backend.dart';
@@ -46,6 +48,24 @@ Future<void> _sembrar(FakeBackend backend) async {
   await fi.crearMeta(const MetaInput(nombre: 'Viaje', montoObjetivo: 2000000, montoActual: 500000));
   final ahora = DateTime.now();
   await fi.guardarPresupuesto(categoria: 'comida', limite: 400000, mes: ahora.month, anio: ahora.year);
+
+  // Página de citas con un servicio y una cita hoy (agendada a mano).
+  c.listen(configAgendaProvider, (_, _) {});
+  c.listen(citasAgendaProvider, (_, _) {});
+  await c.read(configAgendaProvider.future);
+  final ag = c.read(agendaRepoProvider);
+  await ag.guardarNegocio({'nombre': 'Consultorio Diego Beltrán', 'slug': 'consultorio-diego', 'tipo': 'profesional'});
+  await ag.guardarServicio({'nombre': 'Consulta psicológica de seguimiento', 'duracion_min': 60, 'precio': 120000});
+  final cfg = c.read(configAgendaProvider).value!;
+  await ag.crearCita({
+    'servicio_id': cfg.servicios.single.id,
+    'profesional_id': cfg.profesionales.single.id,
+    'fecha': hoy,
+    'hora': '07:00',
+    'cliente_nombre': 'María Fernanda Rodríguez',
+    'cliente_whatsapp': '573001112233',
+    'forzar': true,
+  });
   c.dispose();
 }
 
@@ -133,9 +153,30 @@ void main() {
       expect(find.text('DÍA'), findsOneWidget);
       await verEn(t, find.text('Historial de ciclos'));
 
-      // ── Perfil ──
-      await t.tap(find.text('Perfil').last);
+      // ── Citas ──
+      await t.tap(find.text('Citas').last);
       await esperar(t);
+      expect(find.text('Tu página para agendar'), findsOneWidget);
+      await verEn(t, find.text('María Fernanda Rodríguez'));
+      await t.tap(find.text('María Fernanda Rodríguez'));
+      await esperar(t);
+      expect(find.text('Escribir por WhatsApp', skipOffstage: false), findsNothing); // tooltip, no texto
+      expect(find.byTooltip('Escribir por WhatsApp'), findsOneWidget);
+      await t.tap(find.byTooltip('Cerrar').last);
+      await esperar(t);
+      final vertical = find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down);
+      await t.scrollUntilVisible(find.byTooltip('Ajustes de citas'), -300, scrollable: vertical.last, maxScrolls: 40);
+      await esperar(t, 4);
+      await t.tap(find.byTooltip('Ajustes de citas'));
+      await esperar(t, 16);
+      expect(find.text('Ajustes de citas'), findsOneWidget);
+      await verEn(t, find.text('Tiempo bloqueado'));
+      GoRouter.of(t.element(find.text('Ajustes de citas'))).pop();
+      await esperar(t);
+
+      // ── Perfil (desde el avatar) ──
+      await t.tap(find.byTooltip('Perfil').last);
+      await esperar(t, 16);
       expect(find.text('diego@test.co'), findsOneWidget);
       await verEn(t, find.text('Cerrar sesión'));
 

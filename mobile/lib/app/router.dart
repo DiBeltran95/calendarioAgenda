@@ -5,6 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../core/motion.dart';
 import '../core/session.dart';
 import '../features/auth/auth_screens.dart';
+import '../features/citas/ajustes_agenda_screen.dart';
+import '../features/citas/citas_screen.dart';
+import '../features/citas/crear_pagina_screen.dart';
+import '../features/citas/reservar_screen.dart';
 import '../features/cycle/cycle_screen.dart';
 import '../features/events/events_screen.dart';
 import '../features/finance/finance_screen.dart';
@@ -47,7 +51,40 @@ CustomTransitionPage<void> _eje(Widget child, GoRouterState s) => CustomTransiti
       },
     );
 
+/// Pantalla que se apila sobre la actual deslizándose desde la derecha.
+CustomTransitionPage<void> _deslizar(Widget child, GoRouterState s) => CustomTransitionPage(
+      key: s.pageKey,
+      child: child,
+      transitionDuration: const Duration(milliseconds: 380),
+      reverseTransitionDuration: const Duration(milliseconds: 260),
+      transitionsBuilder: (context, a, sa, c) {
+        final entra = CurvedAnimation(parent: a, curve: Motion.enter, reverseCurve: Motion.exit);
+        return FadeTransition(
+          opacity: Tween(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: a, curve: const Interval(0, 0.6))),
+          child: SlideTransition(position: Tween(begin: const Offset(0.12, 0), end: Offset.zero).animate(entra), child: c),
+        );
+      },
+    );
+
+/// Pantalla que sube desde abajo (flujos de creación y reserva).
+CustomTransitionPage<void> _subir(Widget child, GoRouterState s) => CustomTransitionPage(
+      key: s.pageKey,
+      child: child,
+      transitionDuration: const Duration(milliseconds: 420),
+      reverseTransitionDuration: const Duration(milliseconds: 280),
+      transitionsBuilder: (context, a, sa, c) {
+        final entra = CurvedAnimation(parent: a, curve: Motion.enter, reverseCurve: Motion.exit);
+        return FadeTransition(
+          opacity: entra,
+          child: SlideTransition(position: Tween(begin: const Offset(0, 0.08), end: Offset.zero).animate(entra), child: c),
+        );
+      },
+    );
+
 const _rutasAuth = {'/login', '/registro', '/verificar'};
+
+/// Páginas públicas de reserva: se abren con o sin sesión (enlace compartido).
+bool _esPublica(String loc) => loc.startsWith('/agenda/');
 
 /// Destino pedido antes de tener la sesión lista (p. ej. al abrir la app
 /// tocando una notificación): se respeta en cuanto termina la carga.
@@ -70,10 +107,24 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final s = sesion.value;
       final loc = state.matchedLocation;
-      if (s.isLoading && !s.hasValue) return loc == '/inicio' ? null : '/inicio';
+      if (s.isLoading && !s.hasValue) {
+        // Enlace que abrió la app en frío: se recuerda para después de cargar.
+        if (loc != '/inicio' && _esPublica(loc)) {
+          final destino = state.uri.toString();
+          Future.microtask(() => ref.read(rutaPendienteProvider.notifier).set(destino));
+        }
+        return loc == '/inicio' ? null : '/inicio';
+      }
+      if (_esPublica(loc)) return null;
       final logueado = s.value != null;
-      if (!logueado) return _rutasAuth.contains(loc) ? null : '/login';
       final pendiente = ref.read(rutaPendienteProvider);
+      if (!logueado) {
+        if (loc == '/inicio' && pendiente != null && _esPublica(pendiente)) {
+          Future.microtask(() => ref.read(rutaPendienteProvider.notifier).set(null));
+          return pendiente;
+        }
+        return _rutasAuth.contains(loc) ? null : '/login';
+      }
       if (pendiente != null) Future.microtask(() => ref.read(rutaPendienteProvider.notifier).set(null));
       if (_rutasAuth.contains(loc) || loc == '/inicio') return pendiente ?? '/hoy';
       return null;
@@ -101,15 +152,23 @@ final routerProvider = Provider<GoRouter>((ref) {
             GoRoute(path: '/eventos', builder: (c, s) => const ModuleTheme(module: AppModule.eventos, child: EventsScreen())),
           ]),
           StatefulShellBranch(routes: [
+            GoRoute(path: '/citas', builder: (c, s) => const ModuleTheme(module: AppModule.citas, child: CitasScreen())),
+          ]),
+          StatefulShellBranch(routes: [
             GoRoute(path: '/finanzas', builder: (c, s) => const ModuleTheme(module: AppModule.finanzas, child: FinanceScreen())),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: '/ciclo', builder: (c, s) => const ModuleTheme(module: AppModule.ciclo, child: CycleScreen())),
           ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/perfil', builder: (c, s) => const SettingsScreen()),
-          ]),
         ],
+      ),
+      // Perfil y ajustes: se abre desde el avatar de cada módulo.
+      GoRoute(path: '/perfil', pageBuilder: (c, s) => _deslizar(const SettingsScreen(), s)),
+      GoRoute(path: '/citas/ajustes', pageBuilder: (c, s) => _deslizar(const ModuleTheme(module: AppModule.citas, child: AjustesAgendaScreen()), s)),
+      GoRoute(path: '/citas/crear', pageBuilder: (c, s) => _subir(const ModuleTheme(module: AppModule.citas, child: CrearPaginaScreen()), s)),
+      GoRoute(
+        path: '/agenda/:slug',
+        pageBuilder: (c, s) => _subir(ModuleTheme(module: AppModule.citas, child: ReservarScreen(slug: s.pathParameters['slug']!.toLowerCase())), s),
       ),
     ],
   );
