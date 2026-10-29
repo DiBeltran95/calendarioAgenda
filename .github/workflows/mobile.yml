@@ -18,6 +18,8 @@ on:
 
 permissions:
   contents: write
+  # Para borrar artefactos viejos (el espacio gratuito de Actions es limitado).
+  actions: write
 
 defaults:
   run:
@@ -27,6 +29,30 @@ env:
   FLUTTER_VERSION: '3.44.1'
 
 jobs:
+  # Cada .ipa/APK pesa decenas de MB y el espacio de artefactos de Actions se
+  # llena ("Artifact storage quota has been hit"). Se borran los anteriores:
+  # los builds quedan para siempre en Releases, que no cuentan para ese límite.
+  limpiar:
+    name: Limpiar artefactos viejos
+    # Si no se puede limpiar, los builds siguen igual.
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const artefactos = await github.paginate(github.rest.actions.listArtifactsForRepo, {
+              owner: context.repo.owner, repo: context.repo.repo, per_page: 100,
+            });
+            let borrados = 0;
+            for (const a of artefactos) {
+              if (a.workflow_run?.id === context.runId) continue;
+              await github.rest.actions.deleteArtifact({ owner: context.repo.owner, repo: context.repo.repo, artifact_id: a.id });
+              borrados++;
+            }
+            core.notice(`Artefactos viejos borrados: ${borrados}`);
+
   test:
     name: Pruebas
     runs-on: ubuntu-latest
@@ -44,7 +70,7 @@ jobs:
 
   android:
     name: APK Android
-    needs: test
+    needs: [test, limpiar]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -74,15 +100,30 @@ jobs:
             echo "::notice::Sin el secreto FIREBASE_DART_DEFINES: el build sale sin push (usa avisos locales + refresco en segundo plano)."
           fi
       - run: flutter build apk --release $DEFINES
+      - run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/Agendaservi.apk
       - uses: actions/upload-artifact@v4
+        # Si el espacio de artefactos está lleno, el APK igual queda en Releases.
+        continue-on-error: true
         with:
           name: Agendaservi-android-apk
           path: mobile/build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 30
+          retention-days: 3
+      - name: Publicar en Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: mobile-build-${{ github.run_number }}
+          name: Agendaservi móvil · build ${{ github.run_number }} (${{ github.ref_name }})
+          prerelease: ${{ github.ref != 'refs/heads/main' }}
+          make_latest: ${{ github.ref == 'refs/heads/main' }}
+          body: |
+            Compilado automáticamente desde `${{ github.sha }}` (rama `${{ github.ref_name }}`).
+            **Android:** `Agendaservi.apk`.
+            **iOS:** `.ipa` sin firmar. Instálalo firmándolo con tu Apple ID desde Sideloadly o AltStore.
+          files: mobile/build/app/outputs/flutter-apk/Agendaservi.apk
 
   ios:
     name: IPA iOS (sin firmar)
-    needs: test
+    needs: [test, limpiar]
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -118,20 +159,24 @@ jobs:
           cd build/ios/ipa
           zip -qry Agendaservi-unsigned.ipa Payload
       - uses: actions/upload-artifact@v4
+        # Si el espacio de artefactos está lleno, el .ipa igual queda en Releases.
+        continue-on-error: true
         with:
           name: Agendaservi-unsigned-ipa
           path: mobile/build/ios/ipa/Agendaservi-unsigned.ipa
-          retention-days: 30
-      # Además del artefacto, se publica como release para descargarlo sin
-      # entrar al detalle de la ejecución.
-      - name: Publicar release
-        if: github.ref == 'refs/heads/main'
+          retention-days: 3
+      # Se publica en Releases (de todas las ramas; las que no son main como
+      # versión previa): se descarga sin entrar al detalle de la ejecución y no
+      # ocupa el espacio de artefactos.
+      - name: Publicar en Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: mobile-build-${{ github.run_number }}
-          name: Agendaservi móvil · build ${{ github.run_number }}
+          name: Agendaservi móvil · build ${{ github.run_number }} (${{ github.ref_name }})
+          prerelease: ${{ github.ref != 'refs/heads/main' }}
+          make_latest: ${{ github.ref == 'refs/heads/main' }}
           body: |
-            Compilado automáticamente desde `${{ github.sha }}`.
+            Compilado automáticamente desde `${{ github.sha }}` (rama `${{ github.ref_name }}`).
+            **Android:** `Agendaservi.apk`.
             **iOS:** `.ipa` sin firmar. Instálalo firmándolo con tu Apple ID desde Sideloadly o AltStore.
-            **Android:** el APK está en los artefactos de la ejecución.
           files: mobile/build/ios/ipa/Agendaservi-unsigned.ipa
