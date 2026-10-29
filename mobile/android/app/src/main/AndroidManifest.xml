@@ -48,6 +48,18 @@
             </intent-filter>
             <meta-data android:name="flutter_deeplinking_enabled" android:value="true"/>
         </activity>
+        <!-- Lectura de avisos de compra de bancos y Google Wallet para "Pagos por
+             clasificar". Solo funciona si el usuario lo activa en Ajustes →
+             Acceso a notificaciones (ver PagosListener.kt). -->
+        <service
+            android:name=".PagosListener"
+            android:label="Agendaservi · pagos"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService"/>
+            </intent-filter>
+        </service>
         <!-- Receptores de flutter_local_notifications para avisos programados. -->
         <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
         <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">

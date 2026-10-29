@@ -284,6 +284,29 @@ Cada usuario puede publicar su **página de citas**: `agendaservi.com/agenda/<en
 
 ---
 
+## 💳 Pagos automáticos (Finanzas)
+
+Los pagos hechos con el celular llegan solos a **Finanzas → Pagos por clasificar**. Ahí solo queda elegir la categoría (con sugerencia) y la cuenta, y tocar **Guardar**.
+
+Ni Apple ni Google dejan que una app lea las compras de Apple Pay o de Google Wallet. Por eso se usan estas dos vías, que son las que usan las apps de finanzas:
+
+| | iPhone | Android |
+|---|---|---|
+| **Cómo** | Automatización de la app **Atajos** con el disparador **Transacción** de Wallet (iOS 17+). Envía monto, comercio y tarjeta a `POST /api/capturas/atajo` con la clave personal en la cabecera `X-Clave`. | La app lee, **con permiso del usuario**, los avisos de compra de Google Wallet, de las apps de los bancos (Bancolombia, Nequi, Davivienda, DaviPlata, BBVA, Banco de Bogotá, Nu) y de los SMS de los bancos. |
+| **Configuración** | Una vez. La guía está en la app, con botones para copiar la URL y la clave. | Un interruptor en *Ajustes → Acceso a notificaciones*. |
+| **Funciona con Sideloadly** | Sí: no usa push. | Sí. |
+| **Llega** | Al instante. Si la app está abierta, aparece un aviso arriba. | Al abrir la app. Mientras tanto, una notificación discreta recuerda clasificarlo. |
+
+- **Sin duplicados:** el servidor identifica cada pago por su contenido (monto, comercio, tarjeta y minuto). Un Atajo repetido o una notificación actualizada no se guardan dos veces.
+- **Aprende:** la categoría y la cuenta elegidas para un comercio o una tarjeta se sugieren la próxima vez. Si no hay historial, se sugiere por palabras clave (Éxito → Comida, Terpel → Transporte, Netflix → Servicios…).
+- **Privacidad:** en Android se ignoran todas las notificaciones que no sean de esas apps y los mensajes que no parecen un pago, como códigos o compras rechazadas. Los textos se interpretan en el teléfono.
+- **Archivos:**
+  - Backend: `backend/lib/finanzas/capturas.ts`, que crea las tablas `finanzas_capturas` y `finanzas_capturas_claves` al arrancar.
+  - App: `mobile/lib/features/finance/pagos/` y `android/.../PagosListener.kt`.
+- **Pruebas:** `backend/lib/finanzas/capturas.test.ts` y `mobile/test/pagos_test.dart`.
+
+---
+
 ## 📌 Funcionalidades
 
 - Registro con verificación por código de WhatsApp y login con JWT.

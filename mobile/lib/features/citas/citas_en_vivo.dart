@@ -201,10 +201,10 @@ Map<int, String> fotoCitas(List<CitaAgenda> citas) => {for (final c in citas) c.
 
 // ─────────────────────── Aviso dentro de la app ───────────────────────
 
-enum TipoAvisoVivo { nueva, cancelada }
+enum TipoAvisoVivo { nueva, cancelada, pago }
 
 class AvisoVivo {
-  AvisoVivo({required this.clave, required this.tipo, required this.titulo, required this.cuerpo, this.citaId, this.fecha}) : id = ++_secuencia;
+  AvisoVivo({required this.clave, required this.tipo, required this.titulo, required this.cuerpo, this.citaId, this.fecha, this.ruta}) : id = ++_secuencia;
   static int _secuencia = 0;
 
   final int id;
@@ -214,6 +214,9 @@ class AvisoVivo {
   final String cuerpo;
   final int? citaId;
   final String? fecha;
+
+  /// Pantalla que abre al tocarlo (si no, la agenda de citas).
+  final String? ruta;
 }
 
 /// Aviso visible en la parte superior (se oculta solo a los 6 s).

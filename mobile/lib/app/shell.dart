@@ -8,6 +8,7 @@ import '../core/net/tiempo_real.dart';
 import '../core/providers.dart';
 import '../data/sync.dart';
 import '../features/citas/citas_en_vivo.dart';
+import '../features/finance/pagos/pagos_repository.dart';
 import '../features/notifications/notification_service.dart';
 import '../features/notifications/push_registro.dart';
 import '../features/notifications/refresco_fondo.dart';
@@ -54,6 +55,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         ref.read(registroPushProvider).sincronizar();
         // Reabre el canal en vivo (y sincroniza lo que llegó mientras tanto).
         ref.read(tiempoRealProvider).reanudar();
+        // Pagos que el teléfono leyó de los bancos mientras tanto (Android).
+        ref.read(pagosRepoProvider).sincronizarAndroid();
       },
       // En segundo plano no se mantiene la conexión: allí avisan los push.
       onPause: () => ref.read(tiempoRealProvider).pausar(),
@@ -84,6 +87,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     // Cambios en vivo del servidor (citas nuevas o canceladas al instante).
     ref.watch(canalVivoProvider);
     ref.watch(citasEnVivoProvider);
+    ref.watch(pagosEnVivoProvider);
 
     final shell = widget.shell;
     final m = _destinos[shell.currentIndex].module;

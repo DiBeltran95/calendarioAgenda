@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app/theme/app_module.dart';
 import '../../app/theme/palette.dart';
@@ -19,6 +20,7 @@ import '../../core/widgets/ui.dart';
 import '../events/events_repository.dart';
 import 'finance_logic.dart';
 import 'finance_providers.dart';
+import 'pagos/pagos_repository.dart';
 import 'sheets/finance_sheets.dart';
 import 'sheets/transaction_sheet.dart';
 import 'tabs/accounts_tab.dart';
@@ -72,6 +74,7 @@ class FinanceScreen extends ConsumerWidget {
               overline: saludo(ref.watch(sesionProvider).value?.usuario.primerNombre ?? ''),
               title: AppModule.finanzas.label,
               actions: [
+                const _BotonPagos(),
                 if (cuentas.length >= 2)
                   IconButton(
                     tooltip: 'Transferir entre cuentas',
@@ -429,6 +432,25 @@ class _TabsState extends ConsumerState<_Tabs> {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Acceso a "Pagos por clasificar" con el número de pendientes.
+class _BotonPagos extends ConsumerWidget {
+  const _BotonPagos();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final n = ref.watch(pagosPendientesProvider).value?.length ?? 0;
+    return IconButton(
+      tooltip: n == 0 ? 'Pagos automáticos' : '$n pagos por clasificar',
+      onPressed: () => context.push(rutaPagos),
+      icon: Badge(
+        isLabelVisible: n > 0,
+        label: Text('$n'),
+        child: const Icon(Icons.contactless_rounded),
       ),
     );
   }

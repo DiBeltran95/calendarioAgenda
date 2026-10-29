@@ -15,23 +15,40 @@ import '../finance_logic.dart';
 import '../finance_providers.dart';
 import '../finance_repository.dart';
 
-Future<void> abrirTransaccion(BuildContext context, {Transaccion? tx, String? fecha, String tipo = 'gasto', String? categoria, String? descripcion}) {
+Future<void> abrirTransaccion(
+  BuildContext context, {
+  Transaccion? tx,
+  String? fecha,
+  String tipo = 'gasto',
+  String? categoria,
+  String? descripcion,
+  double? monto,
+  int? cuentaId,
+  void Function(int id, TransaccionInput input)? alCrear,
+}) {
   return showAppSheet(
     context,
-    (_) => TransactionSheet(tx: tx, fecha: fecha ?? hoyYmd(), tipo: tipo, categoria: categoria, descripcion: descripcion),
+    (_) => TransactionSheet(tx: tx, fecha: fecha ?? hoyYmd(), tipo: tipo, categoria: categoria, descripcion: descripcion, monto: monto, cuentaId: cuentaId, alCrear: alCrear),
   );
 }
 
 /// Registrar / editar un ingreso o gasto. Con tarjeta de crédito permite
 /// diferir a cuotas y muestra en vivo en qué fechas caerán los cobros.
 class TransactionSheet extends ConsumerStatefulWidget {
-  const TransactionSheet({super.key, this.tx, required this.fecha, this.tipo = 'gasto', this.categoria, this.descripcion});
+  const TransactionSheet({super.key, this.tx, required this.fecha, this.tipo = 'gasto', this.categoria, this.descripcion, this.monto, this.cuentaId, this.alCrear});
 
   final Transaccion? tx;
   final String fecha;
   final String tipo;
   final String? categoria;
   final String? descripcion;
+
+  /// Valores iniciales (p. ej. un pago detectado de Apple Pay o del banco).
+  final double? monto;
+  final int? cuentaId;
+
+  /// Se llama con el id del movimiento recién creado.
+  final void Function(int id, TransaccionInput input)? alCrear;
 
   @override
   ConsumerState<TransactionSheet> createState() => _TransactionSheetState();
@@ -55,9 +72,9 @@ class _TransactionSheetState extends ConsumerState<TransactionSheet> {
     _tipo = t?.tipo ?? widget.tipo;
     _fecha = t?.fecha ?? widget.fecha;
     _categoria = t?.categoria ?? widget.categoria ?? 'otros';
-    _cuentaId = t?.cuentaId;
+    _cuentaId = t?.cuentaId ?? widget.cuentaId;
     _cuotas = t?.cuotas ?? 1;
-    _monto = TextEditingController(text: montoInicial(t?.monto ?? 0));
+    _monto = TextEditingController(text: montoInicial(t?.monto ?? widget.monto ?? 0));
     _desc = TextEditingController(text: t?.descripcion ?? widget.descripcion ?? '');
     // La vista previa de cuotas depende del monto: se recalcula al escribir.
     _monto.addListener(() => setState(() {}));
@@ -90,7 +107,8 @@ class _TransactionSheetState extends ConsumerState<TransactionSheet> {
     try {
       final repo = ref.read(financeRepoProvider);
       if (widget.tx == null) {
-        await repo.crearTransaccion(input);
+        final id = await repo.crearTransaccion(input);
+        widget.alCrear?.call(id, input);
       } else {
         await repo.actualizarTransaccion(widget.tx!, input);
       }

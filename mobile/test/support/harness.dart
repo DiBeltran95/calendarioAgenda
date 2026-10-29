@@ -3,6 +3,7 @@ import 'package:agendaservi/core/net/api_client.dart';
 import 'package:agendaservi/core/providers.dart';
 import 'package:agendaservi/core/session.dart';
 import 'package:agendaservi/data/models.dart';
+import 'package:agendaservi/features/finance/pagos/lector_pagos.dart';
 import 'package:agendaservi/features/notifications/notification_service.dart';
 import 'package:agendaservi/features/notifications/push_service.dart';
 import 'package:agendaservi/features/notifications/refresco_fondo.dart';
@@ -29,6 +30,7 @@ List<Override> overridesDePrueba({
   ServicioPush? push,
   AlmacenAvisos? almacen,
   TareasFondo? fondo,
+  LectorPagos? lector,
 }) {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
   return [
@@ -38,6 +40,7 @@ List<Override> overridesDePrueba({
     servicioPushProvider.overrideWithValue(push ?? ServicioPushInerte()),
     almacenAvisosProvider.overrideWithValue(almacen ?? AlmacenAvisos.memoria()),
     tareasFondoProvider.overrideWithValue(fondo ?? TareasFondoInertes()),
+    lectorPagosProvider.overrideWithValue(lector ?? LectorPagosInerte()),
     apiProvider.overrideWith((ref) => ApiClient(
           token: () async => ref.read(sesionProvider).value?.token,
           onUnauthorized: () => ref.read(sesionProvider.notifier).cerrar(motivo: 'Tu sesión expiró. Vuelve a iniciar sesión.'),

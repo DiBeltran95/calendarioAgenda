@@ -58,6 +58,10 @@ class _Tarjeta extends ConsumerWidget {
   void _abrir(WidgetRef ref) {
     HapticFeedback.selectionClick();
     ref.read(avisoVivoProvider.notifier).cerrar();
+    if (aviso.ruta != null) {
+      ref.read(routerProvider).push(aviso.ruta!);
+      return;
+    }
     if (aviso.fecha != null) ref.read(diaCitasProvider.notifier).set(aviso.fecha!);
     if (aviso.citaId != null) ref.read(citaPorAbrirProvider.notifier).set(aviso.citaId);
     ref.read(routerProvider).go('/citas');
@@ -66,8 +70,11 @@ class _Tarjeta extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
-    final cancelada = aviso.tipo == TipoAvisoVivo.cancelada;
-    final color = cancelada ? p.danger : p.success;
+    final color = switch (aviso.tipo) {
+      TipoAvisoVivo.cancelada => p.danger,
+      TipoAvisoVivo.pago => p.info,
+      TipoAvisoVivo.nueva => p.success,
+    };
     final notifier = ref.read(avisoVivoProvider.notifier);
     return Padding(
       padding: const EdgeInsets.fromLTRB(Gap.sm, Gap.xs, Gap.sm, 0),
@@ -80,7 +87,7 @@ class _Tarjeta extends ConsumerWidget {
           container: true,
           button: true,
           label: '${aviso.titulo}. ${aviso.cuerpo}',
-          hint: 'Toca para ver la cita',
+          hint: aviso.tipo == TipoAvisoVivo.pago ? 'Toca para clasificar el pago' : 'Toca para ver la cita',
           excludeSemantics: true,
           child: Listener(
             onPointerDown: (_) => notifier.sostener(),
@@ -101,7 +108,11 @@ class _Tarjeta extends ConsumerWidget {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(Gap.sm, Gap.sm, Gap.xxs, Gap.sm),
                       child: Row(children: [
-                        _Icono(color: color, cancelada: cancelada),
+                        _Icono(color: color, icono: switch (aviso.tipo) {
+                          TipoAvisoVivo.cancelada => Icons.event_busy_rounded,
+                          TipoAvisoVivo.pago => Icons.contactless_rounded,
+                          TipoAvisoVivo.nueva => Icons.event_available_rounded,
+                        }),
                         const HGap.sm(),
                         Expanded(
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
@@ -142,9 +153,9 @@ class _Tarjeta extends ConsumerWidget {
 
 /// Ícono con un pulso suave al aparecer.
 class _Icono extends StatelessWidget {
-  const _Icono({required this.color, required this.cancelada});
+  const _Icono({required this.color, required this.icono});
   final Color color;
-  final bool cancelada;
+  final IconData icono;
 
   @override
   Widget build(BuildContext context) {
@@ -157,7 +168,7 @@ class _Icono extends StatelessWidget {
         width: 44,
         height: 44,
         decoration: BoxDecoration(color: color.withValues(alpha: 0.16), shape: BoxShape.circle),
-        child: Icon(cancelada ? Icons.event_busy_rounded : Icons.event_available_rounded, color: color),
+        child: Icon(icono, color: color),
       ),
     );
   }

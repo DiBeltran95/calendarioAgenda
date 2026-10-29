@@ -83,6 +83,7 @@ Del backend solo usa los endpoints de la web, más `POST /api/dispositivos` y `P
   - en segundo plano se desconecta y avisa el push; con la app abierta, un push de cita se convierte en el mismo aviso, sin duplicarse.
 
 ### 💳 Control financiero
+- **Pagos por clasificar** (ícono sin contacto en el encabezado de Finanzas, con contador): los pagos de **Apple Pay** (vía Atajos) y los avisos de compra de **bancos y Google Wallet** (Android, con acceso a notificaciones) llegan solos. Cada uno trae la categoría y la cuenta sugeridas; se guarda con un toque, se edita completo o se descarta (con deshacer). Ver `lib/features/finance/pagos/`.
 - **Cuentas y tarjetas:**
   - Ahorros y corriente (tarjeta débito) y efectivo.
   - **Tarjetas de crédito** con cupo, uso y día de corte.
@@ -242,6 +243,7 @@ Las pruebas **nunca tocan el servidor real**, así que no crean cuentas ni enví
 | `push_test` | Registro del teléfono y preferencias, paso de avisos locales a push del servidor, token renovado, baja al cerrar sesión, refresco en segundo plano |
 | `citas_test` | Página de citas, servicios, equipo, bloqueos, citas a mano y estados; reserva con código; asistente completo y reserva desde la app (interfaz) |
 | `tiempo_real_test` | Canal SSE: lector, reconexión y resincronización, modo respaldo, cierre. Agenda en vivo: la reserva aparece sola, avisos sin duplicados ni por acciones propias, detección de cambios sin canal, push de cita. Interfaz: aviso, tocarlo abre el detalle, que se actualiza al cancelar |
+| `pagos_test` | Avisos reales de Bancolombia, Nequi, Davivienda y Google Wallet; códigos y rechazos ignorados; sugerencias de categoría y cuenta; subir la cola de Android, registrar, descartar y deshacer; pago de Apple Pay en vivo; clasificar desde la pantalla |
 | `fab_animado_test` | Botón flotante que se despliega y se recoge |
 | `planner_test` | Avisos del teléfono con las reglas del cron: 30 min, resumen de las 7:00, puentes festivos, CDT, límite de iOS |
 | `app_smoke_test` | Recorre la app completa en teléfono, tablet y modo claro con texto al 130 %, más los flujos de login y registro con código. Falla ante cualquier excepción o desbordamiento |

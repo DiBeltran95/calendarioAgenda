@@ -54,6 +54,58 @@ class FakeBackend implements HttpClientAdapter {
   final presupuestos = <Map<String, dynamic>>[];
   final categorias = <Map<String, dynamic>>[];
   final dispositivos = <Map<String, dynamic>>[];
+  final capturas = <Map<String, dynamic>>[];
+  final clavesAtajo = <int, String>{};
+
+  /// Como POST /api/capturas/atajo (el Atajo de iPhone): guarda y avisa en vivo.
+  Map<String, dynamic> pagoApplePay(int uid, {required num monto, String comercio = '', String tarjeta = ''}) {
+    final c = {
+      'id': _id(), 'user_id': uid, 'origen': 'apple_pay', 'tipo': 'gasto', 'monto': monto, 'moneda': 'COP', 'comercio': comercio, 'tarjeta': tarjeta,
+      'app': '', 'texto': '', 'fecha': DateTime.now().toUtc().toIso8601String(), 'estado': 'pendiente', 'transaccion_id': null, 'categoria': null, 'cuenta_id': null,
+    };
+    capturas.add(c);
+    emitir(uid, 'captura', {'captura': c});
+    return c;
+  }
+
+  _Resp _capturas(String m, List<String> seg, Map<String, dynamic> q, Map<String, dynamic> b, int uid) {
+    final accion = seg.length > 2 ? seg[2] : '';
+    final mias = capturas.where((c) => c['user_id'] == uid);
+    switch ((m, accion)) {
+      case ('GET', ''):
+        final estado = '${q['estado'] ?? 'pendiente'}';
+        return _Resp(200, mias.where((c) => c['estado'] == estado).toList()..sort((a, z) => '${z['fecha']}'.compareTo('${a['fecha']}')));
+      case ('POST', ''):
+        var nuevas = 0;
+        final lista = (b['capturas'] as List? ?? const []).cast<Map>();
+        for (final x in lista) {
+          final dup = mias.any((c) => c['monto'] == x['monto'] && c['comercio'] == x['comercio'] && '${c['fecha']}'.substring(0, 16) == '${x['fecha']}'.substring(0, 16));
+          if (dup) continue;
+          capturas.add({...Map<String, dynamic>.from(x), 'id': _id(), 'user_id': uid, 'estado': 'pendiente', 'moneda': 'COP'});
+          nuevas++;
+        }
+        return _Resp(200, {'recibidas': lista.length, 'nuevas': nuevas});
+      case ('GET', 'preferencias'):
+        return _Resp(200, [
+          for (final c in mias.where((c) => c['estado'] == 'registrada' && c['categoria'] != null))
+            {'comercio': c['comercio'], 'tarjeta': c['tarjeta'], 'categoria': c['categoria'], 'cuenta_id': c['cuenta_id']},
+        ]);
+      case ('GET', 'clave'):
+        return _Resp(200, {'clave': clavesAtajo.putIfAbsent(uid, () => 'a' * 40), 'usado': null});
+      case ('POST', 'clave'):
+        return _Resp(200, {'clave': clavesAtajo[uid] = 'b' * 40, 'usado': null});
+      case ('PUT', _):
+        final c = mias.where((c) => '${c['id']}' == accion).firstOrNull;
+        if (c == null) return _err(404, 'Pago no encontrado');
+        c
+          ..['estado'] = b['estado']
+          ..['transaccion_id'] = b['transaccion_id']
+          ..['categoria'] = b['categoria']
+          ..['cuenta_id'] = b['cuenta_id'];
+        return _Resp(200, c);
+    }
+    return _err(404, 'Ruta de capturas no encontrada');
+  }
   late final agenda = FakeAgenda(this);
 
   /// Lo que hace el cron al entregar la notificación de bienvenida.
@@ -171,6 +223,7 @@ class FakeBackend implements HttpClientAdapter {
     List<Map<String, dynamic>> de(List<Map<String, dynamic>> t) => t.where((r) => r['user_id'] == uid).toList();
 
     if (seg.length > 1 && seg[1] == 'agenda') return agenda._privada(m, seg, q, b, uid);
+    if (seg.length > 1 && seg[1] == 'capturas') return _capturas(m, seg, q, b, uid);
     switch ((m, seg.length > 1 ? seg[1] : '')) {
       case ('GET', 'dashboard') when seg[2] == 'bootstrap':
         return _Resp(200, {

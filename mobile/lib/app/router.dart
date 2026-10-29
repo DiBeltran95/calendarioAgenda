@@ -12,6 +12,7 @@ import '../features/citas/reservar_screen.dart';
 import '../features/cycle/cycle_screen.dart';
 import '../features/events/events_screen.dart';
 import '../features/finance/finance_screen.dart';
+import '../features/finance/pagos/pagos_screen.dart';
 import '../features/home/today_screen.dart';
 import '../features/settings/settings_screen.dart';
 import 'module_theme.dart';
@@ -108,8 +109,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       final s = sesion.value;
       final loc = state.matchedLocation;
       if (s.isLoading && !s.hasValue) {
-        // Enlace que abrió la app en frío: se recuerda para después de cargar.
-        if (loc != '/inicio' && _esPublica(loc)) {
+        // Enlace que abrió la app en frío (reserva, notificación de un pago…):
+        // se recuerda para después de cargar la sesión.
+        if (loc != '/inicio' && !_rutasAuth.contains(loc) && loc != '/hoy') {
           final destino = state.uri.toString();
           Future.microtask(() => ref.read(rutaPendienteProvider.notifier).set(destino));
         }
@@ -164,6 +166,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       // Perfil y ajustes: se abre desde el avatar de cada módulo.
       GoRoute(path: '/perfil', pageBuilder: (c, s) => _deslizar(const SettingsScreen(), s)),
+      GoRoute(path: '/finanzas/pagos', pageBuilder: (c, s) => _deslizar(const ModuleTheme(module: AppModule.finanzas, child: PagosScreen()), s)),
       GoRoute(path: '/citas/ajustes', pageBuilder: (c, s) => _deslizar(const ModuleTheme(module: AppModule.citas, child: AjustesAgendaScreen()), s)),
       GoRoute(path: '/citas/crear', pageBuilder: (c, s) => _subir(const ModuleTheme(module: AppModule.citas, child: CrearPaginaScreen()), s)),
       GoRoute(
