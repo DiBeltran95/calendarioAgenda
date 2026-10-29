@@ -226,7 +226,7 @@ test('empresa con equipo: "cualquier profesional" reparte y respeta bloqueos', {
     const servicio = srv.body.servicios[0].id;
     assert.deepEqual(srv.body.servicios[0].profesionales.sort(), [idLuis, idPedro].sort());
 
-    const vincularMal = await api('POST', '/api/agenda/profesionales', { nombre: 'X', vincular: 'nadie@test.co' }, tokenEmpresa);
+    const vincularMal = await api('POST', '/api/agenda/profesionales', { nombre: 'Xavier', vincular: 'nadie@test.co' }, tokenEmpresa);
     assert.equal(vincularMal.status, 404);
 
     const reservar = (w: string) => api('POST', '/api/public/agenda/barberia-don-juan/reservas', { servicio_id: servicio, profesional_id: 0, fecha: LUNES, hora: '10:00', nombre: 'Cliente ' + w, whatsapp: w });
