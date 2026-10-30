@@ -5,7 +5,8 @@ import '../../app/theme/palette.dart';
 import '../../app/theme/tokens.dart';
 import '../motion.dart';
 
-/// Superficie base: fondo de tarjeta, borde fino y radio grande.
+/// Superficie base: en claro flota con sombra suave; en oscuro es una superficie
+/// tonal con un borde muy fino.
 class AppCard extends StatelessWidget {
   const AppCard({
     super.key,
@@ -39,7 +40,8 @@ class AppCard extends StatelessWidget {
         color: gradient == null ? (color ?? p.surface) : null,
         gradient: gradient,
         borderRadius: Radii.rLg,
-        border: Border.all(color: borderColor ?? p.border),
+        border: Border.all(color: borderColor ?? p.bordeTarjeta),
+        boxShadow: p.sombraSuave,
       ),
       child: Material(type: MaterialType.transparency, child: child),
     );
@@ -143,7 +145,7 @@ class Tag extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = color ?? context.palette.textSecondary;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: Gap.xs, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: Gap.xs + 2, vertical: Gap.xxs),
       decoration: BoxDecoration(
         color: filled ? c : c.withValues(alpha: context.isDark ? 0.16 : 0.12),
         borderRadius: BorderRadius.circular(Radii.pill),
@@ -152,7 +154,7 @@ class Tag extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 13, color: filled ? context.palette.onAccent : c),
+            Icon(icon, size: IconSizes.sm, color: filled ? context.palette.onAccent : c),
             const SizedBox(width: 3),
           ],
           // Si no cabe (texto grande, espacio estrecho) se recorta con "…".
@@ -211,39 +213,75 @@ class StatTile extends StatelessWidget {
   }
 }
 
-/// Cabecera grande de cada módulo: saludo, título y acciones.
-class ModuleHeader extends StatelessWidget {
-  const ModuleHeader({super.key, required this.title, this.overline, this.actions = const [], this.perfil = true});
+/// Encabezado único de la app, en pestañas y en pantallas internas: título
+/// grande, línea de contexto y acciones. A la izquierda lleva "atrás" si la
+/// pantalla se abrió encima de otra; a la derecha, el avatar que abre Perfil.
+class EncabezadoPantalla extends StatelessWidget {
+  const EncabezadoPantalla({
+    super.key,
+    required this.titulo,
+    this.contexto,
+    this.acciones = const [],
+    this.perfil = true,
+    this.atras = false,
+    this.padding = const EdgeInsets.fromLTRB(Gap.xxs, Gap.xs, 0, Gap.md),
+  });
 
-  final String title;
-  final String? overline;
-  final List<Widget> actions;
+  final String titulo;
 
-  /// Muestra el avatar que abre Perfil (todas las cabeceras menos la propia).
+  /// Línea corta sobre el título (fecha, nombre del negocio…).
+  final String? contexto;
+  final List<Widget> acciones;
   final bool perfil;
+  final bool atras;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(Gap.xs, Gap.xs, 0, Gap.md),
+      padding: padding,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          if (atras) ...[
+            const BotonAtras(),
+            const HGap.xs(),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (overline != null)
-                  Text(overline!, style: context.text.labelMedium?.copyWith(color: p.accent, fontWeight: FontWeight.w600)),
-                Semantics(header: true, child: Text(title, style: context.text.headlineMedium)),
+                if (contexto != null)
+                  Text(contexto!, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.labelMedium?.copyWith(color: p.accent, fontWeight: FontWeight.w600)),
+                Semantics(
+                  header: true,
+                  child: Text(titulo, maxLines: 2, overflow: TextOverflow.ellipsis, style: atras ? context.text.headlineSmall : context.text.headlineMedium),
+                ),
               ],
             ),
           ),
-          ...actions,
-          if (perfil) ...[const HGap.xs(), const Padding(padding: EdgeInsets.only(bottom: 2), child: BotonPerfil())],
+          ...acciones,
+          if (perfil) ...[const HGap.xs(), const BotonPerfil()],
         ],
       ),
+    );
+  }
+}
+
+/// Botón "atrás" circular de las pantallas internas.
+class BotonAtras extends StatelessWidget {
+  const BotonAtras({super.key, this.onPressed});
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return IconButton(
+      tooltip: 'Atrás',
+      onPressed: onPressed ?? () => Navigator.of(context).maybePop(),
+      style: IconButton.styleFrom(backgroundColor: p.surfaceHigh, minimumSize: const Size(44, 44)),
+      icon: const Icon(Icons.arrow_back_rounded),
     );
   }
 }
@@ -291,29 +329,5 @@ class ModuleLayout extends StatelessWidget {
         ],
       );
     });
-  }
-}
-
-/// Barra fina de progreso para la primera carga desde el servidor (cuando
-/// aún no hay nada guardado en el teléfono). Aparece y desaparece suavemente.
-class CargandoBarra extends StatelessWidget {
-  const CargandoBarra({super.key, required this.visible});
-  final bool visible;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: Motion.of(context, Motion.medium),
-      child: visible
-          ? Padding(
-              key: const ValueKey('c'),
-              padding: const EdgeInsets.only(bottom: Gap.sm),
-              child: Semantics(
-                label: 'Cargando datos',
-                child: ClipRRect(borderRadius: BorderRadius.circular(4), child: const LinearProgressIndicator(minHeight: 3)),
-              ),
-            )
-          : const SizedBox(key: ValueKey('n'), width: double.infinity),
-    );
   }
 }

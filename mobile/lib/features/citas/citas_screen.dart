@@ -81,10 +81,10 @@ class CitasScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        ModuleHeader(
-                          overline: negocio?.nombre ?? 'Recibe reservas',
-                          title: 'Citas',
-                          actions: [
+                        EncabezadoPantalla(
+                          contexto: negocio?.nombre ?? 'Recibe reservas',
+                          titulo: 'Citas',
+                          acciones: [
                             if (negocio != null)
                               IconButton(
                                 tooltip: 'Ajustes de citas',
@@ -93,7 +93,6 @@ class CitasScreen extends ConsumerWidget {
                               ),
                           ],
                         ),
-                        CargandoBarra(visible: configAsync.isLoading && config != null),
                         if (cargando)
                           const _Cargando()
                         else if (negocio == null)
@@ -471,25 +470,22 @@ class _TarjetaCita extends ConsumerWidget {
                       child: Padding(
                         padding: const EdgeInsets.all(Gap.sm),
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Row(children: [
-                            Expanded(
-                              child: Text(
-                                cita.clienteNombre,
-                                style: context.text.titleSmall?.copyWith(decoration: apagada ? TextDecoration.lineThrough : null),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (reciente) ...[
+                          Text(
+                            cita.clienteNombre,
+                            style: context.text.titleSmall?.copyWith(decoration: apagada ? TextDecoration.lineThrough : null),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: Gap.xxs),
+                          Wrap(spacing: Gap.xxs, runSpacing: Gap.xxs, children: [
+                            if (reciente)
                               Tag('Nueva', color: p.success, icon: Icons.fiber_new_rounded)
                                   .animate()
                                   .fadeIn(duration: Motion.of(context, Motion.medium))
                                   .scale(begin: const Offset(0.8, 0.8), curve: Curves.easeOutBack, duration: Motion.of(context, Motion.slow)),
-                              const HGap(Gap.xxs),
-                            ],
                             Tag(cita.estado.etiqueta, color: colorEstado, icon: iconoEstado),
                           ]),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: Gap.xxs),
                           Text(
                             [cita.servicioNombre, if (conEquipo || cita.rol == 'equipo') cita.profesionalNombre, if (cita.precio > 0) cop(cita.precio)].join(' · '),
                             style: context.text.bodySmall,

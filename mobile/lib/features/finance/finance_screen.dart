@@ -70,10 +70,10 @@ class FinanceScreen extends ConsumerWidget {
         child: ModuleLayout(
           onRefresh: () => ref.read(sincronizadorProvider).refrescarTodo(),
           primary: [
-            ModuleHeader(
-              overline: saludo(ref.watch(sesionProvider).value?.usuario.primerNombre ?? ''),
-              title: AppModule.finanzas.label,
-              actions: [
+            EncabezadoPantalla(
+              contexto: saludo(ref.watch(sesionProvider).value?.usuario.primerNombre ?? ''),
+              titulo: AppModule.finanzas.label,
+              acciones: [
                 const _BotonPagos(),
                 if (cuentas.length >= 2)
                   IconButton(
@@ -83,7 +83,6 @@ class FinanceScreen extends ConsumerWidget {
                   ),
               ],
             ),
-            CargandoBarra(visible: ref.watch(monthProvider((mes.year, mes.month))).isLoading && !ref.watch(monthProvider((mes.year, mes.month))).hasValue),
             Entrance(
               child: _Patrimonio(cuentas: cuentas, txMes: txMes),
             ),

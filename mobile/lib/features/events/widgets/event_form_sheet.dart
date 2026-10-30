@@ -414,7 +414,7 @@ class _AvisosCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    const wa = Color(0xFF25D366);
+    const wa = Brand.whatsapp;
     final texto = descripcionAvisos(categoria: categoria, hora: hora);
     return AnimatedContainer(
       duration: Motion.of(context, Motion.medium),

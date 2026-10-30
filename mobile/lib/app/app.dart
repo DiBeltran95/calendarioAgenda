@@ -37,8 +37,12 @@ class AgendaApp extends ConsumerWidget {
         final mq = MediaQuery.of(context);
         return MediaQuery(
           data: mq.copyWith(disableAnimations: mq.disableAnimations || prefs.reducirMovimiento),
-          // Avisos en vivo (cita nueva / cancelada) por encima de cualquier pantalla.
-          child: CapaAvisoVivo(child: child!),
+          // El texto crece con el del sistema hasta un punto en que el diseño
+          // aún funciona. Avisos en vivo por encima de cualquier pantalla.
+          child: MediaQuery.withClampedTextScaling(
+            maxScaleFactor: 1.35,
+            child: CapaAvisoVivo(child: child!),
+          ),
         );
       },
     );

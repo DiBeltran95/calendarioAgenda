@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme/palette.dart';
 import '../../app/theme/tokens.dart';
 import '../../core/motion.dart';
+import '../../core/providers.dart';
 import '../../core/session.dart';
 import 'auth_repository.dart';
 import 'auth_widgets.dart';
@@ -293,6 +294,7 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
     try {
       final s = await ref.read(authRepoProvider).verificar(widget.datos.email, codigo);
       HapticFeedback.heavyImpact();
+      ref.read(bienvenidaPendienteProvider.notifier).set(true);
       await ref.read(sesionProvider.notifier).iniciar(s);
     } on AuthError catch (e) {
       if (!mounted) return;
@@ -325,7 +327,7 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    const wa = Color(0xFF25D366);
+    const wa = Brand.whatsapp;
     return AuthShell(
       titulo: 'Revisa tu WhatsApp',
       subtitulo: 'Escribe el código de 6 dígitos que enviamos a ${whatsappEnmascarado(widget.datos.whatsapp)}.',
@@ -417,7 +419,7 @@ class _PulsoState extends State<_Pulso> with SingleTickerProviderStateMixin {
         Container(
           width: 64 + 36 * _c.value,
           height: 64 + 36 * _c.value,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF25D366).withValues(alpha: 0.18 * (1 - _c.value))),
+          decoration: BoxDecoration(shape: BoxShape.circle, color: Brand.whatsapp.withValues(alpha: 0.18 * (1 - _c.value))),
         ),
         child!,
       ]),

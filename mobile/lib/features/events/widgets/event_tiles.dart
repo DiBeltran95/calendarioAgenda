@@ -326,7 +326,7 @@ class BirthdayTile extends ConsumerWidget {
           IconButton(
             tooltip: 'Felicitar por WhatsApp',
             onPressed: () => abrirWhatsApp(mensajeCumple(c), telefono: c.telefono),
-            icon: const Icon(Icons.chat_rounded, color: Color(0xFF25D366)),
+            icon: const Icon(Icons.chat_rounded, color: Brand.whatsapp),
           ),
           PopupMenuButton<int>(
             tooltip: 'Más opciones',
@@ -357,7 +357,7 @@ class _VistaWhatsApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final e = evento;
-    const wa = Color(0xFF25D366);
+    const wa = Brand.whatsapp;
     final todoElDia = esTodoElDiaCron(categoria: e.categoria, hora: e.hora, tarjetaCreditoId: e.tarjetaCreditoId);
     final mensajes = todoElDia
         ? [('7:00 a. m. · resumen del día', _lineaResumen(e))]

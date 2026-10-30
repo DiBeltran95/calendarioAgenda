@@ -4,7 +4,6 @@
 import 'dart:math';
 
 import 'package:agendaservi/app/app.dart';
-import 'package:agendaservi/app/theme/app_theme.dart';
 import 'package:agendaservi/core/net/api_client.dart';
 import 'package:agendaservi/core/net/tiempo_real.dart';
 import 'package:agendaservi/core/session.dart' show apiProvider;
@@ -35,7 +34,6 @@ Future<void> hasta(bool Function() cond, {Duration max = const Duration(seconds:
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
-    usarGoogleFonts = false;
     await initializeDateFormatting('es_CO');
   });
 

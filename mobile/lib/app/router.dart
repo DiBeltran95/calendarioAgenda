@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/motion.dart';
+import '../core/providers.dart';
 import '../core/session.dart';
 import '../features/auth/auth_screens.dart';
 import '../features/citas/ajustes_agenda_screen.dart';
@@ -14,6 +15,7 @@ import '../features/events/events_screen.dart';
 import '../features/finance/finance_screen.dart';
 import '../features/finance/pagos/pagos_screen.dart';
 import '../features/home/today_screen.dart';
+import '../features/onboarding/onboarding_screen.dart';
 import '../features/settings/settings_screen.dart';
 import 'module_theme.dart';
 import 'shell.dart';
@@ -24,10 +26,12 @@ CustomTransitionPage<void> _fade(Widget child, GoRouterState s) => CustomTransit
       child: child,
       transitionDuration: const Duration(milliseconds: 420),
       reverseTransitionDuration: const Duration(milliseconds: 260),
-      transitionsBuilder: (context, a, _, c) => FadeTransition(
-        opacity: CurvedAnimation(parent: a, curve: Motion.standard),
-        child: c,
-      ),
+      transitionsBuilder: (context, a, _, c) => Motion.reduced(context)
+          ? c
+          : FadeTransition(
+              opacity: CurvedAnimation(parent: a, curve: Motion.standard),
+              child: c,
+            ),
     );
 
 /// Transición "shared axis" horizontal entre login, registro y verificación.
@@ -37,6 +41,7 @@ CustomTransitionPage<void> _eje(Widget child, GoRouterState s) => CustomTransiti
       transitionDuration: const Duration(milliseconds: 380),
       reverseTransitionDuration: const Duration(milliseconds: 260),
       transitionsBuilder: (context, a, sa, c) {
+        if (Motion.reduced(context)) return c;
         final entra = CurvedAnimation(parent: a, curve: Motion.enter);
         final sale = CurvedAnimation(parent: sa, curve: Motion.exit);
         return FadeTransition(
@@ -59,6 +64,7 @@ CustomTransitionPage<void> _deslizar(Widget child, GoRouterState s) => CustomTra
       transitionDuration: const Duration(milliseconds: 380),
       reverseTransitionDuration: const Duration(milliseconds: 260),
       transitionsBuilder: (context, a, sa, c) {
+        if (Motion.reduced(context)) return c;
         final entra = CurvedAnimation(parent: a, curve: Motion.enter, reverseCurve: Motion.exit);
         return FadeTransition(
           opacity: Tween(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: a, curve: const Interval(0, 0.6))),
@@ -74,6 +80,7 @@ CustomTransitionPage<void> _subir(Widget child, GoRouterState s) => CustomTransi
       transitionDuration: const Duration(milliseconds: 420),
       reverseTransitionDuration: const Duration(milliseconds: 280),
       transitionsBuilder: (context, a, sa, c) {
+        if (Motion.reduced(context)) return c;
         final entra = CurvedAnimation(parent: a, curve: Motion.enter, reverseCurve: Motion.exit);
         return FadeTransition(
           opacity: entra,
@@ -128,7 +135,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         return _rutasAuth.contains(loc) ? null : '/login';
       }
       if (pendiente != null) Future.microtask(() => ref.read(rutaPendienteProvider.notifier).set(null));
-      if (_rutasAuth.contains(loc) || loc == '/inicio') return pendiente ?? '/hoy';
+      if (_rutasAuth.contains(loc) || loc == '/inicio') {
+        if (ref.read(bienvenidaPendienteProvider)) return '/bienvenida';
+        return pendiente ?? '/hoy';
+      }
       return null;
     },
     routes: [
@@ -143,6 +153,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           return _eje(VerifyScreen(datos: d), s);
         },
       ),
+      GoRoute(path: '/bienvenida', pageBuilder: (c, s) => _fade(const ModuleTheme(module: AppModule.inicio, child: OnboardingScreen()), s)),
       StatefulShellRoute(
         builder: (context, state, shell) => HomeShell(shell: shell),
         navigatorContainerBuilder: (context, shell, children) => AnimatedBranches(index: shell.currentIndex, children: children),

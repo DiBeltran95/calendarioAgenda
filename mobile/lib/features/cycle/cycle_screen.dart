@@ -41,10 +41,10 @@ class CycleScreen extends ConsumerWidget {
         child: ModuleLayout(
           onRefresh: () => ref.read(sincronizadorProvider).refrescarTodo(),
           primary: [
-            ModuleHeader(
-              overline: saludo(nombre),
-              title: AppModule.ciclo.label,
-              actions: [
+            EncabezadoPantalla(
+              contexto: saludo(nombre),
+              titulo: AppModule.ciclo.label,
+              acciones: [
                 IconButton(
                   tooltip: 'Leyenda de colores',
                   onPressed: () => showAppSheet(context, (_) => const _LeyendaSheet()),
@@ -52,7 +52,6 @@ class CycleScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            CargandoBarra(visible: ref.watch(bootstrapProvider).isLoading && !ref.watch(bootstrapProvider).hasValue),
             Entrance(
               child: stats.vacio ? _SinRegistros(onRegistrar: registrar) : _Hero(fecha: sel, detalles: detalles, stats: stats),
             ),

@@ -524,7 +524,7 @@ class _ReservarScreenState extends ConsumerState<ReservarScreen> {
             child: Container(
               width: 76,
               height: 76,
-              decoration: BoxDecoration(color: const Color(0xFF25D366), borderRadius: BorderRadius.circular(24)),
+              decoration: BoxDecoration(color: Brand.whatsapp, borderRadius: BorderRadius.circular(24)),
               child: const Icon(Icons.chat_rounded, color: Colors.white, size: 38),
             ).animate(onPlay: (c) => c.repeat(reverse: true)).moveY(begin: 0, end: -4, duration: 1500.ms, curve: Curves.easeInOut),
           ),

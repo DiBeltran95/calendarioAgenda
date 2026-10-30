@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../../app/theme/tokens.dart';
 import '../../core/dates.dart';
 import '../../core/providers.dart';
 import '../../core/session.dart';
@@ -71,7 +72,7 @@ class ServicioAvisosLocal implements ServicioAvisos {
     channelDescription: 'Avisos 30 minutos antes y a la hora de tus eventos',
     importance: Importance.high,
     priority: Priority.high,
-    color: Color(0xFF25D366),
+    color: Brand.whatsapp,
     category: AndroidNotificationCategory.reminder,
     styleInformation: BigTextStyleInformation(''),
   );

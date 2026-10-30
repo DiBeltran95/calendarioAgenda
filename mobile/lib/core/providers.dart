@@ -64,13 +64,14 @@ final moduloActivoProvider = NotifierProvider<ModuloActivo, AppModule>(ModuloAct
 /// Preferencias del dispositivo (tabla de ajustes local).
 class Preferencias {
   const Preferencias({
-    this.themeMode = ThemeMode.dark,
+    this.themeMode = ThemeMode.system,
     this.reducirMovimiento = false,
     this.onboardingFinanzasOculto = false,
     this.notificaciones = true,
     this.aviso30 = true,
     this.resumenDiario = true,
     this.permisoPedido = false,
+    this.modulos,
   });
 
   final ThemeMode themeMode;
@@ -89,11 +90,15 @@ class Preferencias {
   /// Ya se mostró la explicación previa al permiso del sistema.
   final bool permisoPedido;
 
+  /// Módulos que la persona eligió ver. null: nunca eligió, se ven todos (así
+  /// nadie pierde una pestaña que ya usaba al actualizar la app).
+  final Set<AppModule>? modulos;
+
   static Preferencias fromMap(Map<String, String> m) => Preferencias(
         themeMode: switch (m['tema']) {
           'light' => ThemeMode.light,
-          'system' => ThemeMode.system,
-          _ => ThemeMode.dark,
+          'dark' => ThemeMode.dark,
+          _ => ThemeMode.system,
         },
         reducirMovimiento: m['reducir_movimiento'] == '1',
         onboardingFinanzasOculto: m['onboarding_fin'] == '1',
@@ -101,6 +106,7 @@ class Preferencias {
         aviso30: m['aviso30'] != '0',
         resumenDiario: m['resumen'] != '0',
         permisoPedido: m['permiso_pedido'] == '1',
+        modulos: m['modulos'] == null ? null : {for (final n in m['modulos']!.split(',')) ...AppModule.values.where((x) => x.name == n)},
       );
 }
 
@@ -110,6 +116,21 @@ final preferenciasProvider = StreamProvider<Preferencias>((ref) {
         (rows) => Preferencias.fromMap({for (final r in rows) r.clave: r.valor}),
       );
 });
+
+/// Módulos visibles en la navegación. "Hoy" siempre está.
+final modulosActivosProvider = Provider<Set<AppModule>>((ref) {
+  final elegidos = ref.watch(preferenciasProvider).value?.modulos;
+  return elegidos == null ? AppModule.values.toSet() : {AppModule.inicio, ...elegidos};
+});
+
+/// La cuenta se acaba de verificar: toca la bienvenida antes de entrar.
+class BienvenidaPendiente extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void set(bool v) => state = v;
+}
+
+final bienvenidaPendienteProvider = NotifierProvider<BienvenidaPendiente, bool>(BienvenidaPendiente.new);
 
 final ajustesRepoProvider = Provider((ref) => AjustesRepo(ref.watch(databaseProvider)));
 
@@ -131,4 +152,5 @@ class AjustesRepo {
   Future<void> setAviso30(bool v) => set('aviso30', v ? '1' : '0');
   Future<void> setResumenDiario(bool v) => set('resumen', v ? '1' : '0');
   Future<void> marcarPermisoPedido() => set('permiso_pedido', '1');
+  Future<void> setModulos(Set<AppModule> m) => set('modulos', m.where((x) => x != AppModule.inicio).map((x) => x.name).join(','));
 }

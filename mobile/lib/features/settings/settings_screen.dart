@@ -13,6 +13,7 @@ import '../../core/widgets/ui.dart';
 import '../../data/sync.dart';
 import '../auth/auth_screens.dart' show whatsappEnmascarado;
 import '../notifications/notification_service.dart';
+import '../onboarding/onboarding_screen.dart' show opcionesModulos;
 import '../notifications/push_registro.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -24,6 +25,7 @@ class SettingsScreen extends ConsumerWidget {
     final prefs = ref.watch(preferenciasProvider).value ?? const Preferencias();
     final usuario = ref.watch(sesionProvider).value?.usuario;
     final repo = ref.read(ajustesRepoProvider);
+    final activos = ref.watch(modulosActivosProvider);
     final permiso = ref.watch(permisoAvisosProvider).value;
     final programados = ref.watch(avisosProgramadosProvider);
     final push = ref.watch(estadoPushProvider);
@@ -38,15 +40,7 @@ class SettingsScreen extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(Gap.md, Gap.xs, Gap.md, Gap.xxxl),
               children: [
-                ModuleHeader(
-                  overline: 'Tu cuenta',
-                  title: 'Perfil',
-                  perfil: false,
-                  actions: [
-                    if (Navigator.of(context).canPop())
-                      IconButton(tooltip: 'Cerrar', onPressed: () => Navigator.of(context).maybePop(), icon: const Icon(Icons.close_rounded)),
-                  ],
-                ),
+                EncabezadoPantalla(titulo: 'Perfil', perfil: false, atras: Navigator.of(context).canPop()),
                 // ── Perfil ──
                 Entrance(
                   index: i++,
@@ -70,7 +64,7 @@ class SettingsScreen extends ConsumerWidget {
                               Text(usuario?.email ?? '', style: context.text.bodySmall),
                               if ((usuario?.whatsapp ?? '').isNotEmpty)
                                 Row(children: [
-                                  const Icon(Icons.chat_rounded, size: 14, color: Color(0xFF25D366)),
+                                  const Icon(Icons.chat_rounded, size: 14, color: Brand.whatsapp),
                                   const SizedBox(width: 4),
                                   Flexible(
                                     child: Text(whatsappEnmascarado(usuario!.whatsapp), style: context.text.bodySmall, overflow: TextOverflow.ellipsis),
@@ -79,6 +73,28 @@ class SettingsScreen extends ConsumerWidget {
                             ],
                           ),
                         ),
+                      ],
+                    ),
+                  ),
+                ),
+                const VGap.lg(),
+                // ── Módulos ──
+                const SectionHeader('Módulos', icon: Icons.dashboard_customize_rounded, subtitle: 'Elige qué ver en la barra inferior. Tus datos no se borran.'),
+                Entrance(
+                  index: i++,
+                  child: AppCard(
+                    padding: const EdgeInsets.symmetric(horizontal: Gap.md, vertical: Gap.xxs),
+                    child: Column(
+                      children: [
+                        for (final o in opcionesModulos)
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            secondary: IconBadge(o.modulo.iconSelected, color: o.modulo.accent(Theme.of(context).brightness), size: 40),
+                            value: activos.contains(o.modulo),
+                            onChanged: (v) => repo.setModulos({...activos.where((m) => m != o.modulo), if (v) o.modulo}),
+                            title: Text(o.modulo.label),
+                            subtitle: Text(o.titulo, style: context.text.bodySmall),
+                          ),
                       ],
                     ),
                   ),
@@ -93,7 +109,7 @@ class SettingsScreen extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Row(children: [
-                          const Icon(Icons.chat_rounded, color: Color(0xFF25D366)),
+                          const Icon(Icons.chat_rounded, color: Brand.whatsapp),
                           const HGap.sm(),
                           Expanded(
                             child: Text(

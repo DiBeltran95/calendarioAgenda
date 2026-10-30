@@ -14,10 +14,10 @@ abstract final class Gap {
 
 /// Radios de esquina.
 abstract final class Radii {
-  static const double sm = 10;
-  static const double md = 14;
-  static const double lg = 20;
-  static const double xl = 28;
+  static const double sm = 12;
+  static const double md = 16;
+  static const double lg = 24;
+  static const double xl = 32;
   static const double pill = 999;
 
   static final BorderRadius rSm = BorderRadius.circular(sm);
@@ -34,24 +34,42 @@ abstract final class IconSizes {
   static const double xl = 32;
 }
 
-/// Colores base de la marca, independientes del módulo.
+/// Colores base de la marca, independientes del módulo. Neutros cálidos
+/// "Tinta / Papel" con el violeta de Agendaservi y el coral como firma.
 abstract final class Brand {
-  // Fondo oscuro heredado del estilo WhatsApp Dark de la versión web.
-  static const darkBg = Color(0xFF0B141A);
-  static const darkSurface = Color(0xFF111B21);
-  static const darkSurfaceHigh = Color(0xFF1A252D);
-  static const darkSurfaceHighest = Color(0xFF233138);
-  static const darkText = Color(0xFFE9EDEF);
-  static const darkTextSecondary = Color(0xFF8FA0AA); // 6.3:1 sobre darkBg
+  static const darkBg = Color(0xFF0F1115);
+  static const darkSurface = Color(0xFF171A21);
+  static const darkSurfaceHigh = Color(0xFF1F232C);
+  static const darkSurfaceHighest = Color(0xFF2A2F3A);
+  static const darkText = Color(0xFFECEDEF);
+  static const darkTextSecondary = Color(0xFF9AA1AE);
 
-  static const lightBg = Color(0xFFF4F6F8);
+  static const lightBg = Color(0xFFF6F5F2);
   static const lightSurface = Color(0xFFFFFFFF);
-  static const lightSurfaceHigh = Color(0xFFEDF1F4);
-  static const lightSurfaceHighest = Color(0xFFE2E8ED);
-  static const lightText = Color(0xFF0F172A);
-  static const lightTextSecondary = Color(0xFF4B5968); // 7:1 sobre lightBg
+  static const lightSurfaceHigh = Color(0xFFEFEDE8);
+  static const lightSurfaceHighest = Color(0xFFE6E3DC);
+  static const lightText = Color(0xFF14161B);
+  static const lightTextSecondary = Color(0xFF545966);
 
-  static const green = Color(0xFF25D366);
+  static const violetaClaro = Color(0xFF5B4CF0);
+  static const violetaOscuro = Color(0xFFA49BFF);
+
+  /// Acento de firma: degradado de héroes, onboarding y celebraciones.
+  static const coral = Color(0xFFFF7A59);
+
+  /// Verde de WhatsApp: solo para lo que ES WhatsApp, no como color de marca.
+  static const whatsapp = Color(0xFF25D366);
+}
+
+/// Color de dato (categoría, tipo de cuenta) con su versión para cada modo:
+/// los tonos vivos que se leen bien sobre oscuro no alcanzan contraste en claro.
+@immutable
+class ColorPar {
+  const ColorPar(this.claro, this.oscuro);
+  final Color claro;
+  final Color oscuro;
+
+  Color de(Brightness b) => b == Brightness.dark ? oscuro : claro;
 }
 
 /// Colores de las fases del ciclo (mismo significado que en la web).

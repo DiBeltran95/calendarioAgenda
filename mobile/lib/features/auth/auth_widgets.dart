@@ -62,9 +62,9 @@ class _AuroraBackgroundState extends State<AuroraBackground> with SingleTickerPr
                     ),
                   );
               return Stack(children: [
-                blob(const Color(0xFF25D366), 420, const Alignment(-1.1, -0.9), 0),
-                blob(const Color(0xFF60A5FA), 380, const Alignment(1.1, -0.2), 2),
-                blob(const Color(0xFFF472B6), 340, const Alignment(-0.6, 1.1), 4),
+                blob(Brand.violetaClaro, 440, const Alignment(-1.1, -0.9), 0),
+                blob(Brand.coral, 380, const Alignment(1.1, -0.2), 2),
+                blob(Brand.violetaOscuro, 340, const Alignment(-0.6, 1.1), 4),
               ]);
             },
           ),

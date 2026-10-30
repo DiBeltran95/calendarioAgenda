@@ -6,12 +6,14 @@ import 'package:go_router/go_router.dart';
 import '../core/motion.dart';
 import '../core/net/tiempo_real.dart';
 import '../core/providers.dart';
+import '../core/widgets/sheets.dart';
 import '../data/sync.dart';
 import '../features/citas/citas_en_vivo.dart';
 import '../features/finance/pagos/pagos_repository.dart';
 import '../features/notifications/notification_service.dart';
 import '../features/notifications/push_registro.dart';
 import '../features/notifications/refresco_fondo.dart';
+import 'barra_flotante.dart';
 import 'theme/app_module.dart';
 import 'theme/palette.dart';
 import 'theme/tokens.dart';
@@ -44,6 +46,25 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> {
   late final AppLifecycleListener _ciclo;
+
+  @override
+  void didUpdateWidget(HomeShell old) {
+    super.didUpdateWidget(old);
+    if (old.shell.currentIndex != widget.shell.currentIndex) _activarSiOculto();
+  }
+
+  /// Un enlace o notificación llevó a un módulo oculto: se muestra de nuevo,
+  /// porque lo que la persona abrió pertenece a él.
+  void _activarSiOculto() {
+    final m = _destinos[widget.shell.currentIndex].module;
+    final prefs = ref.read(preferenciasProvider).value;
+    final elegidos = prefs?.modulos;
+    if (m == null || elegidos == null || ref.read(modulosActivosProvider).contains(m)) return;
+    ref.read(ajustesRepoProvider).setModulos({...elegidos, m});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) toast(context, 'Activamos ${m.label} para mostrarte esto.', icon: m.iconSelected);
+    });
+  }
 
   @override
   void initState() {
@@ -88,6 +109,18 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     ref.watch(canalVivoProvider);
     ref.watch(citasEnVivoProvider);
     ref.watch(pagosEnVivoProvider);
+    final activos = ref.watch(modulosActivosProvider);
+    ref.listen(preferenciasProvider, (antes, ahora) {
+      if (!ahora.hasValue) return;
+      if (antes?.hasValue != true) {
+        // Las preferencias acaban de cargar (app abierta desde un enlace).
+        _activarSiOculto();
+      } else {
+        // Se apagó el módulo en el que estaba parado: vuelve a Hoy.
+        final actual = _destinos[widget.shell.currentIndex].module;
+        if (actual != null && !ref.read(modulosActivosProvider).contains(actual)) widget.shell.goBranch(0);
+      }
+    });
 
     final shell = widget.shell;
     final m = _destinos[shell.currentIndex].module;
@@ -98,14 +131,20 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final wide = MediaQuery.sizeOf(context).width >= 980;
     final p = context.palette;
     final cuerpo = Column(children: [const _BannerRed(), Expanded(child: shell)]);
+    // Índices de rama de las pestañas visibles, en orden.
+    final visibles = [
+      for (var i = 0; i < _destinos.length; i++)
+        if (_destinos[i].module == null || activos.contains(_destinos[i].module)) i,
+    ];
+    final elegida = visibles.indexOf(shell.currentIndex).clamp(0, visibles.length - 1);
 
     if (wide) {
       return Scaffold(
         body: Row(
           children: [
             NavigationRail(
-              selectedIndex: shell.currentIndex,
-              onDestinationSelected: _ir,
+              selectedIndex: elegida,
+              onDestinationSelected: (i) => _ir(visibles[i]),
               labelType: NavigationRailLabelType.all,
               backgroundColor: p.surface,
               indicatorColor: p.accent.withValues(alpha: 0.2),
@@ -119,8 +158,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                 ),
               ),
               destinations: [
-                for (final d in _destinos)
-                  NavigationRailDestination(icon: Icon(d.icon), selectedIcon: Icon(d.iconSel), label: Text(d.label)),
+                for (final i in visibles)
+                  NavigationRailDestination(icon: Icon(_destinos[i].icon), selectedIcon: Icon(_destinos[i].iconSel), label: Text(_destinos[i].label)),
               ],
             ),
             VerticalDivider(width: 1, color: p.border),
@@ -130,19 +169,37 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       );
     }
 
+    // La barra flota sobre el contenido: cada pantalla la recibe como área
+    // segura, así sus botones flotantes y avisos quedan por encima de ella.
+    final mq = MediaQuery.of(context);
+    final espacio = BarraFlotante.espacio(context);
+    final teclado = mq.viewInsets.bottom > 0;
     return Scaffold(
-      body: cuerpo,
-      bottomNavigationBar: DecoratedBox(
-        decoration: BoxDecoration(border: Border(top: BorderSide(color: p.border))),
-        child: NavigationBar(
-          selectedIndex: shell.currentIndex,
-          onDestinationSelected: _ir,
-          animationDuration: Motion.of(context, Motion.slow),
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: [
-            for (final d in _destinos) NavigationDestination(icon: Icon(d.icon), selectedIcon: Icon(d.iconSel), label: d.label),
-          ],
-        ),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: MediaQuery(
+              data: teclado ? mq : mq.copyWith(padding: mq.padding.copyWith(bottom: espacio), viewPadding: mq.viewPadding.copyWith(bottom: espacio)),
+              child: cuerpo,
+            ),
+          ),
+          if (!teclado)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: MediaQuery.withClampedTextScaling(
+                maxScaleFactor: 1.15,
+                child: BarraFlotante(
+                  seleccionado: elegida,
+                  onElegir: (i) => _ir(visibles[i]),
+                  destinos: [
+                    for (final i in visibles) DestinoBarra(etiqueta: _destinos[i].label, icono: _destinos[i].icon, iconoSel: _destinos[i].iconSel),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

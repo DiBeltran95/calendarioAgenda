@@ -1,18 +1,16 @@
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app_module.dart';
 import 'palette.dart';
 import 'tokens.dart';
 
-/// Las pruebas desactivan Google Fonts (no hay red): se usa la fuente base.
-bool usarGoogleFonts = true;
+/// Plus Jakarta Sans va incluida en la app (`assets/fonts`): se ve igual desde
+/// la primera apertura, aunque no haya internet.
+const fuenteApp = 'PlusJakartaSans';
 
-TextStyle _inter({double? fontSize, FontWeight? fontWeight, double? height, double? letterSpacing, Color? color}) {
-  final base = TextStyle(fontSize: fontSize, fontWeight: fontWeight, height: height, letterSpacing: letterSpacing, color: color);
-  return usarGoogleFonts ? GoogleFonts.inter(textStyle: base) : base;
-}
+TextStyle _t(double size, FontWeight peso, double alto, double espaciado, Color color) =>
+    TextStyle(fontFamily: fuenteApp, fontSize: size, fontWeight: peso, height: alto, letterSpacing: espaciado, color: color);
 
 /// Construye el [ThemeData] de un módulo en un brillo dado.
 ///
@@ -55,6 +53,7 @@ ThemeData buildTheme(Brightness brightness, AppModule module) {
 
   final base = ThemeData(
     useMaterial3: true,
+    fontFamily: fuenteApp,
     brightness: brightness,
     colorScheme: scheme,
     scaffoldBackgroundColor: p.bg,
@@ -64,19 +63,20 @@ ThemeData buildTheme(Brightness brightness, AppModule module) {
     extensions: [p],
   );
 
-  final textTheme = (usarGoogleFonts ? GoogleFonts.interTextTheme(base.textTheme) : base.textTheme).copyWith(
-    displaySmall: _inter(fontSize: 32, fontWeight: FontWeight.w700, height: 1.15, letterSpacing: -0.6, color: p.text),
-    headlineMedium: _inter(fontSize: 26, fontWeight: FontWeight.w700, height: 1.2, letterSpacing: -0.4, color: p.text),
-    headlineSmall: _inter(fontSize: 22, fontWeight: FontWeight.w700, height: 1.25, letterSpacing: -0.3, color: p.text),
-    titleLarge: _inter(fontSize: 19, fontWeight: FontWeight.w600, height: 1.3, letterSpacing: -0.2, color: p.text),
-    titleMedium: _inter(fontSize: 16, fontWeight: FontWeight.w600, height: 1.35, color: p.text),
-    titleSmall: _inter(fontSize: 14, fontWeight: FontWeight.w600, height: 1.35, color: p.text),
-    bodyLarge: _inter(fontSize: 16, fontWeight: FontWeight.w400, height: 1.5, color: p.text),
-    bodyMedium: _inter(fontSize: 14.5, fontWeight: FontWeight.w400, height: 1.5, color: p.text),
-    bodySmall: _inter(fontSize: 13, fontWeight: FontWeight.w400, height: 1.45, color: p.textSecondary),
-    labelLarge: _inter(fontSize: 14.5, fontWeight: FontWeight.w600, height: 1.2, color: p.text),
-    labelMedium: _inter(fontSize: 13, fontWeight: FontWeight.w500, height: 1.2, color: p.textSecondary),
-    labelSmall: _inter(fontSize: 11.5, fontWeight: FontWeight.w600, height: 1.2, letterSpacing: 0.4, color: p.textSecondary),
+  final textTheme = base.textTheme.copyWith(
+    // Escala de la app: nada por debajo de 12 px.
+    displaySmall: _t(34, FontWeight.w800, 1.15, -0.8, p.text),
+    headlineMedium: _t(28, FontWeight.w700, 1.2, -0.5, p.text),
+    headlineSmall: _t(24, FontWeight.w700, 1.25, -0.4, p.text),
+    titleLarge: _t(20, FontWeight.w600, 1.3, -0.2, p.text),
+    titleMedium: _t(17, FontWeight.w600, 1.35, -0.1, p.text),
+    titleSmall: _t(15, FontWeight.w600, 1.35, 0, p.text),
+    bodyLarge: _t(16, FontWeight.w400, 1.5, 0, p.text),
+    bodyMedium: _t(15, FontWeight.w400, 1.5, 0, p.text),
+    bodySmall: _t(13.5, FontWeight.w400, 1.45, 0, p.textSecondary),
+    labelLarge: _t(14, FontWeight.w600, 1.2, 0, p.text),
+    labelMedium: _t(13, FontWeight.w500, 1.2, 0, p.textSecondary),
+    labelSmall: _t(12, FontWeight.w600, 1.2, 0.2, p.textSecondary),
   );
 
   final fieldBorder = OutlineInputBorder(
@@ -102,7 +102,7 @@ ThemeData buildTheme(Brightness brightness, AppModule module) {
       color: p.surface,
       elevation: 0,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: Radii.rLg, side: BorderSide(color: p.border)),
+      shape: RoundedRectangleBorder(borderRadius: Radii.rLg, side: BorderSide(color: p.bordeTarjeta)),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,

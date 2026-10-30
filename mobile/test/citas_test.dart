@@ -3,7 +3,6 @@
 
 import 'package:agendaservi/app/app.dart';
 import 'package:agendaservi/app/router.dart';
-import 'package:agendaservi/app/theme/app_theme.dart';
 import 'package:agendaservi/core/dates.dart';
 import 'package:agendaservi/core/session.dart';
 import 'package:agendaservi/data/models.dart';
@@ -32,7 +31,6 @@ const sesionAna = Sesion(token: 'tok-2', usuario: Usuario(id: 2, nombre: 'Ana Cl
 
 void main() {
   setUpAll(() async {
-    usarGoogleFonts = false;
     await initializeDateFormatting('es_CO');
   });
 

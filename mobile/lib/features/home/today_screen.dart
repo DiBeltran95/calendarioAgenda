@@ -558,7 +558,7 @@ class _Acciones extends ConsumerWidget {
       children: [
         const SectionHeader('Acciones rápidas', icon: Icons.bolt_rounded),
         Row(children: [
-          accion(Icons.event_available_rounded, 'Nuevo evento', const Color(0xFF25D366), () => abrirFormularioEvento(context, fecha: hoyYmd())),
+          accion(Icons.event_available_rounded, 'Nuevo evento', Brand.whatsapp, () => abrirFormularioEvento(context, fecha: hoyYmd())),
           const HGap.xs(),
           accion(Icons.receipt_long_rounded, 'Registrar gasto', const Color(0xFF60A5FA), () => abrirTransaccion(context, fecha: hoyYmd())),
           const HGap.xs(),

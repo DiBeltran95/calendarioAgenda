@@ -4,7 +4,6 @@
 
 import 'package:agendaservi/app/app.dart';
 import 'package:agendaservi/app/router.dart';
-import 'package:agendaservi/app/theme/app_theme.dart';
 import 'package:agendaservi/core/net/tiempo_real.dart';
 import 'package:agendaservi/data/models.dart';
 import 'package:agendaservi/features/citas/citas_en_vivo.dart';
@@ -46,7 +45,6 @@ AvisoInterpretado? leer(String texto, {String titulo = '', String app = 'SMS', S
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
-    usarGoogleFonts = false;
     await initializeDateFormatting('es_CO');
   });
 

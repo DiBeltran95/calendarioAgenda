@@ -4,7 +4,8 @@
 // cualquier excepción o desbordamiento de layout.
 
 import 'package:agendaservi/app/app.dart';
-import 'package:agendaservi/app/theme/app_theme.dart';
+import 'package:agendaservi/app/router.dart';
+import 'package:agendaservi/app/theme/app_module.dart';
 import 'package:agendaservi/core/dates.dart';
 import 'package:agendaservi/core/providers.dart';
 import 'package:agendaservi/core/session.dart';
@@ -71,7 +72,6 @@ Future<void> _sembrar(FakeBackend backend) async {
 
 void main() {
   setUpAll(() async {
-    usarGoogleFonts = false;
     await initializeDateFormatting('es_CO');
   });
 
@@ -227,8 +227,52 @@ void main() {
 
     await t.enterText(find.byType(TextField).last, '123456');
     await esperar(t, 20);
-    expect(find.textContaining('Ana'), findsWidgets);
     expect(find.text('Revisa tu WhatsApp'), findsNothing);
+
+    // Cuenta nueva: la bienvenida pregunta para qué la usará.
+    expect(find.text('¿Para qué usarás Agendaservi?'), findsOneWidget);
+    expect(find.text('Elige al menos una opción para continuar.'), findsOneWidget);
+    await t.tap(find.text('Mis finanzas'));
+    await esperar(t, 4);
+    await t.tap(find.text('Continuar'));
+    await esperar(t, 8);
+    expect(find.text('Que nada se te pase'), findsOneWidget);
+    await t.tap(find.text('Ahora no'));
+    await esperar(t, 20);
+
+    // Solo ve lo que eligió.
+    expect(find.textContaining('Ana'), findsWidgets);
+    expect(find.text('Finanzas'), findsWidgets);
+    expect(find.bySemanticsLabel('Citas'), findsNothing);
+    expect(find.bySemanticsLabel('Ciclo'), findsNothing);
+    await desmontar(t);
+  });
+
+  testWidgets(timeout: const Timeout(Duration(minutes: 2)), 'módulos: se ocultan y un enlace los vuelve a activar', (t) async {
+    await tamanio(t, const Size(390, 844));
+    final backend = FakeBackend();
+    final db = dbEnMemoria();
+    await t.runAsync(() => AjustesRepo(db).setModulos({AppModule.eventos}));
+    await t.pumpWidget(ProviderScope(overrides: overridesDePrueba(backend: backend, db: db), child: const AgendaApp()));
+    await esperar(t, 20);
+
+    final semantica = t.ensureSemantics();
+    expect(find.bySemanticsLabel('Eventos'), findsOneWidget);
+    expect(find.bySemanticsLabel('Finanzas'), findsNothing);
+
+    // Una notificación lleva a Finanzas, que estaba oculto.
+    final c = ProviderScope.containerOf(t.element(find.byType(MaterialApp).first));
+    c.read(routerProvider).go('/finanzas');
+    await esperar(t, 12);
+    expect(find.bySemanticsLabel('Finanzas'), findsOneWidget);
+    expect(c.read(modulosActivosProvider), contains(AppModule.finanzas));
+    expect(find.textContaining('Activamos Finanzas'), findsOneWidget);
+
+    // Apagarlo estando dentro devuelve a Hoy.
+    await t.runAsync(() => AjustesRepo(db).setModulos({AppModule.eventos}));
+    await esperar(t, 12);
+    expect(c.read(routerProvider).state.uri.path, '/hoy');
+    semantica.dispose();
     await desmontar(t);
   });
 }

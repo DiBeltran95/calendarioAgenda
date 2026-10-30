@@ -55,10 +55,10 @@ class EventsScreen extends ConsumerWidget {
         child: ModuleLayout(
           onRefresh: () => ref.read(sincronizadorProvider).refrescarTodo(),
           primary: [
-            ModuleHeader(
-              overline: saludo(nombre),
-              title: AppModule.eventos.label,
-              actions: [
+            EncabezadoPantalla(
+              contexto: saludo(nombre),
+              titulo: AppModule.eventos.label,
+              acciones: [
                 IconButton(
                   tooltip: 'Buscar eventos',
                   onPressed: () => showAppSheet(context, (_) => const _BuscarSheet()),
@@ -66,7 +66,6 @@ class EventsScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            CargandoBarra(visible: eventosAsync.isLoading && !eventosAsync.hasValue),
             Entrance(child: _ResumenMes(eventos: eventos)),
             const VGap.sm(),
             Entrance(
