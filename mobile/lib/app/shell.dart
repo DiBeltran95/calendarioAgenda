@@ -8,11 +8,13 @@ import '../core/net/tiempo_real.dart';
 import '../core/providers.dart';
 import '../core/widgets/sheets.dart';
 import '../data/sync.dart';
+import '../features/captura/captura_sheet.dart';
 import '../features/citas/citas_en_vivo.dart';
 import '../features/finance/pagos/pagos_repository.dart';
 import '../features/notifications/notification_service.dart';
 import '../features/notifications/push_registro.dart';
 import '../features/notifications/refresco_fondo.dart';
+import '../features/widgets_inicio/publicador.dart';
 import 'barra_flotante.dart';
 import 'theme/app_module.dart';
 import 'theme/palette.dart';
@@ -53,6 +55,14 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     if (old.shell.currentIndex != widget.shell.currentIndex) _activarSiOculto();
   }
 
+  /// El botón del widget pidió la captura, quizá antes de que esta pantalla
+  /// existiera (la app arrancó tocándolo).
+  void _abrirCapturaPendiente() {
+    if (!mounted || !ref.read(capturaPendienteProvider)) return;
+    ref.read(capturaPendienteProvider.notifier).set(false);
+    abrirCaptura(context);
+  }
+
   /// Un enlace o notificación llevó a un módulo oculto: se muestra de nuevo,
   /// porque lo que la persona abrió pertenece a él.
   void _activarSiOculto() {
@@ -69,6 +79,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _abrirCapturaPendiente());
     _ciclo = AppLifecycleListener(
       onResume: () {
         ref.read(sincronizadorProvider).refrescarTodo();
@@ -109,7 +120,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     ref.watch(canalVivoProvider);
     ref.watch(citasEnVivoProvider);
     ref.watch(pagosEnVivoProvider);
+    ref.watch(widgetsInicioProvider);
     final activos = ref.watch(modulosActivosProvider);
+    ref.listen(capturaPendienteProvider, (_, pedir) {
+      if (pedir) WidgetsBinding.instance.addPostFrameCallback((_) => _abrirCapturaPendiente());
+    });
     ref.listen(preferenciasProvider, (antes, ahora) {
       if (!ahora.hasValue) return;
       if (antes?.hasValue != true) {

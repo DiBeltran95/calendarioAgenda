@@ -153,6 +153,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           return _eje(VerifyScreen(datos: d), s);
         },
       ),
+      // Botón del widget de la pantalla de inicio: Hoy con la captura abierta.
+      GoRoute(
+        path: '/capturar',
+        redirect: (c, s) {
+          Future.microtask(() => ref.read(capturaPendienteProvider.notifier).set(true));
+          return '/hoy';
+        },
+      ),
       GoRoute(path: '/bienvenida', pageBuilder: (c, s) => _fade(const ModuleTheme(module: AppModule.inicio, child: OnboardingScreen()), s)),
       StatefulShellRoute(
         builder: (context, state, shell) => HomeShell(shell: shell),

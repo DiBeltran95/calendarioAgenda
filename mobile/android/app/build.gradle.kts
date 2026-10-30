@@ -49,4 +49,6 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // Temas AppCompat que necesita el diálogo de huella en Android 8 o anterior.
+    implementation("androidx.appcompat:appcompat:1.7.0")
 }

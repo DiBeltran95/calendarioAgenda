@@ -105,6 +105,8 @@ void main() {
     ('teléfono', const Size(390, 844), false, 1.0),
     ('tablet', const Size(1280, 900), false, 1.0),
     ('teléfono claro con texto al 130%', const Size(390, 844), true, 1.3),
+    ('teléfono pequeño con texto grande', const Size(360, 640), false, 1.35),
+    ('teléfono en horizontal', const Size(844, 390), true, 1.0),
   ]) {
     testWidgets(timeout: const Timeout(Duration(minutes: 3)), 'recorre toda la app en $nombre', (t) async {
       await tamanio(t, size);
@@ -145,6 +147,11 @@ void main() {
       expect(find.text('Patrimonio neto'), findsOneWidget);
       await verEn(t, find.text('Planear'));
       for (final tab in ['Cuentas', 'Planear', 'Presupuesto', 'Planificador', 'Metas', 'Historial', 'Calendario', 'Gráficos', 'Resumen']) {
+        // En pantallas bajas la lista no construye lo que está lejos: se sube y se busca.
+        final lista = find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down);
+        await t.drag(lista.last, const Offset(0, 3000));
+        await esperar(t, 4);
+        await verEn(t, find.text(tab));
         await t.ensureVisible(find.text(tab).first);
         await esperar(t, 4);
         await t.tap(find.text(tab).first);

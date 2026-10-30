@@ -14,6 +14,7 @@ import '../../data/sync.dart';
 import '../auth/auth_screens.dart' show whatsappEnmascarado;
 import '../notifications/notification_service.dart';
 import '../onboarding/onboarding_screen.dart' show opcionesModulos;
+import '../seguridad/bloqueo.dart';
 import '../notifications/push_registro.dart';
 
 String _ultimaSincronizacion(DateTime? t) {
@@ -108,6 +109,33 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ),
                 const VGap.lg(),
+                // ── Seguridad ──
+                if (ref.watch(biometriaDisponibleProvider).value == true) ...[
+                  const SectionHeader('Seguridad', icon: Icons.lock_rounded),
+                  Entrance(
+                    index: i++,
+                    child: AppCard(
+                      padding: const EdgeInsets.symmetric(horizontal: Gap.md, vertical: Gap.xxs),
+                      child: SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: prefs.bloqueo,
+                        onChanged: (v) async {
+                          final toaster = Toaster.of(context);
+                          // Para activarlo o quitarlo hay que identificarse.
+                          final ok = await ref.read(servicioBiometriaProvider).autenticar(v ? 'Confirma para activar el bloqueo' : 'Confirma para quitar el bloqueo');
+                          if (ok) {
+                            await repo.setBloqueo(v);
+                          } else {
+                            toaster.show('No pudimos identificarte. No se hicieron cambios.', error: true);
+                          }
+                        },
+                        title: const Text('Bloquear con Face ID o huella'),
+                        subtitle: Text('Se pide al abrir la app y al volver después de ${esperaBloqueo.inMinutes} minutos.', style: context.text.bodySmall),
+                      ),
+                    ),
+                  ),
+                  const VGap.lg(),
+                ],
                 // ── Notificaciones ──
                 const SectionHeader('Notificaciones', icon: Icons.notifications_rounded),
                 Entrance(

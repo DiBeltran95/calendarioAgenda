@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_fondo">#FFFFFFFF</color>
+    <color name="widget_texto">#FF14161B</color>
+    <color name="widget_texto_suave">#FF545966</color>
+    <color name="widget_acento">#FF5B4CF0</color>
+    <color name="widget_sobre_acento">#FFFFFFFF</color>
+
+    <string name="widget_proximo_nombre">Próximo compromiso</string>
+    <string name="widget_proximo_descripcion">Lo siguiente en tu agenda</string>
+    <string name="widget_hoy_nombre">Tu día</string>
+    <string name="widget_hoy_descripcion">Tu día de un vistazo y registro rápido</string>
+    <string name="widget_proximo_etiqueta">Próximo</string>
+    <string name="widget_sin_compromisos">Sin compromisos próximos</string>
+    <string name="widget_toca_para_abrir">Toca para abrir Agendaservi</string>
+    <string name="widget_capturar">Registrar</string>
+    <string name="widget_gasto_mes">%1$s gastado este mes</string>
+    <plurals name="widget_citas">
+        <item quantity="one">%1$d cita hoy</item>
+        <item quantity="other">%1$d citas hoy</item>
+    </plurals>
+    <plurals name="widget_pagos">
+        <item quantity="one">%1$d pago por clasificar</item>
+        <item quantity="other">%1$d pagos por clasificar</item>
+    </plurals>
+</resources>

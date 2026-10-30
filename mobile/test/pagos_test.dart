@@ -168,6 +168,41 @@ void main() {
     });
   });
 
+  testWidgets(timeout: const Timeout(Duration(minutes: 2)), 'interfaz: deslizar guarda o descarta el pago', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final backend = FakeBackend();
+    backend.pagoApplePay(1, monto: 32000, comercio: 'Terpel Autopista', tarjeta: 'Visa');
+    backend.pagoApplePay(1, monto: 9000, comercio: 'Tienda Don Pepe', tarjeta: 'Visa');
+
+    Future<void> esperar([int vueltas = 14]) async {
+      for (var i = 0; i < vueltas; i++) {
+        await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+        await t.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    await t.pumpWidget(ProviderScope(overrides: overridesDePrueba(backend: backend, db: dbEnMemoria()), child: const AgendaApp()));
+    await esperar(20);
+    ProviderScope.containerOf(t.element(find.byType(MaterialApp).first)).read(routerProvider).push(rutaPagos);
+    await esperar(16);
+
+    await t.drag(find.text('Terpel Autopista'), const Offset(380, 0));
+    await esperar();
+    expect(find.text('Terpel Autopista'), findsNothing);
+    expect(backend.transacciones.single['categoria'], 'transporte');
+
+    await t.drag(find.text('Tienda Don Pepe'), const Offset(-380, 0));
+    await esperar();
+    expect(find.text('Tienda Don Pepe'), findsNothing);
+    expect(backend.transacciones, hasLength(1), reason: 'descartar no crea movimiento');
+    expect(find.text('Pago descartado'), findsOneWidget);
+
+    await t.pumpWidget(const SizedBox.shrink());
+    await t.pump(const Duration(seconds: 1));
+  });
+
   testWidgets(timeout: const Timeout(Duration(minutes: 2)), 'interfaz: clasificar un pago con un toque', (t) async {
     t.view.physicalSize = const Size(390, 844);
     t.view.devicePixelRatio = 1;

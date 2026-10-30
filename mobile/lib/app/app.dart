@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/motion.dart';
 import '../core/providers.dart';
+import '../features/seguridad/bloqueo.dart';
 import 'aviso_vivo.dart';
 import 'module_theme.dart';
 import 'router.dart';
@@ -41,7 +42,7 @@ class AgendaApp extends ConsumerWidget {
           // aún funciona. Avisos en vivo por encima de cualquier pantalla.
           child: MediaQuery.withClampedTextScaling(
             maxScaleFactor: 1.35,
-            child: CapaAvisoVivo(child: child!),
+            child: CapaBloqueo(child: CapaAvisoVivo(child: child!)),
           ),
         );
       },

@@ -20,10 +20,13 @@ Future<void> abrirFormularioEvento(
   Cumple? cumple,
   String? fecha,
   String categoriaInicial = 'reunion',
+  String? tituloInicial,
+  String? horaInicial,
+  double? montoInicial,
 }) {
   return showAppSheet(
     context,
-    (_) => EventFormSheet(evento: evento, cumple: cumple, fecha: fecha ?? evento?.fecha ?? hoyYmd(), categoriaInicial: cumple != null ? 'cumpleanos' : categoriaInicial),
+    (_) => EventFormSheet(evento: evento, cumple: cumple, fecha: fecha ?? evento?.fecha ?? hoyYmd(), categoriaInicial: cumple != null ? 'cumpleanos' : categoriaInicial, tituloInicial: tituloInicial, horaInicial: horaInicial, montoInicial: montoInicial),
   );
 }
 
@@ -44,12 +47,17 @@ Future<AlcanceSerie?> preguntarAlcance(BuildContext context, {required bool borr
 }
 
 class EventFormSheet extends ConsumerStatefulWidget {
-  const EventFormSheet({super.key, this.evento, this.cumple, required this.fecha, this.categoriaInicial = 'reunion'});
+  const EventFormSheet({super.key, this.evento, this.cumple, required this.fecha, this.categoriaInicial = 'reunion', this.tituloInicial, this.horaInicial, this.montoInicial});
 
   final Evento? evento;
   final Cumple? cumple;
   final String fecha;
   final String categoriaInicial;
+
+  /// Lo que ya se entendió en la captura rápida.
+  final String? tituloInicial;
+  final String? horaInicial;
+  final double? montoInicial;
 
   @override
   ConsumerState<EventFormSheet> createState() => _EventFormSheetState();
@@ -87,13 +95,13 @@ class _EventFormSheetState extends ConsumerState<EventFormSheet> {
     _fecha = c?.fecha ?? widget.fecha;
     // Un cumpleaños se muestra en el año visible aunque se haya creado otro año.
     if (c != null) _fecha = '${widget.fecha.substring(0, 4)}${c.fecha.substring(4)}';
-    _hora = e?.hora;
+    _hora = e?.hora ?? widget.horaInicial;
     _frecuencia = e?.frecuencia ?? 'unica';
-    _tipoTx = e?.tipoTransaccion ?? 'ninguno';
+    _tipoTx = e?.tipoTransaccion ?? (widget.montoInicial != null ? 'gasto' : 'ninguno');
     _estado = e?.estadoPago ?? 'pendiente';
-    _titulo = TextEditingController(text: e?.titulo ?? c?.nombre ?? '');
+    _titulo = TextEditingController(text: e?.titulo ?? c?.nombre ?? widget.tituloInicial ?? '');
     _ubicacion = TextEditingController(text: e?.ubicacion ?? '');
-    _costo = TextEditingController(text: montoInicial(e?.costo ?? 0));
+    _costo = TextEditingController(text: montoInicial(e?.costo ?? widget.montoInicial ?? 0));
     _anio = TextEditingController(text: c?.anioNacimiento?.toString() ?? '');
     _telefono = TextEditingController(text: c?.telefono ?? '');
     _mensaje = TextEditingController(text: c?.mensaje ?? '');
@@ -357,7 +365,7 @@ class _CategoryPicker extends StatelessWidget {
       return value == 'cumpleanos' ? c.value == 'cumpleanos' : c.value != 'cumpleanos';
     }).toList();
     return SizedBox(
-      height: 86,
+      height: 62 + MediaQuery.textScalerOf(context).scale(28),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: opciones.length,

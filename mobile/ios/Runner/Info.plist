@@ -75,6 +75,12 @@
 		<string>fetch</string>
 		<string>remote-notification</string>
 	</array>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Para desbloquear Agendaservi y proteger tus finanzas y tu información.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Para que puedas dictar lo que quieres registrar.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Para convertir en texto lo que dictas al registrar algo.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

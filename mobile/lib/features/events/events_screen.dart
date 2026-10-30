@@ -190,7 +190,7 @@ class _Leyenda extends StatelessWidget {
       children: [
         marca,
         const SizedBox(width: 6),
-        Text(t, style: context.text.labelSmall?.copyWith(letterSpacing: 0)),
+        Flexible(child: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.labelSmall?.copyWith(letterSpacing: 0))),
       ],
     );
     Widget muestra({Color? relleno, Color? borde}) => Container(

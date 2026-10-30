@@ -148,6 +148,12 @@ void main() {
         await foto(nombre);
       }
 
+      router.go('/capturar');
+      await esperar();
+      await t.enterText(find.byType(TextField).last, 'almuerzo 25 mil');
+      await esperar(6);
+      await foto('captura');
+
       await t.pumpWidget(const SizedBox.shrink());
       await t.pump(const Duration(seconds: 1));
       debugDisableShadows = true;

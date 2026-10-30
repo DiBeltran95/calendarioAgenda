@@ -421,7 +421,7 @@ class _LeyendaFin extends StatelessWidget {
       children: [
         i,
         const SizedBox(width: 4),
-        Text(t, style: context.text.labelSmall?.copyWith(letterSpacing: 0)),
+        Flexible(child: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.labelSmall?.copyWith(letterSpacing: 0))),
       ],
     );
     return Wrap(

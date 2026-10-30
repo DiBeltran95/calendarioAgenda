@@ -20,6 +20,7 @@ import '../../core/widgets/ui.dart';
 import '../../core/widgets/vista_async.dart';
 import '../../data/models.dart';
 import '../../data/sync.dart';
+import '../captura/captura_sheet.dart';
 import '../citas/citas_models.dart';
 import '../citas/citas_repository.dart';
 import '../cycle/cycle_engine.dart';
@@ -99,6 +100,8 @@ class TodayScreen extends ConsumerWidget {
                       children: [
                         _Cabecera(usuario: usuario),
                         const _AvisoPermiso(),
+                        const _BarraCaptura(),
+                        const VGap.sm(),
                         Entrance(index: i++, child: _Acciones(conAgenda: conAgenda, conFinanzas: conFinanzas, conCiclo: conCiclo, conCitas: conCitas)),
                         const VGap.md(),
                         if (fallo) ...[
@@ -586,6 +589,49 @@ class _CicloMini extends ConsumerWidget {
 }
 
 String _cuenta(int n, String uno, String varios) => '$n ${n == 1 ? uno : varios}';
+
+/// Entrada a la captura rápida: parece un campo de texto, con micrófono.
+class _BarraCaptura extends StatelessWidget {
+  const _BarraCaptura();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(Radii.md),
+        border: Border.all(color: p.bordeTarjeta),
+        boxShadow: p.sombraSuave,
+      ),
+      child: Row(children: [
+        Expanded(
+          child: Pressable(
+            onTap: () => abrirCaptura(context),
+            semanticLabel: 'Registrar algo rápido escribiéndolo',
+            scale: 0.99,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(Gap.md, Gap.md, Gap.xs, Gap.md),
+              child: Row(children: [
+                Icon(Icons.bolt_rounded, color: p.accent, size: IconSizes.md),
+                const HGap.sm(),
+                Expanded(
+                  child: Text('Escribe o di lo que quieras registrar…', maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodyMedium?.copyWith(color: p.textSecondary)),
+                ),
+              ]),
+            ),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Dictar',
+          onPressed: () => abrirCaptura(context, escuchar: true),
+          icon: Icon(Icons.mic_rounded, color: p.accent),
+        ),
+        const SizedBox(width: Gap.xxs),
+      ]),
+    );
+  }
+}
 
 /// Lo que más se registra, siempre a un toque.
 class _Acciones extends ConsumerWidget {

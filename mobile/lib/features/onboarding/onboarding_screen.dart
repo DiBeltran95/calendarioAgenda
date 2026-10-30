@@ -11,6 +11,7 @@ import '../../core/providers.dart';
 import '../../core/widgets/ui.dart';
 import '../auth/auth_widgets.dart' show AuroraBackground;
 import '../notifications/notification_service.dart';
+import '../seguridad/bloqueo.dart';
 
 /// Lo que se le ofrece a quien recién crea su cuenta: cada opción habla de lo
 /// que la persona quiere hacer, no del nombre de la pestaña.
@@ -41,7 +42,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   int _paso = 0;
   bool _guardando = false;
 
-  static const _pasos = 2;
+  /// El paso de bloqueo solo aparece si el teléfono puede hacerlo.
+  int get _pasos => ref.read(biometriaDisponibleProvider).value == true ? 3 : 2;
 
   void _alternar(AppModule m) {
     HapticFeedback.selectionClick();
@@ -56,17 +58,32 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (mounted) context.go('/hoy');
   }
 
+  Future<void> _despuesDeAvisos() async {
+    if (_pasos > 2) {
+      setState(() => _paso = 2);
+    } else {
+      await _terminar();
+    }
+  }
+
   Future<void> _activarAvisos() async {
     await ref.read(permisoAvisosProvider.notifier).pedir();
+    await _despuesDeAvisos();
+  }
+
+  Future<void> _activarBloqueo() async {
+    final repo = ref.read(ajustesRepoProvider);
+    if (await ref.read(servicioBiometriaProvider).autenticar('Confirma para activar el bloqueo')) await repo.setBloqueo(true);
     await _terminar();
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(biometriaDisponibleProvider);
     return PopScope(
       canPop: _paso == 0,
       onPopInvokedWithResult: (hecho, _) {
-        if (!hecho) setState(() => _paso = 0);
+        if (!hecho) setState(() => _paso = _paso - 1);
       },
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -85,9 +102,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     Expanded(
                       child: SmoothSwitcher(
                         axis: Axis.horizontal,
-                        child: _paso == 0
-                            ? _PasoModulos(key: const ValueKey(0), elegidos: _elegidos, onAlternar: _alternar)
-                            : const _PasoAvisos(key: ValueKey(1)),
+                        child: switch (_paso) {
+                          0 => _PasoModulos(key: const ValueKey(0), elegidos: _elegidos, onAlternar: _alternar),
+                          1 => const _PasoAvisos(key: ValueKey(1)),
+                          _ => const _PasoBloqueo(key: ValueKey(2)),
+                        },
                       ),
                     ),
                     _Acciones(
@@ -95,9 +114,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       puedeSeguir: _elegidos.isNotEmpty,
                       ocupado: _guardando,
                       onSeguir: () => setState(() => _paso = 1),
-                      onAtras: () => setState(() => _paso = 0),
-                      onActivar: _activarAvisos,
-                      onOmitir: _terminar,
+                      onAtras: () => setState(() => _paso = _paso - 1),
+                      onActivar: _paso == 1 ? _activarAvisos : _activarBloqueo,
+                      onOmitir: _paso == 1 ? _despuesDeAvisos : _terminar,
                     ),
                   ],
                 ),
@@ -251,6 +270,28 @@ class _PasoAvisos extends StatelessWidget {
   }
 }
 
+class _PasoBloqueo extends StatelessWidget {
+  const _PasoBloqueo({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.xl, Gap.lg, Gap.md),
+      children: [
+        IconBadge(Icons.lock_rounded, color: p.accent, size: 64),
+        const VGap.lg(),
+        Semantics(header: true, child: Text('Protege tu información', style: context.text.headlineMedium)),
+        const VGap.xs(),
+        Text(
+          'Tus finanzas y tu ciclo son privados. Pide Face ID o huella al abrir la app. Puedes cambiarlo cuando quieras en tu perfil.',
+          style: context.text.bodyMedium?.copyWith(color: p.textSecondary),
+        ),
+      ],
+    );
+  }
+}
+
 class _Acciones extends StatelessWidget {
   const _Acciones({
     required this.paso,
@@ -287,7 +328,7 @@ class _Acciones extends StatelessWidget {
                 FilledButton(onPressed: puedeSeguir ? onSeguir : null, child: const Text('Continuar')),
               ]
             : [
-                FilledButton(onPressed: ocupado ? null : onActivar, child: const Text('Activar avisos')),
+                FilledButton(onPressed: ocupado ? null : onActivar, child: Text(paso == 1 ? 'Activar avisos' : 'Activar bloqueo')),
                 const VGap.xs(),
                 Row(children: [
                   Expanded(child: TextButton(onPressed: ocupado ? null : onAtras, child: const Text('Atrás'))),

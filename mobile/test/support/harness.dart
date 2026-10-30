@@ -3,10 +3,13 @@ import 'package:agendaservi/core/net/api_client.dart';
 import 'package:agendaservi/core/providers.dart';
 import 'package:agendaservi/core/session.dart';
 import 'package:agendaservi/data/models.dart';
+import 'package:agendaservi/features/captura/voz.dart';
 import 'package:agendaservi/features/finance/pagos/lector_pagos.dart';
 import 'package:agendaservi/features/notifications/notification_service.dart';
 import 'package:agendaservi/features/notifications/push_service.dart';
 import 'package:agendaservi/features/notifications/refresco_fondo.dart';
+import 'package:agendaservi/features/seguridad/bloqueo.dart';
+import 'package:agendaservi/features/widgets_inicio/publicador.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,6 +34,9 @@ List<Override> overridesDePrueba({
   AlmacenAvisos? almacen,
   TareasFondo? fondo,
   LectorPagos? lector,
+  ServicioBiometria? biometria,
+  ReconocedorVoz? voz,
+  PublicadorWidgets? publicador,
 }) {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
   return [
@@ -41,6 +47,9 @@ List<Override> overridesDePrueba({
     almacenAvisosProvider.overrideWithValue(almacen ?? AlmacenAvisos.memoria()),
     tareasFondoProvider.overrideWithValue(fondo ?? TareasFondoInertes()),
     lectorPagosProvider.overrideWithValue(lector ?? LectorPagosInerte()),
+    servicioBiometriaProvider.overrideWithValue(biometria ?? BiometriaInerte()),
+    reconocedorVozProvider.overrideWithValue(voz ?? VozInerte()),
+    publicadorWidgetsProvider.overrideWithValue(publicador ?? PublicadorInerte()),
     apiProvider.overrideWith((ref) => ApiClient(
           token: () async => ref.read(sesionProvider).value?.token,
           onUnauthorized: () => ref.read(sesionProvider.notifier).cerrar(motivo: 'Tu sesión expiró. Vuelve a iniciar sesión.'),

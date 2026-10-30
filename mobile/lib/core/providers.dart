@@ -72,6 +72,7 @@ class Preferencias {
     this.resumenDiario = true,
     this.permisoPedido = false,
     this.modulos,
+    this.bloqueo = false,
   });
 
   final ThemeMode themeMode;
@@ -94,6 +95,9 @@ class Preferencias {
   /// nadie pierde una pestaña que ya usaba al actualizar la app).
   final Set<AppModule>? modulos;
 
+  /// Pedir Face ID, huella o código del teléfono para entrar.
+  final bool bloqueo;
+
   static Preferencias fromMap(Map<String, String> m) => Preferencias(
         themeMode: switch (m['tema']) {
           'light' => ThemeMode.light,
@@ -106,6 +110,7 @@ class Preferencias {
         aviso30: m['aviso30'] != '0',
         resumenDiario: m['resumen'] != '0',
         permisoPedido: m['permiso_pedido'] == '1',
+        bloqueo: m['bloqueo'] == '1',
         modulos: m['modulos'] == null ? null : {for (final n in m['modulos']!.split(',')) ...AppModule.values.where((x) => x.name == n)},
       );
 }
@@ -132,6 +137,15 @@ class BienvenidaPendiente extends Notifier<bool> {
 
 final bienvenidaPendienteProvider = NotifierProvider<BienvenidaPendiente, bool>(BienvenidaPendiente.new);
 
+/// Un enlace (el botón del widget) pidió abrir la captura rápida.
+class CapturaPendiente extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void set(bool v) => state = v;
+}
+
+final capturaPendienteProvider = NotifierProvider<CapturaPendiente, bool>(CapturaPendiente.new);
+
 final ajustesRepoProvider = Provider((ref) => AjustesRepo(ref.watch(databaseProvider)));
 
 class AjustesRepo {
@@ -151,6 +165,7 @@ class AjustesRepo {
   Future<void> setNotificaciones(bool v) => set('notificaciones', v ? '1' : '0');
   Future<void> setAviso30(bool v) => set('aviso30', v ? '1' : '0');
   Future<void> setResumenDiario(bool v) => set('resumen', v ? '1' : '0');
+  Future<void> setBloqueo(bool v) => set('bloqueo', v ? '1' : '0');
   Future<void> marcarPermisoPedido() => set('permiso_pedido', '1');
   Future<void> setModulos(Set<AppModule> m) => set('modulos', m.where((x) => x != AppModule.inicio).map((x) => x.name).join(','));
 }

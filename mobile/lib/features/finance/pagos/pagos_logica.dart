@@ -193,11 +193,17 @@ String claveComercio(String s) {
 
 const _palabras = <String, List<String>>{
   'comida': [
+    'almuerzo', 'desayuno', 'cena', 'comida', 'mercado', 'restaurante', 'tinto', 'cafe', 'domicilio',
     'exito', 'carulla', 'olimpica', 'jumbo', 'ara', 'd1', 'isimo', 'surtimax', 'makro', 'pricesmart', 'oxxo', 'rappi', 'restaurante', 'panader', 'cafe', 'juan valdez',
     'tostao', 'frisby', 'kfc', 'mcdonald', 'burger', 'domino', 'pizza', 'crepes', 'el corral', 'subway', 'starbucks', 'mercado', 'supermercado', 'fruver', 'carniceria', 'ifood',
   ],
-  'transporte': ['uber', 'didi', 'cabify', 'indriver', 'terpel', 'primax', 'texaco', 'biomax', 'esso', 'mobil', 'gasolin', 'combustible', 'estacion de servicio', 'peaje', 'parqueadero', 'transmilenio', 'tullave', 'civica', 'taxi'],
+  'salud': ['farmacia', 'drogueria', 'medico', 'doctor', 'dentista', 'cita medica', 'eps'],
+  'entretenimiento': ['cine', 'concierto', 'fiesta', 'rumba'],
+  'educacion': ['universidad', 'colegio', 'matricula', 'curso'],
+  'arriendo': ['arriendo', 'alquiler'],
+  'transporte': ['taxi', 'bus', 'transmilenio', 'parqueadero', 'peaje', 'gasolina', 'uber', 'didi', 'cabify', 'indriver', 'terpel', 'primax', 'texaco', 'biomax', 'esso', 'mobil', 'gasolin', 'combustible', 'estacion de servicio', 'peaje', 'parqueadero', 'transmilenio', 'tullave', 'civica', 'taxi'],
   'servicios': [
+    'luz', 'agua', 'gas', 'celular', 'plan de datos',
     'netflix', 'spotify', 'disney', 'hbo', 'prime video', 'amazon prime', 'youtube', 'apple.com', 'icloud', 'google', 'claro', 'movistar', 'tigo', 'wom', 'etb', 'epm',
     'codensa', 'enel', 'vanti', 'gas natural', 'acueducto', 'internet', 'chatgpt', 'openai',
   ],

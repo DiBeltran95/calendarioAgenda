@@ -288,7 +288,33 @@ class _TarjetaPagoState extends ConsumerState<_TarjetaPago> {
     // Categorías: la sugerida primero.
     final orden = [...cats]..sort((a, b) => (a.valor == categoria ? 0 : 1).compareTo(b.valor == categoria ? 0 : 1));
 
-    return Padding(
+    Widget fondo(Alignment lado, IconData icono, String texto, Color color) => Container(
+          alignment: lado,
+          margin: const EdgeInsets.only(bottom: Gap.sm),
+          padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.16), borderRadius: Radii.rLg),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icono, color: color),
+            const HGap.xs(),
+            Text(texto, style: context.text.labelLarge?.copyWith(color: color)),
+          ]),
+        );
+
+    return Dismissible(
+      key: ValueKey('pago-${c.id}'),
+      background: fondo(Alignment.centerLeft, Icons.check_rounded, 'Guardar', p.success),
+      secondaryBackground: fondo(Alignment.centerRight, Icons.close_rounded, 'Descartar', p.danger),
+      // La tarjeta sale de la lista cuando el servidor confirma, no antes.
+      confirmDismiss: (lado) async {
+        if (_guardando) return false;
+        if (lado == DismissDirection.startToEnd) {
+          await _guardar(categoria, cuentaId);
+        } else {
+          await _descartar();
+        }
+        return false;
+      },
+      child: Padding(
       padding: const EdgeInsets.only(bottom: Gap.sm),
       child: AppCard(
         padding: const EdgeInsets.fromLTRB(Gap.md, Gap.md, Gap.md, Gap.sm),
@@ -320,7 +346,7 @@ class _TarjetaPagoState extends ConsumerState<_TarjetaPago> {
           const VGap.sm(),
           // Categoría con un toque.
           SizedBox(
-            height: 40,
+            height: 48,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: orden.length,
@@ -382,6 +408,7 @@ class _TarjetaPagoState extends ConsumerState<_TarjetaPago> {
             ),
           ]),
         ]),
+      ),
       ),
     );
   }

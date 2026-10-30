@@ -28,6 +28,22 @@ Del backend solo usa los endpoints de la web, más `POST /api/dispositivos` y `P
   - Si el servidor rechaza el token (401), la app vuelve al inicio de sesión con un aviso.
   - **Cerrar sesión** borra el token, la caché local y los avisos programados.
 
+## Diseño
+
+Identidad propia de la app (la web conserva la suya): neutros Tinta/Papel, violeta y coral, Plus Jakarta Sans incluida en `assets/fonts` y un acento por módulo. Modo claro, oscuro o el del sistema.
+
+- **Tokens** en `lib/app/theme/`: colores, radios, sombras y escala de texto (nada por debajo de 12 px). Los colores de datos usan `ColorPar` y los colores libres pasan por `context.legible()`.
+- **Estados de carga**: `Esqueleto` / `EsqueletoLista`, y `EstadoError` con "Reintentar". Una pantalla no debe mostrar vacío cuando en realidad falló.
+- **Módulos**: cada persona elige los suyos en la bienvenida o en Perfil; "Hoy" y la barra inferior se adaptan.
+- **Formularios**: `SheetScaffold` bloquea el doble envío y, con `hayCambios`, pregunta antes de descartar.
+- **Extras**: bloqueo con Face ID o huella (`features/seguridad`), captura rápida por texto o voz (`features/captura`) y widgets de pantalla de inicio en Android (`features/widgets_inicio`, `WidgetsInicio.kt`).
+
+Para revisar el diseño con datos de prueba, sin tocar la API real:
+
+```bash
+flutter test test/support/vitrina.dart --dart-define=VITRINA_DIR=build/vitrina
+```
+
 ## Módulos
 
 ### 🏠 Hoy

@@ -20,9 +20,6 @@ abstract final class Motion {
   static const exit = Cubic(0.3, 0.0, 0.8, 0.15);
   static const standard = Cubic(0.2, 0.0, 0.0, 1.0);
 
-  /// Resorte suave para lo que sigue al dedo o entra con inercia (hojas).
-  static const resorte = SpringDescription(mass: 1, stiffness: 340, damping: 32);
-
   /// Retraso entre elementos de una lista escalonada.
   static const stagger = Duration(milliseconds: 40);
 
