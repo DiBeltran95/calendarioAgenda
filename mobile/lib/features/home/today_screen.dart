@@ -28,9 +28,9 @@ import '../cycle/cycle_repository.dart';
 import '../cycle/widgets/cycle_ring.dart';
 import '../cycle/widgets/cycle_sheets.dart';
 import '../events/event_categories.dart';
-import '../events/events_repository.dart';
 import '../events/widgets/event_form_sheet.dart';
 import '../events/widgets/event_tiles.dart';
+import '../events/widgets/pago_evento_sheet.dart';
 import '../finance/finance_logic.dart';
 import '../finance/inversiones/inversiones_repository.dart';
 import '../finance/pagos/pagos_repository.dart';
@@ -461,15 +461,7 @@ class _Pagos extends ConsumerWidget {
                     IconButton(
                       tooltip: 'Marcar como pagado',
                       icon: Icon(Icons.check_circle_outline_rounded, color: p.success),
-                      onPressed: () async {
-                        final toaster = Toaster.of(context);
-                        try {
-                          await ref.read(eventsRepoProvider).alternarPago(e);
-                          toaster.show('Marcado como pagado', icon: Icons.check_circle_rounded);
-                        } catch (err) {
-                          toaster.show('$err', error: true);
-                        }
-                      },
+                      onPressed: () => gestionarPagoEvento(context, e),
                     ),
                   ]),
                   onTap: () => showAppSheet(context, (_) => EventDetailSheet(evento: e, parentContext: context)),

@@ -15,6 +15,7 @@ import '../events_repository.dart';
 import '../mensajes.dart';
 import '../whatsapp.dart';
 import 'event_form_sheet.dart';
+import 'pago_evento_sheet.dart';
 
 // ─────────────────────────── Acciones ───────────────────────────
 
@@ -141,14 +142,7 @@ class EventTile extends ConsumerWidget {
           if (esTx)
             _PagoToggle(
               pagado: pagado,
-              onTap: () async {
-                final toaster = Toaster.of(context);
-                try {
-                  await ref.read(eventsRepoProvider).alternarPago(e);
-                } catch (err) {
-                  toaster.show('$err', error: true);
-                }
-              },
+              onTap: () => gestionarPagoEvento(context, e),
             ),
         ],
       ),
@@ -274,15 +268,9 @@ class EventDetailSheet extends ConsumerWidget {
         if (esTx) ...[
           const VGap.sm(),
           OutlinedButton.icon(
-            onPressed: () async {
-              final toaster = Toaster.of(context);
+            onPressed: () {
               Navigator.pop(context);
-              try {
-                await ref.read(eventsRepoProvider).alternarPago(e);
-                toaster.show(e.pagado ? 'Marcado como pendiente' : 'Marcado como pagado');
-              } catch (err) {
-                toaster.show('$err', error: true);
-              }
+              gestionarPagoEvento(parentContext, e);
             },
             icon: Icon(e.estadoPago == 'pagado' ? Icons.undo_rounded : Icons.check_circle_rounded),
             label: Text(e.estadoPago == 'pagado' ? 'Marcar como pendiente' : 'Marcar como pagado'),

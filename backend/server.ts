@@ -13,6 +13,7 @@ import { migrarAgenda, registrarAgenda } from './lib/agenda/rutas';
 import { registrarTiempoReal } from './lib/tiempoReal';
 import { migrarCapturas, registrarCapturas } from './lib/finanzas/capturas';
 import { migrarInversiones, registrarInversiones } from './lib/finanzas/inversiones';
+import { migrarPagosEventos, registrarPagosEventos } from './lib/finanzas/pagosEventos';
 
 dotenv.config();
 
@@ -77,7 +78,9 @@ async function ensureDefaultCategories(conn: any, userId: number): Promise<void>
     }
 }
 
-const WHATSAPP_API_KEY = process.env.WHATSAPP_API_KEY || 'e0015f66b77a90f580860d1f3abe4dd6426f7320852416f815515a1323c515d8';
+// La clave vive solo en el entorno (.env): el repositorio es público.
+const WHATSAPP_API_KEY = process.env.WHATSAPP_API_KEY || '';
+if (!WHATSAPP_API_KEY) server.log.error('Falta WHATSAPP_API_KEY: no se podrán enviar mensajes de WhatsApp');
 
 /** Envía un texto por la API de WhatsApp. Devuelve false si no se pudo. */
 async function enviarWhatsApp(numero: string, texto: string): Promise<boolean> {
@@ -113,7 +116,12 @@ async function sendWhatsAppVerificationCode(whatsapp: string, code: string): Pro
             })
         });
         const data = await response.json() as any;
-        server.log.info({ jid: cleanedJid, response: data }, 'WhatsApp API response');
+        if (response.ok) {
+            server.log.info({ jid: cleanedJid }, 'Código de verificación enviado');
+        } else {
+            // Aquí queda el motivo real, p. ej. "API key inválida o inactiva".
+            server.log.error({ jid: cleanedJid, status: response.status, response: data }, 'WhatsApp rechazó el código de verificación');
+        }
         return response.ok;
     } catch (error) {
         server.log.error(error, 'Error sending WhatsApp verification code');
@@ -170,7 +178,7 @@ server.post('/api/register', async (request, reply) => {
         }
 
         return reply.send({ 
-            message: 'Código de verificación enviado a tu WhatsApp', 
+            message: sent ? 'Código de verificación enviado a tu WhatsApp' : 'Tu cuenta quedó creada, pero no pudimos enviar el código por WhatsApp. Inténtalo con "Reenviar código" en unos minutos.', 
             verification_required: true,
             email 
         });
@@ -300,7 +308,7 @@ server.post('/api/login', async (request, reply) => {
             }
 
             return reply.status(403).send({
-                message: 'Tu cuenta no está verificada. Hemos enviado un nuevo código a tu WhatsApp.',
+                message: sent ? 'Tu cuenta no está verificada. Hemos enviado un nuevo código a tu WhatsApp.' : 'Tu cuenta no está verificada y no pudimos enviar el código por WhatsApp. Inténtalo con "Reenviar código" en unos minutos.',
                 verification_required: true,
                 email: userRow.email,
                 whatsapp: userRow.whatsapp
@@ -332,6 +340,7 @@ registrarTiempoReal(server);
 // --- PAGOS CAPTURADOS (Apple Pay vía Atajos, notificaciones en Android) ---
 registrarCapturas(server, { pool });
 registrarInversiones(server, { pool });
+registrarPagosEventos(server, { pool });
 
 // --- AGENDAMIENTO DE CITAS (lib/agenda) ---
 registrarAgenda(server, {
@@ -2568,6 +2577,7 @@ async function runMigrations() {
     await migrarAgenda(pool, server.log);
     await migrarCapturas(pool, server.log);
     await migrarInversiones(pool, server.log);
+    await migrarPagosEventos(pool, server.log);
 
     // Índices compuestos (user_id, fecha) para que las consultas por mes sean
     // casi instantáneas aun con mucho histórico. Se crean sólo si no existen.

@@ -140,6 +140,25 @@ class EventsRepository {
   /// "Deshacer" de una sola repetición: vuelve esa fecha, sin regenerar la serie.
   Future<void> restaurarOcurrencia(Evento e) => crear(EventoInput.desde(e, frecuencia: 'unica'));
 
+  /// Confirma un pago: con [cuentaId] mueve el dinero (si es la cuota de una
+  /// compra a crédito, baja la deuda); sin ella solo lo marca como pagado.
+  Future<void> pagar(Evento e, {int? cuentaId, double? monto, String? fecha, String? categoria}) async {
+    await _api.post('/api/events/${e.id}/pagar', body: {
+      'cuenta_id': cuentaId,
+      'monto': ?monto,
+      'fecha': ?fecha,
+      'categoria': ?categoria,
+    });
+    await _sync.despuesDeCambio();
+  }
+
+  /// Vuelve a pendiente y deshace lo que el pago movió. true si devolvió dinero.
+  Future<bool> quitarPago(Evento e) async {
+    final r = asMap(await _api.delete('/api/events/${e.id}/pago'));
+    await _sync.despuesDeCambio();
+    return r['devolvio'] == true;
+  }
+
   /// Marca pagado/pendiente. Se aplica al instante en pantalla (optimista) y
   /// se revierte si el servidor falla.
   Future<void> alternarPago(Evento e) async {

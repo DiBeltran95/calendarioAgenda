@@ -68,6 +68,63 @@ class FakeBackend implements HttpClientAdapter {
     return c;
   }
 
+  /// Como lib/finanzas/pagosEventos.ts.
+  final pagosEventos = <int, Map<String, dynamic>>{};
+
+  /// Servidor sin desplegar: las rutas de pago aún no existen.
+  bool sinPagoEventos = false;
+
+  _Resp _pagarEvento(int id, Map<String, dynamic> b, int uid) {
+    if (sinPagoEventos) return _err(404, 'Route not found');
+    final e = eventos.firstWhere((x) => x['id'] == id && x['user_id'] == uid);
+    if (e['estado_pago'] == 'pagado') return _err(409, 'Este evento ya está pagado');
+    final monto = ((b['monto'] ?? double.parse('${e['costo']}')) as num).toDouble();
+    final cuenta = b['cuenta_id'] as int?;
+    if (cuenta != null) {
+      final tarjeta = e['tipo_transaccion'] == 'gasto' ? e['tarjeta_credito_id'] as int? : null;
+      if (tarjeta != null) {
+        if (tarjeta == cuenta) return _err(400, 'Elige otra cuenta: una deuda no se paga con ella misma');
+        final t = {'id': _id(), 'user_id': uid, 'cuenta_origen_id': cuenta, 'cuenta_destino_id': tarjeta, 'monto': _dec(monto), 'descripcion': 'Pago: ${e['titulo']}', 'fecha': b['fecha'] ?? e['fecha']};
+        transferencias.add(t);
+        _saldo(cuenta, esCredito(_cuenta(cuenta)['tipo'] as String) ? monto : -monto);
+        _saldo(tarjeta, -monto);
+        pagosEventos[id] = {'transferencia': t};
+      } else {
+        final tipo = e['tipo_transaccion'] as String;
+        final t = {'id': _id(), 'user_id': uid, 'cuenta_id': cuenta, 'tipo': tipo, 'monto': _dec(monto), 'descripcion': e['titulo'], 'fecha': b['fecha'] ?? e['fecha'], 'categoria': b['categoria'] ?? 'otros', 'cuotas': 1};
+        transacciones.add(t);
+        _saldo(cuenta, _efecto(tipo, cuenta, monto));
+        pagosEventos[id] = {'transaccion': t};
+      }
+    }
+    e['estado_pago'] = 'pagado';
+    e['costo'] = _dec(monto);
+    return _Resp(200, {'ok': true, 'movio_dinero': cuenta != null});
+  }
+
+  _Resp _quitarPago(int id, int uid) {
+    if (sinPagoEventos) return _err(404, 'Route not found');
+    final e = eventos.firstWhere((x) => x['id'] == id && x['user_id'] == uid);
+    e['estado_pago'] = 'pendiente';
+    final p = pagosEventos.remove(id);
+    if (p == null) return const _Resp(200, {'ok': true, 'devolvio': false});
+    final tr = p['transferencia'] as Map<String, dynamic>?;
+    if (tr != null) {
+      final monto = double.parse('${tr['monto']}');
+      final o = tr['cuenta_origen_id'] as int, d = tr['cuenta_destino_id'] as int;
+      _saldo(o, esCredito(_cuenta(o)['tipo'] as String) ? -monto : monto);
+      _saldo(d, monto);
+      transferencias.remove(tr);
+    }
+    final tx = p['transaccion'] as Map<String, dynamic>?;
+    if (tx != null) {
+      final c = tx['cuenta_id'] as int;
+      _saldo(c, -_efecto(tx['tipo'] as String, c, double.parse('${tx['monto']}')));
+      transacciones.remove(tx);
+    }
+    return const _Resp(200, {'ok': true, 'devolvio': true});
+  }
+
   final inversiones = <Map<String, dynamic>>[];
 
   /// Servidor sin desplegar: la ruta de inversiones aún no existe.
@@ -301,6 +358,8 @@ class FakeBackend implements HttpClientAdapter {
     if (seg.length > 1 && seg[1] == 'agenda') return agenda._privada(m, seg, q, b, uid);
     if (seg.length > 1 && seg[1] == 'capturas') return _capturas(m, seg, q, b, uid);
     if (seg.length > 2 && seg[1] == 'finanzas' && (seg[2] == 'inversiones' || seg[2] == 'inversion-movimientos')) return _inversiones(m, seg, b, uid);
+    if (m == 'POST' && seg.length == 4 && seg[1] == 'events' && seg[3] == 'pagar') return _pagarEvento(idEn(2)!, b, uid);
+    if (m == 'DELETE' && seg.length == 4 && seg[1] == 'events' && seg[3] == 'pago') return _quitarPago(idEn(2)!, uid);
     switch ((m, seg.length > 1 ? seg[1] : '')) {
       case ('GET', 'dashboard') when seg[2] == 'bootstrap':
         return _Resp(200, {
