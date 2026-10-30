@@ -189,33 +189,26 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final mq = MediaQuery.of(context);
     final espacio = BarraFlotante.espacio(context);
     final teclado = mq.viewInsets.bottom > 0;
+    // bottomNavigationBar (y no una capa encima): así los avisos salen por
+    // encima de la barra en vez de taparla.
     return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: MediaQuery(
-              data: teclado ? mq : mq.copyWith(padding: mq.padding.copyWith(bottom: espacio), viewPadding: mq.viewPadding.copyWith(bottom: espacio)),
-              child: cuerpo,
-            ),
-          ),
-          if (!teclado)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: MediaQuery.withClampedTextScaling(
-                maxScaleFactor: 1.15,
-                child: BarraFlotante(
-                  seleccionado: elegida,
-                  onElegir: (i) => _ir(visibles[i]),
-                  destinos: [
-                    for (final i in visibles) DestinoBarra(etiqueta: _destinos[i].label, icono: _destinos[i].icon, iconoSel: _destinos[i].iconSel),
-                  ],
-                ),
+      extendBody: true,
+      body: MediaQuery(
+        data: teclado ? mq : mq.copyWith(padding: mq.padding.copyWith(bottom: espacio), viewPadding: mq.viewPadding.copyWith(bottom: espacio)),
+        child: cuerpo,
+      ),
+      bottomNavigationBar: teclado
+          ? null
+          : MediaQuery.withClampedTextScaling(
+              maxScaleFactor: 1.15,
+              child: BarraFlotante(
+                seleccionado: elegida,
+                onElegir: (i) => _ir(visibles[i]),
+                destinos: [
+                  for (final i in visibles) DestinoBarra(etiqueta: _destinos[i].label, icono: _destinos[i].icon, iconoSel: _destinos[i].iconSel),
+                ],
               ),
             ),
-        ],
-      ),
     );
   }
 }
