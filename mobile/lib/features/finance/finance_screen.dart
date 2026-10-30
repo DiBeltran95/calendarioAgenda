@@ -184,6 +184,13 @@ class _Movimientos extends ConsumerWidget {
       for (final o in ocurrencias)
         if (!o.verificado) o.fechaEsperada,
     };
+    final marcas = marcasDelMes(
+      transacciones: txMes,
+      transferencias: ref.watch(transferenciasMesProvider((mes.year, mes.month))).value ?? const [],
+      inversiones: ref.watch(inversionesProvider).value ?? const [],
+      cuentas: ref.watch(cuentasProvider).value ?? const [],
+      prefijoMes: '${mes.year}-${mes.month.toString().padLeft(2, '0')}',
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -205,6 +212,7 @@ class _Movimientos extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(Gap.sm, Gap.xs, Gap.sm, Gap.sm),
             child: MonthCalendar(
               cursor: mesFinanzasProvider,
+              altoMinimoCelda: 66,
               selected: sel,
               onTap: (f) => ref.read(diaFinanzasProvider.notifier).alternar(f),
               onLongPress: (f) {
@@ -213,13 +221,15 @@ class _Movimientos extends ConsumerWidget {
               },
               semantics: (d) {
                 final n = neto[d.fecha];
-                return '${fechaConDia(d.fecha)}${n != null ? ', balance ${cop(n)}' : ''}'
+                final hechos = (marcas[d.fecha] ?? const <MarcaDia>{}).map((m) => m.etiqueta.toLowerCase()).join(', ');
+                return '${fechaConDia(d.fecha)}${hechos.isEmpty ? '' : ', $hechos'}${n != null ? ', balance ${cop(n)}' : ''}'
                     '${pagosPendientes.contains(d.fecha) ? ', pago pendiente' : ''}'
                     '${ingresosEsperados.contains(d.fecha) ? ', ingreso esperado' : ''}';
               },
               cellBuilder: (context, d) => _FinDayCell(
                 day: d,
                 neto: neto[d.fecha],
+                marcas: marcas[d.fecha] ?? const {},
                 pagoPendiente: pagosPendientes.contains(d.fecha),
                 ingresoEsperado: ingresosEsperados.contains(d.fecha),
               ),
@@ -408,10 +418,20 @@ class _Onboarding extends ConsumerWidget {
 
 // ─────────────────────────── Celda ───────────────────────────
 
+Color colorMarca(BuildContext context, MarcaDia m) {
+  final p = context.palette;
+  return switch (m) {
+    MarcaDia.compra => p.danger,
+    MarcaDia.pagoCredito => p.info,
+    MarcaDia.inversion => p.gold,
+  };
+}
+
 class _FinDayCell extends StatelessWidget {
-  const _FinDayCell({required this.day, required this.neto, required this.pagoPendiente, required this.ingresoEsperado});
+  const _FinDayCell({required this.day, required this.neto, required this.marcas, required this.pagoPendiente, required this.ingresoEsperado});
   final CalendarDay day;
   final double? neto;
+  final Set<MarcaDia> marcas;
   final bool pagoPendiente;
   final bool ingresoEsperado;
 
@@ -428,7 +448,14 @@ class _FinDayCell extends StatelessWidget {
           : ingresoEsperado
           ? Dot(p.info, size: 8)
           : null,
-      markers: n == null
+      // En el orden de la leyenda, para que siempre se lean igual.
+      markers: marcas.isEmpty
+          ? null
+          : Row(mainAxisSize: MainAxisSize.min, children: [
+              for (final m in MarcaDia.values)
+                if (marcas.contains(m)) Icon(m.icono, size: 14, color: colorMarca(context, m)),
+            ]),
+      markersAbajo: n == null
           ? null
           : Text(
               '${n >= 0 ? '+' : '-'}${copCompacto(n.abs())}',
@@ -457,6 +484,7 @@ class _LeyendaFin extends StatelessWidget {
       runSpacing: Gap.xs,
       alignment: WrapAlignment.center,
       children: [
+        for (final m in MarcaDia.values) item(Icon(m.icono, size: IconSizes.sm, color: colorMarca(context, m)), m.etiqueta),
         item(Text('+50K', style: context.text.labelSmall?.copyWith(color: p.success)), 'Balance del día'),
         item(Dot(p.warning, size: 8), 'Pago pendiente'),
         item(Dot(p.info, size: 8), 'Ingreso esperado'),

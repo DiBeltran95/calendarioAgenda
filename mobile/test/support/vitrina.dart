@@ -14,7 +14,9 @@ import 'package:agendaservi/core/session.dart';
 import 'package:agendaservi/features/citas/citas_repository.dart';
 import 'package:agendaservi/features/cycle/cycle_repository.dart';
 import 'package:agendaservi/features/events/events_repository.dart';
+import 'package:agendaservi/features/finance/finance_providers.dart';
 import 'package:agendaservi/features/finance/finance_repository.dart';
+import 'package:agendaservi/features/finance/finance_screen.dart';
 import 'package:agendaservi/features/finance/inversiones/inversiones_logica.dart';
 import 'package:agendaservi/features/finance/inversiones/inversiones_repository.dart';
 import 'package:flutter/material.dart';
@@ -66,6 +68,10 @@ Future<void> _sembrar(FakeBackend backend) async {
   await inv.crear(nombre: '10 novillos de levante', tipo: 'ganado', monto: 2000000, fecha: sumarDiasYmd(hoy, -90), cuentaId: ah);
   final casa = await inv.crear(nombre: 'Casa en Villeta', tipo: 'inmueble', monto: 180000000, fecha: '2021-03-15');
   await inv.agregarMovimiento(casa, tipo: TipoMovimiento.valoracion, monto: 215000000, fecha: hoy);
+  // Un día con cada cosa, para ver cómo se distinguen en el calendario.
+  await fi.transferir(origenId: ah, destinoId: tc, monto: 300000, fecha: sumarDiasYmd(hoy, -1), descripcion: 'Pago: Cuota');
+  await fi.crearTransaccion(TransaccionInput(tipo: 'gasto', monto: 80000, descripcion: 'Zapatos', fecha: sumarDiasYmd(hoy, -2), cuentaId: ah, categoria: 'otros'));
+  await inv.crear(nombre: 'Terneros', tipo: 'ganado', monto: 500000, fecha: sumarDiasYmd(hoy, -2), cuentaId: ah);
   final ahora = DateTime.now();
   await fi.guardarPresupuesto(categoria: 'comida', limite: 400000, mes: ahora.month, anio: ahora.year);
 
@@ -156,6 +162,17 @@ void main() {
         await esperar();
         await foto(nombre);
       }
+
+      c.read(finTabProvider.notifier).set(FinTab.historial);
+      c.read(finCalendarioProvider.notifier).set(true);
+      router.go('/finanzas');
+      await esperar();
+      final lista = find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down);
+      await t.scrollUntilVisible(find.text('Pago de crédito'), 300, scrollable: lista.last, maxScrolls: 30);
+      await esperar(6);
+      await t.drag(lista.last, const Offset(0, 460));
+      await esperar(6);
+      await foto('calendario_finanzas');
 
       router.go('/capturar');
       await esperar();

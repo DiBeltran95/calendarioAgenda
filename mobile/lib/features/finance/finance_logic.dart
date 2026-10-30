@@ -441,6 +441,53 @@ String slugCategoria(String label) {
   return s.length > 50 ? s.substring(0, 50) : s;
 }
 
+/// Lo que se distingue en el calendario de Finanzas.
+enum MarcaDia {
+  compra('Compra', Icons.shopping_bag_rounded),
+  pagoCredito('Pago de crédito', Icons.credit_score_rounded),
+  inversion('Inversión', Icons.trending_up_rounded);
+
+  const MarcaDia(this.etiqueta, this.icono);
+  final String etiqueta;
+  final IconData icono;
+}
+
+/// Qué pasó cada día del mes [prefijoMes] (YYYY-MM).
+Map<String, Set<MarcaDia>> marcasDelMes({
+  required List<Transaccion> transacciones,
+  required List<Transferencia> transferencias,
+  required List<Inversion> inversiones,
+  required List<Cuenta> cuentas,
+  required String prefijoMes,
+}) {
+  final porId = {for (final c in cuentas) c.id: c};
+  final out = <String, Set<MarcaDia>>{};
+  void marcar(String fecha, MarcaDia m) {
+    final f = fecha.length >= 10 ? fecha.substring(0, 10) : fecha;
+    if (f.startsWith(prefijoMes)) (out[f] ??= {}).add(m);
+  }
+
+  bool esDeuda(int? id) => porId[id] != null && esCredito(porId[id]!.tipo);
+  for (final t in transacciones) {
+    if (t.tipo == 'gasto') {
+      marcar(t.fecha, MarcaDia.compra);
+    } else if (esDeuda(t.cuentaId)) {
+      // Un ingreso en una tarjeta es un abono (así lo registra el enlace de WhatsApp).
+      marcar(t.fecha, MarcaDia.pagoCredito);
+    }
+  }
+  for (final t in transferencias) {
+    if (esDeuda(t.cuentaDestinoId)) marcar(t.fecha, MarcaDia.pagoCredito);
+  }
+  // Actualizar el valor no es una operación del día: no se marca.
+  for (final i in inversiones) {
+    for (final m in i.movimientos) {
+      if (m.tipo != TipoMovimiento.valoracion) marcar(m.fecha, MarcaDia.inversion);
+    }
+  }
+  return out;
+}
+
 /// Una línea del historial que mueve dinero sin ser gasto ni ingreso.
 class Traspaso {
   const Traspaso({required this.fecha, required this.titulo, required this.detalle, required this.monto, required this.icono, this.inversionId});

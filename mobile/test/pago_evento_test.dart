@@ -5,6 +5,7 @@ import 'package:agendaservi/app/app.dart';
 import 'package:agendaservi/core/dates.dart';
 import 'package:agendaservi/data/models.dart';
 import 'package:agendaservi/features/events/events_repository.dart';
+import 'package:agendaservi/features/finance/finance_logic.dart';
 import 'package:agendaservi/features/finance/finance_providers.dart';
 import 'package:agendaservi/features/finance/finance_repository.dart';
 import 'package:flutter/material.dart';
@@ -173,6 +174,16 @@ void main() {
       expect(find.text('Abono a Addi'), findsOneWidget);
       expect(find.textContaining('Desde Ahorros'), findsOneWidget);
       expect(find.textContaining('Pago: Cuota Addi'), findsOneWidget);
+
+      // En el calendario el día se distingue con su ícono, y la leyenda lo explica.
+      await mostrar(find.text('Calendario'));
+      await t.tap(find.text('Calendario'));
+      await esperar(t);
+      expect(find.byIcon(MarcaDia.pagoCredito.icono), findsWidgets);
+      expect(find.text('Pago de crédito', skipOffstage: false), findsOneWidget);
+      await mostrar(find.text('Lista'));
+      await t.tap(find.text('Lista'));
+      await esperar(t);
 
       // Filtrar por gastos lo oculta; por abonos, solo queda él.
       await mostrar(find.text('Gastos'));

@@ -34,6 +34,7 @@ DateTime _mesDe(int i) => DateTime(_base.year, _base.month + i);
 class MonthCalendar extends ConsumerStatefulWidget {
   const MonthCalendar({
     super.key,
+    this.altoMinimoCelda = 52,
     required this.cursor,
     required this.selected,
     required this.cellBuilder,
@@ -50,6 +51,9 @@ class MonthCalendar extends ConsumerStatefulWidget {
   final ValueChanged<String>? onLongPress;
   final DaySemantics? semantics;
   final Widget? footer;
+
+  /// Altura mínima de cada día (más alta si la celda lleva más información).
+  final double altoMinimoCelda;
 
   @override
   ConsumerState<MonthCalendar> createState() => _MonthCalendarState();
@@ -177,7 +181,7 @@ class _MonthCalendarState extends ConsumerState<MonthCalendar> {
         // ── Rejilla deslizable ──
         LayoutBuilder(builder: (context, c) {
           final cellW = c.maxWidth / 7;
-          final cellH = (cellW * 0.92).clamp(52.0, 70.0);
+          final cellH = (cellW * 0.92).clamp(widget.altoMinimoCelda, widget.altoMinimoCelda > 70 ? widget.altoMinimoCelda : 70.0);
           return SizedBox(
             height: cellH * 6,
             child: PageView.builder(
@@ -284,6 +288,7 @@ class DayCellFrame extends StatelessWidget {
   const DayCellFrame({
     super.key,
     required this.day,
+    this.markersAbajo,
     this.fill,
     this.ring,
     this.numberColor,
@@ -305,6 +310,9 @@ class DayCellFrame extends StatelessWidget {
 
   /// Fila de marcadores bajo el número.
   final Widget? markers;
+
+  /// Segunda fila, para los calendarios con [MonthCalendar.altoMinimoCelda] mayor.
+  final Widget? markersAbajo;
 
   /// Icono pequeño en la esquina superior derecha.
   final Widget? corner;
@@ -359,6 +367,7 @@ class DayCellFrame extends StatelessWidget {
                 ),
               ),
               SizedBox(height: 16, child: markers == null ? null : Center(child: FittedBox(fit: BoxFit.scaleDown, child: markers))),
+              if (markersAbajo != null) SizedBox(height: 14, child: Center(child: FittedBox(fit: BoxFit.scaleDown, child: markersAbajo))),
             ],
           ),
           if (corner != null) Positioned(top: 3, right: 3, child: corner!),

@@ -96,6 +96,45 @@ void main() {
     });
   });
 
+  group('calendario', () {
+    const cuentas = [Cuenta(id: 1, nombre: 'Ahorros', tipo: 'ahorros'), Cuenta(id: 2, nombre: 'Addi', tipo: 'tarjeta_credito')];
+    Transaccion tx(int id, String tipo, String fecha, int cuenta) => Transaccion.fromJson({'id': id, 'tipo': tipo, 'monto': 10, 'descripcion': 'x', 'fecha': fecha, 'cuenta_id': cuenta, 'categoria': 'otros'});
+
+    Map<String, Set<MarcaDia>> marcas({List<Transaccion> t = const [], List<Transferencia> tr = const [], List<Inversion> i = const []}) =>
+        marcasDelMes(transacciones: t, transferencias: tr, inversiones: i, cuentas: cuentas, prefijoMes: '2026-10');
+
+    test('distingue compra, pago de crédito e inversión el mismo día', () {
+      final m = marcas(
+        t: [tx(1, 'gasto', '2026-10-18', 1)],
+        tr: const [Transferencia(id: 1, cuentaOrigenId: 1, cuentaDestinoId: 2, monto: 5, descripcion: '', fecha: '2026-10-18')],
+        i: [inv([mov(1, TipoMovimiento.aporte, 100, '2026-10-18', cuenta: 1)])],
+      );
+      expect(m['2026-10-18'], {MarcaDia.compra, MarcaDia.pagoCredito, MarcaDia.inversion});
+    });
+
+    test('una compra con tarjeta es compra; un ingreso normal no se marca', () {
+      expect(marcas(t: [tx(1, 'gasto', '2026-10-05', 2)])['2026-10-05'], {MarcaDia.compra});
+      expect(marcas(t: [tx(1, 'ingreso', '2026-10-05', 1)]), isEmpty);
+    });
+
+    test('el abono por el enlace de WhatsApp (ingreso en la tarjeta) es pago de crédito', () {
+      expect(marcas(t: [tx(1, 'ingreso', '2026-10-05', 2)])['2026-10-05'], {MarcaDia.pagoCredito});
+    });
+
+    test('una transferencia entre cuentas normales no es pago de crédito', () {
+      expect(marcas(tr: const [Transferencia(id: 1, cuentaOrigenId: 2, cuentaDestinoId: 1, monto: 5, descripcion: '', fecha: '2026-10-05')]), isEmpty);
+    });
+
+    test('la inversión cuenta aunque no salga de una cuenta; actualizar el valor no', () {
+      final m = marcas(i: [inv([mov(1, TipoMovimiento.aporte, 100, '2026-10-02'), mov(2, TipoMovimiento.valoracion, 200, '2026-10-03'), mov(3, TipoMovimiento.venta, 300, '2026-10-04', cuenta: 1)])]);
+      expect(m.keys.toSet(), {'2026-10-02', '2026-10-04'});
+    });
+
+    test('solo el mes pedido', () {
+      expect(marcas(t: [tx(1, 'gasto', '2026-11-01', 1)]), isEmpty);
+    });
+  });
+
   group('historial', () {
     const cuentas = [Cuenta(id: 1, nombre: 'Ahorros', tipo: 'ahorros'), Cuenta(id: 2, nombre: 'Addi', tipo: 'tarjeta_credito')];
 
