@@ -277,17 +277,17 @@ class _PasswordFieldState extends State<PasswordField> {
 }
 
 /// Indicativos de país más comunes (Colombia por defecto).
-const indicativos = <(String, String, String)>[
-  ('57', '🇨🇴', 'Colombia'),
-  ('52', '🇲🇽', 'México'),
-  ('58', '🇻🇪', 'Venezuela'),
-  ('593', '🇪🇨', 'Ecuador'),
-  ('51', '🇵🇪', 'Perú'),
-  ('56', '🇨🇱', 'Chile'),
-  ('54', '🇦🇷', 'Argentina'),
-  ('507', '🇵🇦', 'Panamá'),
-  ('34', '🇪🇸', 'España'),
-  ('1', '🇺🇸', 'Estados Unidos'),
+const indicativos = <(String, String)>[
+  ('57', 'Colombia'),
+  ('52', 'México'),
+  ('58', 'Venezuela'),
+  ('593', 'Ecuador'),
+  ('51', 'Perú'),
+  ('56', 'Chile'),
+  ('54', 'Argentina'),
+  ('507', 'Panamá'),
+  ('34', 'España'),
+  ('1', 'Estados Unidos'),
 ];
 
 /// Número de WhatsApp con indicativo. El servidor lo guarda solo con dígitos.
@@ -315,12 +315,12 @@ class WhatsAppField extends StatelessWidget {
           initialValue: indicativo,
           onSelected: onIndicativo,
           itemBuilder: (_) => [
-            for (final (c, f, n) in indicativos) PopupMenuItem(value: c, child: Text('$f  $n  +$c')),
+            for (final (c, n) in indicativos) PopupMenuItem(value: c, child: Text('$n  +$c')),
           ],
           child: Padding(
             padding: const EdgeInsets.only(left: Gap.md, right: Gap.xs),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Text('${actual.$2} +${actual.$1}', style: context.text.bodyLarge),
+              Text('+${actual.$1}', style: context.text.bodyLarge),
               Icon(Icons.arrow_drop_down_rounded, color: p.textSecondary),
             ]),
           ),

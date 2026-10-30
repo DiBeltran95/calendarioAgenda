@@ -9,9 +9,11 @@ import '../../app/theme/tokens.dart';
 import '../../core/dates.dart';
 import '../../core/money.dart';
 import '../../core/motion.dart';
+import '../../core/widgets/esqueleto.dart';
 import '../../core/widgets/fab_animado.dart';
 import '../../core/widgets/sheets.dart';
 import '../../core/widgets/ui.dart';
+import '../../core/widgets/vista_async.dart';
 import 'citas_en_vivo.dart';
 import 'citas_models.dart';
 import 'citas_repository.dart';
@@ -57,14 +59,17 @@ class CitasScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: negocio == null
+      // Siempre en el mismo lugar: crea la página o, si ya existe, una cita.
+      floatingActionButton: cargando || configAsync.hasError && config == null
           ? null
-          : FabAnimado(
-              heroTag: 'fab-citas',
-              icono: Icons.add_rounded,
-              etiqueta: 'Nueva cita',
-              onPressed: () => showAppSheet(context, (_) => NuevaCitaSheet(config: config!, fecha: ref.read(diaCitasProvider))),
-            ),
+          : negocio == null
+              ? FabAnimado(heroTag: 'fab-citas', icono: Icons.rocket_launch_rounded, etiqueta: 'Crear página', onPressed: () => context.push('/citas/crear'))
+              : FabAnimado(
+                  heroTag: 'fab-citas',
+                  icono: Icons.add_rounded,
+                  etiqueta: 'Nueva cita',
+                  onPressed: () => showAppSheet(context, (_) => NuevaCitaSheet(config: config!, fecha: ref.read(diaCitasProvider))),
+                ),
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -93,8 +98,10 @@ class CitasScreen extends ConsumerWidget {
                               ),
                           ],
                         ),
-                        if (cargando)
-                          const _Cargando()
+                        if (configAsync.hasError && config == null)
+                          EstadoError(error: configAsync.error, onReintentar: refrescar)
+                        else if (cargando)
+                          const EsqueletoLista(alturas: [150, 110, 78, 96])
                         else if (negocio == null)
                           const _Bienvenida()
                         else
@@ -116,19 +123,6 @@ class CitasScreen extends ConsumerWidget {
   }
 }
 
-class _Cargando extends StatelessWidget {
-  const _Cargando();
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    Widget bloque(double h) => Container(height: h, margin: const EdgeInsets.only(bottom: Gap.sm), decoration: BoxDecoration(color: p.surfaceHigh, borderRadius: Radii.rLg));
-    return Column(children: [bloque(120), bloque(84), bloque(64), bloque(96), bloque(96)])
-        .animate(onPlay: (c) => c.repeat(reverse: true))
-        .fade(begin: 0.5, end: 1, duration: 900.ms);
-  }
-}
-
 // ─────────────────────── Sin página: invitación ───────────────────────
 
 class _Bienvenida extends StatelessWidget {
@@ -147,25 +141,15 @@ class _Bienvenida extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Entrance(
-          child: Container(
-            padding: const EdgeInsets.all(Gap.lg),
-            decoration: BoxDecoration(
-              borderRadius: Radii.rLg,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color.alphaBlend(p.accent.withValues(alpha: context.isDark ? 0.30 : 0.14), p.surface), Color.alphaBlend(p.accent2.withValues(alpha: 0.10), p.surface)],
-              ),
-              border: Border.all(color: p.accent.withValues(alpha: 0.3)),
-            ),
+          child: TarjetaHeroe(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const _Ilustracion(),
               const VGap.md(),
-              Text('Que tus clientes agenden solos', style: context.text.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+              Text('Que tus clientes agenden solos', style: context.text.headlineSmall?.copyWith(fontWeight: FontWeight.w800, color: p.onAccent)),
               const VGap.xs(),
               Text(
                 'Crea tu página de citas en un minuto. Tus clientes eligen servicio, profesional y hora; tú solo recibes la notificación.',
-                style: context.text.bodyMedium?.copyWith(color: p.textSecondary),
+                style: context.text.bodyMedium?.copyWith(color: p.onAccent.withValues(alpha: 0.88)),
               ),
               const VGap.lg(),
               SizedBox(
@@ -174,6 +158,7 @@ class _Bienvenida extends StatelessWidget {
                   onPressed: () => context.push('/citas/crear'),
                   icon: const Icon(Icons.rocket_launch_rounded),
                   label: const Text('Crear mi página de citas'),
+                  style: FilledButton.styleFrom(backgroundColor: p.onAccent, foregroundColor: p.accent),
                 ),
               ),
             ]),
@@ -251,6 +236,8 @@ class _Agenda extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Entrance(index: i++, child: _HeroCitas(resumen: resumen)),
+        const VGap.sm(),
         Entrance(index: i++, child: TarjetaEnlace(negocio: negocio)),
         if (sinServicios) ...[
           const VGap.sm(),
@@ -268,32 +255,12 @@ class _Agenda extends ConsumerWidget {
             ),
           ),
         ],
-        const VGap.md(),
-        Entrance(
-          index: i++,
-          child: Row(children: [
-            Expanded(child: StatTile(label: 'Hoy', value: _Numero(resumen.hoy), icon: Icons.today_rounded)),
-            const HGap.sm(),
-            Expanded(child: StatTile(label: 'Semana', value: _Numero(resumen.semana), icon: Icons.date_range_rounded)),
-            const HGap.sm(),
-            Expanded(child: StatTile(
-              label: 'Ingresos',
-              value: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(copCompacto(resumen.ingresosSemana))),
-              icon: Icons.payments_rounded,
-              color: context.palette.success,
-            )),
-          ]),
-        ),
-        if (resumen.proxima != null) ...[
-          const VGap.md(),
-          Entrance(index: i++, child: _Proxima(cita: resumen.proxima!)),
-        ],
         const VGap.lg(),
         Entrance(index: i++, child: _TiraDias(porDia: porDia)),
         const VGap.md(),
         Row(children: [
           Expanded(child: Text(dia == hoyYmd() ? 'Hoy · ${fechaConDia(dia)}' : fechaConDia(dia), style: context.text.titleMedium)),
-          if (citasDia.isNotEmpty) Text('${citasDia.where((c) => c.estado != EstadoCita.cancelada).length} cita(s)', style: context.text.bodySmall),
+          if (citasDia.isNotEmpty) Text(_cuentaCitas(citasDia.where((c) => c.estado != EstadoCita.cancelada).length), style: context.text.bodySmall),
         ]),
         const VGap.sm(),
         AnimatedSwitcher(
@@ -323,35 +290,63 @@ class _Agenda extends ConsumerWidget {
   }
 }
 
-class _Proxima extends StatelessWidget {
-  const _Proxima({required this.cita});
-  final CitaAgenda cita;
+String _cuentaCitas(int n) => '$n ${n == 1 ? 'cita' : 'citas'}';
+
+/// El día del negocio de un vistazo: números y la próxima cita.
+class _HeroCitas extends StatelessWidget {
+  const _HeroCitas({required this.resumen});
+  final ResumenCitas resumen;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final color = Color(cita.profesionalColor);
-    return AppCard(
-      onTap: () => showAppSheet(context, (_) => CitaDetalleSheet(cita: cita)),
-      semanticLabel: 'Próxima cita: ${cita.clienteNombre}, ${fechaRelativa(cita.fecha)} a las ${hora12(cita.horaInicio)}',
-      gradient: LinearGradient(colors: [Color.alphaBlend(color.withValues(alpha: context.isDark ? 0.22 : 0.10), p.surface), p.surface]),
-      borderColor: color.withValues(alpha: 0.4),
-      child: Row(children: [
-        Column(children: [
-          Text(hora12(cita.horaInicio).split(' ').first, style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w800, fontFeatures: const [FontFeature.tabularFigures()])),
-          Text(hora12(cita.horaInicio).split(' ').skip(1).join(' '), style: context.text.labelSmall),
+    final suave = p.onAccent.withValues(alpha: 0.86);
+    final proxima = resumen.proxima;
+    Widget dato(String etiqueta, String valor) => Expanded(
+          child: Semantics(
+            label: '$etiqueta: $valor',
+            excludeSemantics: true,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(etiqueta, style: context.text.labelMedium?.copyWith(color: suave)),
+              const SizedBox(height: 2),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(valor, style: context.text.headlineSmall?.copyWith(color: p.onAccent, fontFeatures: const [FontFeature.tabularFigures()])),
+              ),
+            ]),
+          ),
+        );
+    return TarjetaHeroe(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          dato('Hoy', '${resumen.hoy}'),
+          dato('Esta semana', '${resumen.semana}'),
+          dato('Ingresos', copCompacto(resumen.ingresosSemana)),
         ]),
-        const HGap.md(),
-        Container(width: 3, height: 44, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
-        const HGap.md(),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('PRÓXIMA · ${fechaRelativa(cita.fecha).toUpperCase()}', style: context.text.labelSmall?.copyWith(color: p.accent, letterSpacing: 0.8, fontWeight: FontWeight.w700)),
-            Text(cita.clienteNombre, style: context.text.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
-            Text('${cita.servicioNombre} · ${cita.profesionalNombre}', style: context.text.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-          ]),
-        ),
-        const Icon(Icons.chevron_right_rounded),
+        if (proxima != null) ...[
+          const VGap.md(),
+          Pressable(
+            onTap: () => showAppSheet(context, (_) => CitaDetalleSheet(cita: proxima)),
+            semanticLabel: 'Próxima cita: ${proxima.clienteNombre}, ${fechaRelativa(proxima.fecha)} a las ${hora12(proxima.horaInicio)}',
+            scale: 0.985,
+            child: Container(
+              padding: const EdgeInsets.all(Gap.sm),
+              decoration: BoxDecoration(color: p.onAccent.withValues(alpha: 0.14), borderRadius: Radii.rMd),
+              child: Row(children: [
+                Icon(Icons.schedule_rounded, color: p.onAccent, size: IconSizes.md),
+                const HGap.xs(),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Próxima: ${fechaRelativa(proxima.fecha)}, ${hora12(proxima.horaInicio)}', style: context.text.labelMedium?.copyWith(color: suave)),
+                    Text(proxima.clienteNombre, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.titleSmall?.copyWith(color: p.onAccent)),
+                  ]),
+                ),
+                Icon(Icons.chevron_right_rounded, color: p.onAccent),
+              ]),
+            ),
+          ),
+        ],
       ]),
     );
   }
@@ -398,7 +393,7 @@ class _TiraDias extends ConsumerWidget {
                   color: elegido ? p.accent : p.surface,
                   borderRadius: Radii.rMd,
                   border: Border.all(color: elegido ? p.accent : (f == hoy ? p.accent.withValues(alpha: 0.5) : p.border)),
-                  boxShadow: elegido ? [BoxShadow(color: p.accent.withValues(alpha: 0.35), blurRadius: 14, offset: const Offset(0, 6))] : null,
+                  boxShadow: elegido ? p.sombraMedia : null,
                 ),
                 child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Text(_dias[d.weekday % 7], style: context.text.labelSmall?.copyWith(color: elegido ? p.onAccent : p.textSecondary)),
@@ -559,18 +554,3 @@ class _MisReservas extends StatelessWidget {
   }
 }
 
-/// Número que cuenta hasta su valor (como las cifras de Finanzas).
-class _Numero extends StatelessWidget {
-  const _Numero(this.valor);
-  final int valor;
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: valor.toDouble()),
-      duration: Motion.of(context, Motion.slow),
-      curve: Motion.enter,
-      builder: (context, v, _) => Text('${v.round()}', style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()])),
-    );
-  }
-}

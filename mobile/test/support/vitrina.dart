@@ -84,7 +84,6 @@ Future<void> _sembrar(FakeBackend backend) async {
 
 void main() {
   setUpAll(() async {
-    debugDisableShadows = false;
     await initializeDateFormatting('es_CO');
     await _fuente('PlusJakartaSans', [
       for (final w in ['Regular', 'Medium', 'SemiBold', 'Bold', 'ExtraBold']) 'assets/fonts/PlusJakartaSans-$w.ttf',
@@ -96,6 +95,7 @@ void main() {
 
   for (final (modo, tema) in const [('claro', ThemeMode.light), ('oscuro', ThemeMode.dark)]) {
     testWidgets(timeout: const Timeout(Duration(minutes: 4)), 'vitrina $modo', (t) async {
+      debugDisableShadows = false;
       t.view.physicalSize = const Size(1170, 2532);
       t.view.devicePixelRatio = 3;
       t.view.padding = const FakeViewPadding(top: 141, bottom: 102);
@@ -150,6 +150,7 @@ void main() {
 
       await t.pumpWidget(const SizedBox.shrink());
       await t.pump(const Duration(seconds: 1));
+      debugDisableShadows = true;
     });
   }
 }

@@ -13,7 +13,7 @@ enum AppModule {
     accentDark: Brand.violetaOscuro,
     accentLight: Brand.violetaClaro,
     secondaryDark: Brand.coral,
-    secondaryLight: Color(0xFFD9482B),
+    secondaryLight: Color(0xFFC93F24),
   ),
   eventos(
     label: 'Eventos',

@@ -9,7 +9,6 @@ import '../../core/dates.dart';
 import '../../core/db/database.dart';
 import '../../core/motion.dart';
 import '../../core/providers.dart';
-import '../../core/session.dart';
 import '../../data/sync.dart';
 import '../../core/widgets/month_calendar.dart';
 import '../../core/widgets/sheets.dart';
@@ -27,7 +26,6 @@ class CycleScreen extends ConsumerWidget {
     final stats = ref.watch(cycleStatsProvider);
     final sel = ref.watch(diaCicloProvider) ?? hoyYmd();
     final registros = ref.watch(registrosDiaProvider).value ?? const <String, RegistroDia>{};
-    final nombre = ref.watch(sesionProvider).value?.usuario.primerNombre ?? '';
     final detalles = getCycleDetails(sel, stats);
     final inicios = {for (final l in stats.logs) l.fechaInicio};
 
@@ -42,7 +40,7 @@ class CycleScreen extends ConsumerWidget {
           onRefresh: () => ref.read(sincronizadorProvider).refrescarTodo(),
           primary: [
             EncabezadoPantalla(
-              contexto: saludo(nombre),
+              contexto: 'Tu cuerpo, tu ritmo',
               titulo: AppModule.ciclo.label,
               acciones: [
                 IconButton(
@@ -139,11 +137,11 @@ class _Hero extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, c) {
           // En columna (teléfono) la rueda puede ser más grande que en fila.
-          final ring = CycleRing(details: d, size: c.maxWidth < 420 ? (c.maxWidth * 0.72).clamp(180.0, 240.0) : 200);
+          final ring = CycleRing(details: d, size: c.maxWidth < 420 ? (c.maxWidth * 0.8).clamp(200.0, 280.0) : 220);
           final info = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(fecha == hoyYmd() ? 'HOY' : fechaConDia(fecha).toUpperCase(), style: context.text.labelSmall?.copyWith(color: p.accent)),
+              Text(fecha == hoyYmd() ? 'Hoy' : fechaConDia(fecha), style: context.text.labelLarge?.copyWith(color: p.accent)),
               const SizedBox(height: 6),
               _Dato(
                 icon: Icons.child_care_rounded,
@@ -206,7 +204,7 @@ class _Dato extends StatelessWidget {
                 child: Text(
                   valor,
                   key: ValueKey(valor),
-                  style: context.text.titleSmall?.copyWith(color: color),
+                  style: context.text.titleSmall?.copyWith(color: color == null ? null : context.legible(color!)),
                 ),
               ),
             ],
@@ -263,13 +261,13 @@ class _CycleDayCell extends StatelessWidget {
       ring: ring?.withValues(alpha: 0.8),
       fillOpacity: f == Fase.periodoPrevisto ? 0.1 : null,
       corner: esInicio
-          ? const Icon(Icons.water_drop_rounded, size: 10, color: Colors.white)
+          ? Icon(Icons.water_drop_rounded, size: 12, color: textoSobre(color ?? PhaseColors.period))
           : f == Fase.ovulacion
-          ? const Icon(Icons.auto_awesome_rounded, size: 10, color: Colors.white)
+          ? Icon(Icons.auto_awesome_rounded, size: 12, color: textoSobre(PhaseColors.ovulation))
           : f == Fase.periodoRetrasado
-          ? const Icon(Icons.hourglass_bottom_rounded, size: 10, color: PhaseColors.late)
+          ? Icon(Icons.hourglass_bottom_rounded, size: 12, color: context.legible(PhaseColors.late))
           : null,
-      markers: tieneRegistro ? Dot(strong ? Colors.white : context.palette.accent2, size: 5) : null,
+      markers: tieneRegistro ? Dot(strong ? textoSobre(color ?? PhaseColors.period) : context.palette.accent2) : null,
     );
   }
 }
@@ -450,7 +448,7 @@ class _Pronostico extends StatelessWidget {
                 label: 'Ciclo promedio',
                 value: Text('${stats.avgCycleLength} días'),
                 icon: Icons.loop_rounded,
-                caption: stats.ciclosUsados == 0 ? 'Estándar (28)' : 'De ${stats.ciclosUsados} ciclo(s)',
+                caption: stats.ciclosUsados == 0 ? 'Estándar (28)' : 'De ${stats.ciclosUsados} ${stats.ciclosUsados == 1 ? 'ciclo' : 'ciclos'}',
               ),
             ),
             const HGap.xs(),

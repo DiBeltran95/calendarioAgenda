@@ -8,6 +8,7 @@ import '../../core/dates.dart';
 import '../../core/money.dart';
 import '../../core/motion.dart';
 import '../../core/widgets/sheets.dart';
+import '../../core/widgets/esqueleto.dart';
 import '../../core/widgets/ui.dart';
 import 'citas_models.dart';
 import 'citas_repository.dart';
@@ -27,9 +28,9 @@ class AjustesAgendaScreen extends ConsumerWidget {
     var i = 0;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Ajustes de citas'), backgroundColor: Colors.transparent, surfaceTintColor: Colors.transparent),
+      appBar: barraPantalla(context, 'Ajustes de citas'),
       body: n == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const Padding(padding: EdgeInsets.all(Gap.md), child: EsqueletoLista())
           : RefreshIndicator(
               onRefresh: () => ref.read(agendaRepoProvider).refrescar(),
               child: ListView(

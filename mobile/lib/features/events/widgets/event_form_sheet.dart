@@ -372,9 +372,9 @@ class _CategoryPicker extends StatelessWidget {
                 width: 82,
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: Gap.xs),
                 decoration: BoxDecoration(
-                  color: sel ? c.color.withValues(alpha: context.isDark ? 0.2 : 0.14) : p.surfaceHigh,
+                  color: sel ? c.colorDe(context).withValues(alpha: context.isDark ? 0.2 : 0.14) : p.surfaceHigh,
                   borderRadius: Radii.rMd,
-                  border: Border.all(color: sel ? c.color : p.border, width: sel ? 1.6 : 1),
+                  border: Border.all(color: sel ? c.colorDe(context) : p.border, width: sel ? 1.6 : 1),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -383,7 +383,7 @@ class _CategoryPicker extends StatelessWidget {
                       scale: sel ? 1.12 : 1,
                       duration: Motion.of(context, Motion.medium),
                       curve: Curves.easeOutBack,
-                      child: Icon(c.icon, color: sel ? c.color : p.textSecondary, size: IconSizes.lg),
+                      child: Icon(c.icon, color: sel ? c.colorDe(context) : p.textSecondary, size: IconSizes.lg),
                     ),
                     const SizedBox(height: 6),
                     Text(

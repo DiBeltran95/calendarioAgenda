@@ -33,6 +33,15 @@ class RedNotifier extends Notifier<EstadoRed> {
 
 final redProvider = NotifierProvider<RedNotifier, EstadoRed>(RedNotifier.new);
 
+/// Última vez que llegaron datos del servidor en esta sesión.
+class UltimaSincronizacion extends Notifier<DateTime?> {
+  @override
+  DateTime? build() => null;
+  void marcar() => state = DateTime.now();
+}
+
+final ultimaSincronizacionProvider = NotifierProvider<UltimaSincronizacion, DateTime?>(UltimaSincronizacion.new);
+
 /// Sin reintentos automáticos de Riverpod: la caché cubre los fallos y el
 /// usuario puede reintentar (arrastrar para refrescar o el aviso sin conexión).
 Duration? sinReintento(int _, Object _) => null;
@@ -62,6 +71,7 @@ mixin CacheRed<T> on AsyncNotifier<T> {
     try {
       final json = await pedir();
       ref.read(redProvider.notifier).reportar(null);
+      ref.read(ultimaSincronizacionProvider.notifier).marcar();
       final valor = parsear(json);
       await ref.read(databaseProvider).escribirCache(_clave, jsonEncode(serializar(valor)));
       return valor;

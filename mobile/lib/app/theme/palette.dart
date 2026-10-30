@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'tokens.dart';
@@ -148,6 +150,14 @@ class Palette extends ThemeExtension<Palette> {
   }
 }
 
+double _contraste(Color a, Color b) {
+  final la = a.computeLuminance(), lb = b.computeLuminance();
+  return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05);
+}
+
+/// Texto o ícono que se lee mejor sobre un fondo de color arbitrario.
+Color textoSobre(Color fondo) => _contraste(fondo, Colors.white) >= _contraste(fondo, Brand.lightText) ? Colors.white : Brand.lightText;
+
 extension PaletteX on BuildContext {
   Palette get palette => Theme.of(this).extension<Palette>()!;
   TextTheme get text => Theme.of(this).textTheme;
@@ -155,4 +165,18 @@ extension PaletteX on BuildContext {
 
   /// Color de dato en el modo actual.
   Color par(ColorPar c) => c.de(Theme.of(this).brightness);
+
+  /// Ajusta un color libre (fase, marca de un negocio…) hasta que se lea como
+  /// texto sobre las superficies del modo actual, sin cambiar su tono.
+  Color legible(Color c) {
+    final fondo = palette.surface;
+    final oscuro = isDark;
+    var hsl = HSLColor.fromColor(c);
+    var actual = c;
+    for (var i = 0; i < 24 && _contraste(actual, fondo) < 4.8; i++) {
+      hsl = hsl.withLightness((hsl.lightness + (oscuro ? 0.03 : -0.03)).clamp(0.0, 1.0));
+      actual = hsl.toColor();
+    }
+    return actual;
+  }
 }

@@ -76,7 +76,7 @@ class _PagosScreenState extends ConsumerState<PagosScreen> {
     final total = pagos.fold<double>(0, (s, c) => s + (c.tipo == 'gasto' ? c.monto : 0));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Pagos por clasificar'), backgroundColor: Colors.transparent, surfaceTintColor: Colors.transparent),
+      appBar: barraPantalla(context, 'Pagos por clasificar'),
       body: RefreshIndicator(
         onRefresh: _refrescar,
         child: ListView(

@@ -264,7 +264,7 @@ class _BudgetTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            IconBadge(iconoPorNombre(categoria.icono), color: colorCategoria(categoria.valor), size: 34),
+            IconBadge(iconoPorNombre(categoria.icono), color: colorCategoria(context, categoria.valor), size: 34),
             const Spacer(),
             if (e.estado == EstadoPresupuesto.excedido) Icon(Icons.error_rounded, color: p.danger, size: IconSizes.md),
             if (e.estado == EstadoPresupuesto.alerta) Icon(Icons.warning_amber_rounded, color: p.warning, size: IconSizes.md),

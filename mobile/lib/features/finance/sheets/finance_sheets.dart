@@ -664,7 +664,7 @@ class _ContributionSheetState extends ConsumerState<ContributionSheet> {
           nav.pop();
           if (cumplida && parent.mounted) {
             celebrar(parent);
-            toaster.show('¡Meta cumplida! 🎉 ${m.nombre}', icon: Icons.emoji_events_rounded);
+            toaster.show('¡Meta cumplida! ${m.nombre}', icon: Icons.emoji_events_rounded);
           } else {
             toaster.show('Aporte de ${cop(monto)} registrado', icon: Icons.savings_rounded);
           }
@@ -851,7 +851,7 @@ class _CategoriesSheetState extends ConsumerState<CategoriesSheet> {
         for (final c in cats)
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: IconBadge(iconoPorNombre(c.icono), color: colorCategoria(c.valor), size: 38),
+            leading: IconBadge(iconoPorNombre(c.icono), color: colorCategoria(context, c.valor), size: 38),
             title: Text(c.label),
             subtitle: Text(c.esDefault ? 'Predeterminada' : (enUso.contains(c.valor) ? 'En uso' : 'Personalizada'), style: context.text.bodySmall),
             trailing: c.esDefault

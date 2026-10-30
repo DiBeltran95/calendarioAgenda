@@ -176,7 +176,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
       // Perfil y ajustes: se abre desde el avatar de cada módulo.
-      GoRoute(path: '/perfil', pageBuilder: (c, s) => _deslizar(const SettingsScreen(), s)),
+      GoRoute(path: '/perfil', pageBuilder: (c, s) => _deslizar(const ModuleTheme(module: AppModule.inicio, child: SettingsScreen()), s)),
       GoRoute(path: '/finanzas/pagos', pageBuilder: (c, s) => _deslizar(const ModuleTheme(module: AppModule.finanzas, child: PagosScreen()), s)),
       GoRoute(path: '/citas/ajustes', pageBuilder: (c, s) => _deslizar(const ModuleTheme(module: AppModule.citas, child: AjustesAgendaScreen()), s)),
       GoRoute(path: '/citas/crear', pageBuilder: (c, s) => _subir(const ModuleTheme(module: AppModule.citas, child: CrearPaginaScreen()), s)),

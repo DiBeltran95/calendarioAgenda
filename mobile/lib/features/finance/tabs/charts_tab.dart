@@ -86,7 +86,7 @@ class ChartsTab extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(vertical: 5),
                     child: Row(children: [
                       SizedBox(width: 22, child: Text('${k + 1}', style: context.text.labelMedium)),
-                      Container(width: 4, height: 28, decoration: BoxDecoration(color: colorCategoria(t.categoria), borderRadius: BorderRadius.circular(2))),
+                      Container(width: 4, height: 28, decoration: BoxDecoration(color: colorCategoria(context, t.categoria), borderRadius: BorderRadius.circular(2))),
                       const HGap.xs(),
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -157,7 +157,7 @@ class _SinDatos extends StatelessWidget {
 }
 
 FlTitlesData _titulos(BuildContext context, {required Widget Function(double, TitleMeta) bottom, double reserved = 44}) {
-  final estilo = context.text.labelSmall?.copyWith(letterSpacing: 0, fontSize: 10);
+  final estilo = context.text.labelSmall?.copyWith(letterSpacing: 0);
   return FlTitlesData(
     topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
     rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -192,7 +192,7 @@ class _LineaPatrimonio extends StatelessWidget {
     if (d == 0) d = mx.abs() > 0 ? mx.abs() * 0.2 : 100000;
     mn -= d * 0.1;
     mx += d * 0.1;
-    final estilo = context.text.labelSmall?.copyWith(letterSpacing: 0, fontSize: 10);
+    final estilo = context.text.labelSmall?.copyWith(letterSpacing: 0);
     final paso = math.max(1, (pts.length / 4).floor());
     return SizedBox(
       height: 200,
@@ -252,7 +252,7 @@ class _BarrasMes extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final estilo = context.text.labelSmall?.copyWith(letterSpacing: 0, fontSize: 10);
+    final estilo = context.text.labelSmall?.copyWith(letterSpacing: 0);
     final datos = a.porMes;
     final mx = datos.fold(0.0, (m, b) => math.max(m, math.max(b.ingresos, b.gastos)));
     return Column(
@@ -306,7 +306,7 @@ class _FlujoDiario extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final d = a.flujoDiario;
-    final estilo = context.text.labelSmall?.copyWith(letterSpacing: 0, fontSize: 10);
+    final estilo = context.text.labelSmall?.copyWith(letterSpacing: 0);
     final mx = d.fold(0.0, (m, x) => math.max(m, math.max(x.$2, x.$3)));
     if (mx == 0) return const _SinDatos();
     final paso = math.max(1, (d.length / 5).floor());
@@ -391,7 +391,7 @@ class _DonaState extends State<_Dona> {
                     for (var i = 0; i < datos.length; i++)
                       PieChartSectionData(
                         value: datos[i].value,
-                        color: colorCategoria(datos[i].key),
+                        color: colorCategoria(context, datos[i].key),
                         radius: i == _tocado ? 34 : 26,
                         showTitle: false,
                       ),
@@ -420,7 +420,7 @@ class _DonaState extends State<_Dona> {
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
               child: Row(children: [
-                Container(width: 12, height: 12, decoration: BoxDecoration(color: colorCategoria(datos[i].key), borderRadius: BorderRadius.circular(3))),
+                Container(width: 12, height: 12, decoration: BoxDecoration(color: colorCategoria(context, datos[i].key), borderRadius: BorderRadius.circular(3))),
                 const HGap.xs(),
                 Expanded(
                   child: Text(widget.nombre(datos[i].key),

@@ -322,7 +322,7 @@ class DayCellFrame extends StatelessWidget {
             ? fill!
             : fill!.withValues(alpha: fillOpacity ?? (context.isDark ? 0.2 : 0.16));
     final numColor = numberColor ??
-        (strong ? Colors.white : (day.isWeekend && fill == null ? p.text.withValues(alpha: 0.8) : p.text));
+        (strong ? textoSobre(fill!) : (day.isWeekend && fill == null ? p.text.withValues(alpha: 0.8) : p.text));
 
     return AnimatedContainer(
       duration: Motion.of(context, Motion.medium),
@@ -334,7 +334,6 @@ class DayCellFrame extends StatelessWidget {
           color: sel ? p.accent : (ring ?? Colors.transparent),
           width: sel ? 2 : 1.4,
         ),
-        boxShadow: sel ? [BoxShadow(color: p.accent.withValues(alpha: 0.25), blurRadius: 12, spreadRadius: -2)] : null,
       ),
       child: Stack(
         children: [
@@ -353,14 +352,13 @@ class DayCellFrame extends StatelessWidget {
                 child: Text(
                   '${day.day}',
                   style: context.text.labelLarge?.copyWith(
-                    fontSize: 14,
                     fontWeight: day.isToday || sel ? FontWeight.w800 : FontWeight.w600,
                     color: day.isToday ? p.onAccent : numColor,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
               ),
-              SizedBox(height: 12, child: markers == null ? null : Center(child: FittedBox(child: markers))),
+              SizedBox(height: 16, child: markers == null ? null : Center(child: FittedBox(fit: BoxFit.scaleDown, child: markers))),
             ],
           ),
           if (corner != null) Positioned(top: 3, right: 3, child: corner!),
@@ -372,7 +370,7 @@ class DayCellFrame extends StatelessWidget {
 
 /// Punto de color para marcadores.
 class Dot extends StatelessWidget {
-  const Dot(this.color, {super.key, this.size = 5});
+  const Dot(this.color, {super.key, this.size = 6});
   final Color color;
   final double size;
 

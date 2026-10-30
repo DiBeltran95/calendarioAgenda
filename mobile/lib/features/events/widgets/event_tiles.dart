@@ -96,7 +96,7 @@ class EventTile extends ConsumerWidget {
               ],
             ),
           ),
-          Container(width: 3, height: 40, decoration: BoxDecoration(color: cat.color, borderRadius: BorderRadius.circular(2))),
+          Container(width: 3, height: 40, decoration: BoxDecoration(color: cat.colorDe(context), borderRadius: BorderRadius.circular(2))),
           const HGap.sm(),
           Expanded(
             child: Column(
@@ -109,7 +109,7 @@ class EventTile extends ConsumerWidget {
                   runSpacing: 4,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Tag(cat.label, color: cat.color, icon: cat.icon),
+                    Tag(cat.label, color: cat.colorDe(context), icon: cat.icon),
                     if (e.frecuencia != 'unica') Tag(frecuenciaLabel(e.frecuencia), icon: Icons.repeat_rounded),
                     if (e.ubicacion.isNotEmpty)
                       Row(mainAxisSize: MainAxisSize.min, children: [
@@ -400,7 +400,7 @@ class _VistaWhatsApp extends StatelessWidget {
                       child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                         _TextoWhatsApp(texto),
                         const SizedBox(height: 2),
-                        Text(cuando, style: context.text.labelSmall?.copyWith(fontSize: 10.5, letterSpacing: 0)),
+                        Text(cuando, style: context.text.labelSmall?.copyWith(letterSpacing: 0)),
                       ]),
                     ),
                   ),

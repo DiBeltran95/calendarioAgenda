@@ -237,7 +237,7 @@ class IconBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? context.palette.accent;
+    final c = context.legible(color ?? context.palette.accent);
     return Container(
       width: size,
       height: size,

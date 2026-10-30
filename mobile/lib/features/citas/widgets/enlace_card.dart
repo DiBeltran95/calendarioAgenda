@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../app/theme/palette.dart';
 import '../../../app/theme/tokens.dart';
 import '../../../core/motion.dart';
+import '../../../core/widgets/ui.dart';
 import '../../../core/widgets/sheets.dart';
 import '../citas_models.dart';
 
@@ -36,17 +37,7 @@ class TarjetaEnlace extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final marca = Color(negocio.color);
-    return Container(
-      padding: const EdgeInsets.all(Gap.md),
-      decoration: BoxDecoration(
-        borderRadius: Radii.rLg,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color.alphaBlend(marca.withValues(alpha: context.isDark ? 0.34 : 0.16), p.surface), p.surface],
-        ),
-        border: Border.all(color: marca.withValues(alpha: 0.35)),
-      ),
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -56,7 +47,7 @@ class TarjetaEnlace extends StatelessWidget {
               height: 40,
               alignment: Alignment.center,
               decoration: BoxDecoration(color: marca, borderRadius: Radii.rMd),
-              child: const Icon(Icons.link_rounded, color: Colors.white),
+              child: Icon(Icons.link_rounded, color: textoSobre(marca)),
             ),
             const HGap.sm(),
             Expanded(
@@ -79,7 +70,7 @@ class TarjetaEnlace extends StatelessWidget {
                 onPressed: () => compartirEnlace(context, negocio),
                 icon: const Icon(Icons.ios_share_rounded, size: 20),
                 label: const Text('Compartir'),
-                style: FilledButton.styleFrom(backgroundColor: marca, foregroundColor: _textoSobre(marca)),
+                style: FilledButton.styleFrom(backgroundColor: marca, foregroundColor: textoSobre(marca)),
               ),
             ),
             const HGap.xs(),
@@ -92,8 +83,6 @@ class TarjetaEnlace extends StatelessWidget {
     );
   }
 }
-
-Color _textoSobre(Color c) => c.computeLuminance() > 0.45 ? const Color(0xFF0F172A) : Colors.white;
 
 class _Estado extends StatelessWidget {
   const _Estado({required this.activo});

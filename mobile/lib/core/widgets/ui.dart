@@ -50,6 +50,39 @@ class AppCard extends StatelessWidget {
   }
 }
 
+/// Tarjeta principal de una pantalla: degradado del módulo y texto de alto
+/// contraste. Hay una por pantalla; es lo primero que se lee.
+class TarjetaHeroe extends StatelessWidget {
+  const TarjetaHeroe({super.key, required this.child, this.padding = const EdgeInsets.all(Gap.lg), this.onTap, this.semanticLabel});
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final VoidCallback? onTap;
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final tarjeta = Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [p.accent, p.accent2]),
+        borderRadius: Radii.rLg,
+        boxShadow: p.sombraMedia,
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: DefaultTextStyle.merge(
+          style: TextStyle(color: p.onAccent),
+          child: IconTheme.merge(data: IconThemeData(color: p.onAccent), child: child),
+        ),
+      ),
+    );
+    if (onTap == null) return tarjeta;
+    return Pressable(onTap: onTap, semanticLabel: semanticLabel, scale: 0.985, child: tarjeta);
+  }
+}
+
 /// Título de sección con acción opcional a la derecha.
 class SectionHeader extends StatelessWidget {
   const SectionHeader(this.title, {super.key, this.icon, this.action, this.subtitle});
@@ -143,7 +176,7 @@ class Tag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? context.palette.textSecondary;
+    final c = context.legible(color ?? context.palette.textSecondary);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: Gap.xs + 2, vertical: Gap.xxs),
       decoration: BoxDecoration(
@@ -185,12 +218,14 @@ class StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final c = color ?? p.accent;
+    final c = context.legible(color ?? p.accent);
     return Container(
       padding: const EdgeInsets.all(Gap.sm),
       decoration: BoxDecoration(
-        color: p.surfaceHigh,
+        color: p.surface,
         borderRadius: Radii.rMd,
+        border: Border.all(color: p.bordeTarjeta),
+        boxShadow: p.sombraSuave,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -268,6 +303,17 @@ class EncabezadoPantalla extends StatelessWidget {
     );
   }
 }
+
+/// Barra superior de las pantallas internas con lista propia: misma apariencia
+/// que [EncabezadoPantalla] con "atrás".
+PreferredSizeWidget barraPantalla(BuildContext context, String titulo, {List<Widget> acciones = const []}) => AppBar(
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      leadingWidth: 60,
+      leading: const Padding(padding: EdgeInsets.only(left: Gap.md), child: Center(child: BotonAtras())),
+      title: Semantics(header: true, child: Text(titulo, style: context.text.headlineSmall)),
+      actions: acciones,
+    );
 
 /// Botón "atrás" circular de las pantallas internas.
 class BotonAtras extends StatelessWidget {

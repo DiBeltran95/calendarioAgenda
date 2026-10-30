@@ -42,7 +42,7 @@ class CycleRing extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final d = details;
-    final color = colorFase(d.fase);
+    final color = context.legible(colorFase(d.fase));
     return Semantics(
       label: 'Día ${d.diaDelCiclo} de ${d.duracionCiclo}. ${d.fase.nombre}.',
       child: SizedBox.square(

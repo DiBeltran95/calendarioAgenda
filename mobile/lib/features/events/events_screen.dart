@@ -10,7 +10,9 @@ import '../../data/models.dart';
 import '../../core/holidays.dart';
 import '../../core/motion.dart';
 import '../../core/providers.dart';
-import '../../core/session.dart';
+import '../../core/widgets/esqueleto.dart';
+import '../../core/widgets/fields.dart';
+import '../../core/widgets/vista_async.dart';
 import '../../data/sync.dart';
 import '../../core/widgets/month_calendar.dart';
 import '../../core/widgets/sheets.dart';
@@ -19,13 +21,24 @@ import 'event_categories.dart';
 import 'events_repository.dart';
 import 'widgets/event_form_sheet.dart';
 import 'widgets/event_tiles.dart';
+import 'widgets/vista_semana.dart';
 
-const _festivoColor = Color(0xFFF59E0B);
-const _especialColor = Color(0xFF60A5FA);
-const _cumpleColor = Color(0xFFF472B6);
+const _festivoPar = ColorPar(Color(0xFF8F5706), Color(0xFFFBBF24));
+const _especialPar = ColorPar(Color(0xFF1D4ED8), Color(0xFF60A5FA));
+const _cumplePar = ColorPar(Color(0xFFBE185D), Color(0xFFF472B6));
 
 /// Cumpleaños que caen en un MM-DD dado.
 List<Cumple> cumplesDelDia(List<Cumple> todos, String fecha) => todos.where((c) => c.fecha.length >= 10 && c.fecha.substring(5) == fecha.substring(5)).toList();
+
+enum VistaEventos { mes, semana }
+
+class VistaEventosNotifier extends Notifier<VistaEventos> {
+  @override
+  VistaEventos build() => VistaEventos.mes;
+  void set(VistaEventos v) => state = v;
+}
+
+final vistaEventosProvider = NotifierProvider<VistaEventosNotifier, VistaEventos>(VistaEventosNotifier.new);
 
 class EventsScreen extends ConsumerWidget {
   const EventsScreen({super.key});
@@ -38,7 +51,7 @@ class EventsScreen extends ConsumerWidget {
     final eventos = eventosAsync.value ?? const <Evento>[];
     final especiales = ref.watch(diasImportantesProvider(mes.year)).value ?? const <DiaImportante>[];
     final cumples = ref.watch(cumplesProvider).value ?? const <Cumple>[];
-    final nombre = ref.watch(sesionProvider).value?.usuario.primerNombre ?? '';
+    final vista = ref.watch(vistaEventosProvider);
 
     final porDia = <String, List<Evento>>{};
     for (final e in eventos) {
@@ -56,7 +69,7 @@ class EventsScreen extends ConsumerWidget {
           onRefresh: () => ref.read(sincronizadorProvider).refrescarTodo(),
           primary: [
             EncabezadoPantalla(
-              contexto: saludo(nombre),
+              contexto: 'Tu agenda',
               titulo: AppModule.eventos.label,
               acciones: [
                 IconButton(
@@ -66,37 +79,58 @@ class EventsScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            Entrance(child: _ResumenMes(eventos: eventos)),
+            SegmentedPill<VistaEventos>(
+              value: vista,
+              onChanged: (v) {
+                if (v == VistaEventos.semana && sel == null) ref.read(diaEventosProvider.notifier).seleccionar(hoyYmd());
+                ref.read(vistaEventosProvider.notifier).set(v);
+              },
+              options: const [
+                (VistaEventos.mes, 'Mes', Icons.calendar_month_rounded),
+                (VistaEventos.semana, 'Semana', Icons.view_week_rounded),
+              ],
+            ),
             const VGap.sm(),
-            Entrance(
-              index: 1,
-              child: AppCard(
-                padding: const EdgeInsets.fromLTRB(Gap.sm, Gap.xs, Gap.sm, Gap.sm),
-                child: MonthCalendar(
-                  cursor: mesEventosProvider,
-                  selected: sel,
-                  onTap: (f) => ref.read(diaEventosProvider.notifier).alternar(f),
-                  onLongPress: (f) {
-                    ref.read(diaEventosProvider.notifier).seleccionar(f);
-                    crear(f);
-                  },
-                  semantics: (d) {
-                    final n = porDia[d.fecha]?.length ?? 0;
-                    final fest = festivoEn(d.fecha);
-                    return '${fechaConDia(d.fecha)}${fest != null ? ', festivo: ${fest.nombre}' : ''}${n > 0 ? ', $n evento(s)' : ''}';
-                  },
-                  cellBuilder: (context, d) => _EventDayCell(
-                    day: d,
-                    especial: diaImportanteEn(especiales, d.fecha),
-                    eventos: porDia[d.fecha] ?? const [],
-                    cumples: cumplesDelDia(cumples, d.fecha).length,
+            if (eventosAsync.hasError && !eventosAsync.hasValue)
+              EstadoError(error: eventosAsync.error, onReintentar: () => ref.read(sincronizadorProvider).refrescarTodo())
+            else if (!eventosAsync.hasValue)
+              const EsqueletoLista(alturas: [76, 360])
+            else if (vista == VistaEventos.semana)
+              Entrance(child: VistaSemana(cumples: cumples))
+            else ...[
+              Entrance(child: _ResumenMes(eventos: eventos)),
+              const VGap.sm(),
+              Entrance(
+                index: 1,
+                child: AppCard(
+                  padding: const EdgeInsets.fromLTRB(Gap.sm, Gap.xs, Gap.sm, Gap.sm),
+                  child: MonthCalendar(
+                    cursor: mesEventosProvider,
+                    selected: sel,
+                    onTap: (f) => ref.read(diaEventosProvider.notifier).alternar(f),
+                    onLongPress: (f) {
+                      ref.read(diaEventosProvider.notifier).seleccionar(f);
+                      crear(f);
+                    },
+                    semantics: (d) {
+                      final n = porDia[d.fecha]?.length ?? 0;
+                      final fest = festivoEn(d.fecha);
+                      return '${fechaConDia(d.fecha)}${fest != null ? ', festivo: ${fest.nombre}' : ''}${n > 0 ? ', $n ${n == 1 ? 'evento' : 'eventos'}' : ''}';
+                    },
+                    cellBuilder: (context, d) => _EventDayCell(
+                      day: d,
+                      especial: diaImportanteEn(especiales, d.fecha),
+                      eventos: porDia[d.fecha] ?? const [],
+                      cumples: cumplesDelDia(cumples, d.fecha).length,
+                    ),
+                    footer: const _Leyenda(),
                   ),
-                  footer: const _Leyenda(),
                 ),
               ),
-            ),
+            ],
           ],
           secondary: [
+            if (vista == VistaEventos.mes && eventosAsync.hasValue) ...[
             const VGap.md(),
             SmoothSwitcher(
               child: sel == null
@@ -109,6 +143,7 @@ class EventsScreen extends ConsumerWidget {
                       especial: diaImportanteEn(especiales, sel),
                     ),
             ),
+            ],
           ],
         ),
       ),
@@ -130,29 +165,17 @@ class _EventDayCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final festivo = festivoEn(day.fecha);
     final especial = festivo == null ? this.especial : null;
-    // Los eventos anuales se pintan con el ícono de su categoría (moto, casa…).
-    final anuales = eventos.where((e) => esAnual(e.frecuencia)).toList();
-    final otros = eventos.where((e) => !esAnual(e.frecuencia)).toList();
-
-    final markers = <Widget>[
-      for (final e in anuales.take(2)) Icon(categoriaEvento(e.categoria).icon, size: 12, color: categoriaEvento(e.categoria).color),
-      if (anuales.length > 2) Text('+${anuales.length - 2}', style: context.text.labelSmall?.copyWith(fontSize: 9, letterSpacing: 0)),
-      for (final e in otros.take(anuales.isEmpty ? 3 : 1)) Dot(categoriaEvento(e.categoria).color),
+    final puntos = <Widget>[
+      for (final e in eventos.take(cumples > 0 ? 2 : 3)) Dot(categoriaEvento(e.categoria).colorDe(context)),
+      if (cumples > 0) Dot(context.par(_cumplePar)),
     ];
 
     return DayCellFrame(
       day: day,
-      fill: festivo != null ? _festivoColor : null,
-      fillOpacity: context.isDark ? 0.16 : 0.14,
-      ring: especial != null ? _especialColor.withValues(alpha: 0.5) : null,
-      corner: festivo != null
-          ? const Icon(Icons.celebration_rounded, size: 11, color: _festivoColor)
-          : cumples > 0
-          ? const Icon(Icons.cake_rounded, size: 11, color: _cumpleColor)
-          : especial != null
-          ? const Icon(Icons.star_rounded, size: 11, color: _especialColor)
-          : null,
-      markers: markers.isEmpty ? null : Row(mainAxisSize: MainAxisSize.min, children: markers),
+      fill: festivo != null ? context.par(_festivoPar) : null,
+      fillOpacity: context.isDark ? 0.18 : 0.14,
+      ring: especial != null ? context.par(_especialPar).withValues(alpha: 0.6) : null,
+      markers: puntos.isEmpty ? null : Row(mainAxisSize: MainAxisSize.min, children: puntos),
     );
   }
 }
@@ -162,23 +185,31 @@ class _Leyenda extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget item(Widget icon, String t) => Row(
+    Widget item(Widget marca, String t) => Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        icon,
-        const SizedBox(width: 4),
+        marca,
+        const SizedBox(width: 6),
         Text(t, style: context.text.labelSmall?.copyWith(letterSpacing: 0)),
       ],
     );
+    Widget muestra({Color? relleno, Color? borde}) => Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: relleno,
+            borderRadius: BorderRadius.circular(4),
+            border: borde == null ? null : Border.all(color: borde, width: 1.4),
+          ),
+        );
     return Wrap(
       spacing: Gap.md,
       runSpacing: Gap.xs,
       alignment: WrapAlignment.center,
       children: [
-        item(const Icon(Icons.celebration_rounded, size: 13, color: _festivoColor), 'Festivo'),
-        item(const Icon(Icons.star_rounded, size: 13, color: _especialColor), 'Día especial'),
-        item(const Icon(Icons.cake_rounded, size: 13, color: _cumpleColor), 'Cumpleaños'),
-        item(Icon(Icons.two_wheeler_rounded, size: 13, color: context.palette.textSecondary), 'Anual'),
+        item(muestra(relleno: context.par(_festivoPar).withValues(alpha: 0.3)), 'Festivo'),
+        item(muestra(borde: context.par(_especialPar)), 'Día especial'),
+        item(Dot(context.par(_cumplePar), size: 8), 'Cumpleaños'),
       ],
     );
   }
@@ -272,7 +303,7 @@ class _DetalleDia extends ConsumerWidget {
           Entrance(
             index: i++,
             child: _InfoDia(
-              color: _festivoColor,
+              color: context.par(_festivoPar),
               icon: Icons.celebration_rounded,
               titulo: festivo.nombre,
               texto: festivo.trasladado ? 'Festivo nacional · trasladado al lunes (Ley Emiliani) · Día no laboral' : 'Festivo nacional · Día no laboral',
@@ -282,7 +313,7 @@ class _DetalleDia extends ConsumerWidget {
           Entrance(
             index: i++,
             child: _InfoDia(
-              color: _especialColor,
+              color: context.par(_especialPar),
               icon: Icons.star_rounded,
               titulo: especial!.nombre,
               texto: [especial!.categoria, especial!.descripcion].where((t) => t.isNotEmpty).join(' · '),
@@ -428,11 +459,11 @@ class _AgendaMes extends ConsumerWidget {
             if (e.hora != null) hora12(e.hora) else 'Todo el día',
           ].join(' · '),
           icon: categoriaEvento(e.categoria).icon,
-          color: categoriaEvento(e.categoria).color,
+          color: categoriaEvento(e.categoria).colorDe(context),
           evento: e,
         ),
       for (final f in festivosColombia(mes.year).where((f) => f.fecha.startsWith(prefijo) && f.fecha.compareTo(desde) >= 0))
-        _ItemAgenda(fecha: f.fecha, hora: '', titulo: f.nombre, detalle: 'Festivo · Día no laboral', icon: Icons.celebration_rounded, color: _festivoColor),
+        _ItemAgenda(fecha: f.fecha, hora: '', titulo: f.nombre, detalle: 'Festivo · Día no laboral', icon: Icons.celebration_rounded, color: context.par(_festivoPar)),
       for (final d in especiales.where((d) => d.fecha.startsWith(prefijo) && d.fecha.compareTo(desde) >= 0))
         _ItemAgenda(
           fecha: d.fecha,
@@ -440,7 +471,7 @@ class _AgendaMes extends ConsumerWidget {
           titulo: d.nombre,
           detalle: d.categoria.isEmpty ? 'Día especial' : d.categoria,
           icon: Icons.star_rounded,
-          color: _especialColor,
+          color: context.par(_especialPar),
         ),
       for (final c in cumples)
         if (c.fecha.length >= 10 && c.fecha.substring(5, 7) == prefijo.substring(5) && '$prefijo${c.fecha.substring(7)}'.compareTo(desde) >= 0)
@@ -450,7 +481,7 @@ class _AgendaMes extends ConsumerWidget {
             titulo: c.nombre,
             detalle: c.anioNacimiento != null ? 'Cumple ${mes.year - c.anioNacimiento!} años' : 'Cumpleaños',
             icon: Icons.cake_rounded,
-            color: _cumpleColor,
+            color: context.par(_cumplePar),
           ),
     ]..sort((a, b) => a.fecha == b.fecha ? a.hora.compareTo(b.hora) : a.fecha.compareTo(b.fecha));
 
@@ -610,7 +641,7 @@ class _BuscarSheetState extends ConsumerState<_BuscarSheet> {
                 },
                 child: Row(
                   children: [
-                    _FechaChip(fecha: _res[i].fecha, color: categoriaEvento(_res[i].categoria).color),
+                    _FechaChip(fecha: _res[i].fecha, color: categoriaEvento(_res[i].categoria).colorDe(context)),
                     const HGap.sm(),
                     Expanded(
                       child: Column(

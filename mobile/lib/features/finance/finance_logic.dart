@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../app/theme/palette.dart';
+import '../../app/theme/tokens.dart';
 import '../../core/dates.dart';
 import '../../data/models.dart';
 import '../../core/money.dart';
@@ -436,28 +438,34 @@ String slugCategoria(String label) {
 }
 
 /// Colores por categoría para las gráficas (base + paleta para personalizadas).
-const coloresCategoriaBase = <String, Color>{
-  'comida': Color(0xFFFF7043),
-  'transporte': Color(0xFF29B6F6),
-  'servicios': Color(0xFFAB47BC),
-  'entretenimiento': Color(0xFFFFCA28),
-  'salud': Color(0xFF26A69A),
-  'educacion': Color(0xFFEC407A),
-  'ahorro': Color(0xFF66BB6A),
-  'arriendo': Color(0xFF8D6E63),
-  'otros': Color(0xFF78909C),
+const coloresCategoriaBase = <String, ColorPar>{
+  'comida': ColorPar(Color(0xFFB83D0B), Color(0xFFFF8A65)),
+  'transporte': ColorPar(Color(0xFF0369A1), Color(0xFF4FC3F7)),
+  'servicios': ColorPar(Color(0xFF7B1FA2), Color(0xFFCE93D8)),
+  'entretenimiento': ColorPar(Color(0xFF8F5706), Color(0xFFFFD54F)),
+  'salud': ColorPar(Color(0xFF00796B), Color(0xFF4DB6AC)),
+  'educacion': ColorPar(Color(0xFFAD1457), Color(0xFFF06292)),
+  'ahorro': ColorPar(Color(0xFF2E7D32), Color(0xFF81C784)),
+  'arriendo': ColorPar(Color(0xFF6D4C41), Color(0xFFBCAAA4)),
+  'otros': ColorPar(Color(0xFF546E7A), Color(0xFF90A4AE)),
 };
 
 const _coloresExtra = [
-  Color(0xFFF06292), Color(0xFF4DD0E1), Color(0xFFAED581), Color(0xFFFFB74D),
-  Color(0xFFCE93D8), Color(0xFF80DEEA), Color(0xFFFFCC02), Color(0xFFA5D6A7),
+  ColorPar(Color(0xFFC2185B), Color(0xFFF48FB1)),
+  ColorPar(Color(0xFF00838F), Color(0xFF4DD0E1)),
+  ColorPar(Color(0xFF558B2F), Color(0xFFAED581)),
+  ColorPar(Color(0xFFB45309), Color(0xFFFFB74D)),
+  ColorPar(Color(0xFF8E24AA), Color(0xFFCE93D8)),
+  ColorPar(Color(0xFF0277BD), Color(0xFF81D4FA)),
+  ColorPar(Color(0xFF7A6A00), Color(0xFFFFE082)),
+  ColorPar(Color(0xFF2E7D32), Color(0xFFA5D6A7)),
 ];
 
-Color colorCategoria(String valor) {
+Color colorCategoria(BuildContext context, String valor) {
   final base = coloresCategoriaBase[valor];
-  if (base != null) return base;
+  if (base != null) return context.par(base);
   final h = valor.codeUnits.fold<int>(0, (a, c) => (a * 31 + c) & 0x7fffffff);
-  return _coloresExtra[h % _coloresExtra.length];
+  return context.par(_coloresExtra[h % _coloresExtra.length]);
 }
 
 // ─────────────────────────── Analítica ───────────────────────────

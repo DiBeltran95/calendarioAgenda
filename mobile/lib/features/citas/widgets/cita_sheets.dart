@@ -425,7 +425,7 @@ class _NuevaCitaSheetState extends ConsumerState<NuevaCitaSheet> {
                 tooltip: 'Indicativo del país',
                 initialValue: _indicativo,
                 onSelected: (v) => setState(() => _indicativo = v),
-                itemBuilder: (_) => [for (final (c, _, n) in indicativos) PopupMenuItem(value: c, child: Text('+$c  $n'))],
+                itemBuilder: (_) => [for (final (c, n) in indicativos) PopupMenuItem(value: c, child: Text('+$c  $n'))],
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Gap.sm),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [Text('+$_indicativo'), const Icon(Icons.arrow_drop_down_rounded)]),

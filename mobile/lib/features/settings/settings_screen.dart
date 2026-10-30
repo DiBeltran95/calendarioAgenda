@@ -16,6 +16,14 @@ import '../notifications/notification_service.dart';
 import '../onboarding/onboarding_screen.dart' show opcionesModulos;
 import '../notifications/push_registro.dart';
 
+String _ultimaSincronizacion(DateTime? t) {
+  if (t == null) return 'Aún no se ha sincronizado en esta sesión.';
+  final min = DateTime.now().difference(t).inMinutes;
+  if (min < 1) return 'Última sincronización: hace un momento.';
+  if (min < 60) return 'Última sincronización: hace $min min.';
+  return 'Última sincronización: hace ${min ~/ 60} h.';
+}
+
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -232,6 +240,8 @@ class SettingsScreen extends ConsumerWidget {
                             ),
                           ),
                         ]),
+                        const VGap.sm(),
+                        Text(_ultimaSincronizacion(ref.watch(ultimaSincronizacionProvider)), style: context.text.bodySmall),
                         const VGap.md(),
                         OutlinedButton.icon(
                           onPressed: () async {
@@ -266,7 +276,7 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ),
                 const VGap.lg(),
-                Center(child: Text('Agendaservi 2.1 · Flutter + Riverpod + Drift', style: context.text.bodySmall)),
+                Center(child: Text('Agendaservi 2.1', style: context.text.bodySmall)),
               ],
             ),
           ),

@@ -16,6 +16,7 @@ import '../../core/widgets/ui.dart';
 import '../auth/auth_widgets.dart' show OtpField, OtpFieldState, WhatsAppField, indicativos;
 import 'citas_models.dart';
 import 'citas_repository.dart';
+import '../../core/widgets/sheets.dart';
 import 'widgets/config_sheets.dart' show duracionTexto;
 
 enum _Paso { servicio, profesional, horario, datos, codigo, listo }
@@ -213,7 +214,7 @@ class _ReservarScreenState extends ConsumerState<ReservarScreen> {
         setState(() => _hora = null);
         _reiniciarDias();
         _ir(_Paso.horario);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ese horario se acaba de ocupar. Elige otro, por favor.')));
+        toast(context, 'Ese horario se acaba de ocupar. Elige otro, por favor.', error: true);
       } else {
         setState(() => _errorForm = e.mensaje);
       }

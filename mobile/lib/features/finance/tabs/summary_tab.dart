@@ -11,9 +11,9 @@ import '../../../core/widgets/ui.dart';
 import '../finance_logic.dart';
 import '../finance_providers.dart';
 
-const _cNecesidades = Color(0xFF38BDF8);
-const _cDeseos = Color(0xFFFB923C);
-const _cAhorro = Color(0xFF34D399);
+const _cNecesidades = ColorPar(Color(0xFF0369A1), Color(0xFF38BDF8));
+const _cDeseos = ColorPar(Color(0xFFB83D0B), Color(0xFFFB923C));
+const _cAhorro = ColorPar(Color(0xFF047857), Color(0xFF34D399));
 
 class SummaryTab extends ConsumerWidget {
   const SummaryTab({super.key, required this.mes, required this.dia, required this.txMes, required this.cuentas});
@@ -222,9 +222,9 @@ class _Regla503020Card extends StatelessWidget {
                     final d = (r.pctDeseos * t).clamp(0, 100 - n).toDouble();
                     final a = (r.pctAhorro.clamp(0, 100) * t).clamp(0, 100 - n - d).toDouble();
                     return Row(children: [
-                      if (n > 0) Expanded(flex: (n * 10).round().clamp(1, 1000), child: Container(color: _cNecesidades)),
-                      if (d > 0) Expanded(flex: (d * 10).round().clamp(1, 1000), child: Container(color: _cDeseos)),
-                      if (a > 0) Expanded(flex: (a * 10).round().clamp(1, 1000), child: Container(color: _cAhorro)),
+                      if (n > 0) Expanded(flex: (n * 10).round().clamp(1, 1000), child: Container(color: context.par(_cNecesidades))),
+                      if (d > 0) Expanded(flex: (d * 10).round().clamp(1, 1000), child: Container(color: context.par(_cDeseos))),
+                      if (a > 0) Expanded(flex: (a * 10).round().clamp(1, 1000), child: Container(color: context.par(_cAhorro))),
                       if (100 - n - d - a > 0.5) Expanded(flex: ((100 - n - d - a) * 10).round(), child: Container(color: p.surfaceHighest)),
                     ]);
                   },
@@ -236,9 +236,9 @@ class _Regla503020Card extends StatelessWidget {
               r.ahorro < 0 ? 'Estás gastando más de lo que ingresas' : 'Distribución de ${cop(r.ingresos)} en ingresos',
               style: context.text.bodySmall?.copyWith(color: r.ahorro < 0 ? p.danger : null),
             ),
-            fila('Necesidades', 'Vivienda, comida, servicios, salud', '50%', _cNecesidades, r.pctNecesidades, r.necesidades, r.estadoNecesidades),
-            fila('Deseos', 'Ocio, entretenimiento, antojos', '30%', _cDeseos, r.pctDeseos, r.deseos, r.estadoDeseos),
-            fila('Ahorro / deuda', 'Lo que no gastas + aportes', '20%', _cAhorro, r.pctAhorro, r.ahorro, r.estadoAhorro),
+            fila('Necesidades', 'Vivienda, comida, servicios, salud', '50%', context.par(_cNecesidades), r.pctNecesidades, r.necesidades, r.estadoNecesidades),
+            fila('Deseos', 'Ocio, entretenimiento, antojos', '30%', context.par(_cDeseos), r.pctDeseos, r.deseos, r.estadoDeseos),
+            fila('Ahorro / deuda', 'Lo que no gastas + aportes', '20%', context.par(_cAhorro), r.pctAhorro, r.ahorro, r.estadoAhorro),
             const VGap.sm(),
             Container(
               padding: const EdgeInsets.all(Gap.sm),

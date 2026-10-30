@@ -122,24 +122,29 @@ void main() {
       expect(find.textContaining('Diego'), findsWidgets);
       expect(find.text('Hoy'), findsWidgets);
       expect(find.text('SOAT de la moto'), findsWidgets);
-      await verEn(t, find.text('Acciones rápidas'));
+      expect(find.text('Registrar gasto'), findsOneWidget);
 
       // ── Eventos ──
       await t.tap(find.text('Eventos').last);
       await esperar(t);
-      expect(find.byIcon(Icons.two_wheeler_rounded), findsWidgets); // evento anual → ícono de moto
+      expect(find.bySemanticsLabel(RegExp('1 evento')), findsWidgets);
       await t.tap(find.text('Nuevo evento'));
       await esperar(t);
       expect(find.textContaining('7:00 a. m.'), findsOneWidget); // sin hora → resumen matutino
       await t.tap(find.byTooltip('Cerrar'));
       await esperar(t);
+      await t.tap(find.text('Semana'));
+      await esperar(t);
+      expect(find.text('Evento'), findsOneWidget);
+      await t.tap(find.text('Mes'));
+      await esperar(t);
 
       // ── Finanzas: todas las pestañas ──
       await t.tap(find.text('Finanzas').last);
       await esperar(t);
-      expect(find.text('PATRIMONIO NETO'), findsOneWidget);
-      await verEn(t, find.text('Planificador'));
-      for (final tab in ['Cuentas', 'Metas', 'Presupuesto', 'Planificador', 'Historial', 'Gráficos', 'Resumen']) {
+      expect(find.text('Patrimonio neto'), findsOneWidget);
+      await verEn(t, find.text('Planear'));
+      for (final tab in ['Cuentas', 'Planear', 'Presupuesto', 'Planificador', 'Metas', 'Historial', 'Calendario', 'Gráficos', 'Resumen']) {
         await t.ensureVisible(find.text(tab).first);
         await esperar(t, 4);
         await t.tap(find.text(tab).first);

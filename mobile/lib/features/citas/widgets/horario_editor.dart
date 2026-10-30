@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../app/theme/palette.dart';
 import '../../../app/theme/tokens.dart';
+import '../../../core/widgets/sheets.dart';
 import '../../../core/dates.dart';
 import '../../../core/motion.dart';
 import '../citas_models.dart';
@@ -90,7 +91,7 @@ class HorarioEditor extends StatelessWidget {
     if (fin == null) return;
     if (fin.compareTo(inicio) <= 0) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('La hora de fin debe ser después de la de inicio.')));
+        toast(context, 'La hora de fin debe ser después de la de inicio.', error: true);
       }
       return;
     }

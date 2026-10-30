@@ -252,7 +252,7 @@ class _TransactionSheetState extends ConsumerState<TransactionSheet> {
                 children: [
                   for (final c in categorias)
                     ChoiceChip(
-                      avatar: Icon(iconoPorNombre(c.icono), size: IconSizes.sm, color: c.valor == _categoria ? colorCategoria(c.valor) : p.textSecondary),
+                      avatar: Icon(iconoPorNombre(c.icono), size: IconSizes.sm, color: c.valor == _categoria ? colorCategoria(context, c.valor) : p.textSecondary),
                       label: Text(c.label),
                       selected: c.valor == _categoria,
                       showCheckmark: false,

@@ -156,7 +156,7 @@ class TxTile extends ConsumerWidget {
           children: [
             IconBadge(
               ingreso ? Icons.north_east_rounded : iconoPorNombre(cat?.icono),
-              color: ingreso ? p.success : colorCategoria(tx.categoria),
+              color: ingreso ? p.success : colorCategoria(context, tx.categoria),
               size: 40,
             ),
             const HGap.sm(),
