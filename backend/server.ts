@@ -12,6 +12,7 @@ import { validarFechaCiclo, validarDiasSangrado, normalizarDiasSangrado } from '
 import { migrarAgenda, registrarAgenda } from './lib/agenda/rutas';
 import { registrarTiempoReal } from './lib/tiempoReal';
 import { migrarCapturas, registrarCapturas } from './lib/finanzas/capturas';
+import { migrarInversiones, registrarInversiones } from './lib/finanzas/inversiones';
 
 dotenv.config();
 
@@ -330,6 +331,7 @@ registrarTiempoReal(server);
 
 // --- PAGOS CAPTURADOS (Apple Pay vía Atajos, notificaciones en Android) ---
 registrarCapturas(server, { pool });
+registrarInversiones(server, { pool });
 
 // --- AGENDAMIENTO DE CITAS (lib/agenda) ---
 registrarAgenda(server, {
@@ -2565,6 +2567,7 @@ async function runMigrations() {
     // Agendamiento de citas (tablas agenda_* y push_cola).
     await migrarAgenda(pool, server.log);
     await migrarCapturas(pool, server.log);
+    await migrarInversiones(pool, server.log);
 
     // Índices compuestos (user_id, fecha) para que las consultas por mes sean
     // casi instantáneas aun con mucho histórico. Se crean sólo si no existen.

@@ -33,7 +33,7 @@ Future<bool> _ejecutar(BuildContext context, Future<void> Function() op, {String
   }
 }
 
-Widget _cuentaDropdown({
+Widget cuentaDropdown({
   required List<Cuenta> cuentas,
   required int? value,
   required ValueChanged<int?> onChanged,
@@ -274,7 +274,7 @@ class _TransferSheetState extends ConsumerState<TransferSheet> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const FieldLabel('Desde', required: true),
-              _cuentaDropdown(
+              cuentaDropdown(
                 cuentas: cuentas,
                 value: _origen,
                 permitirNula: false,
@@ -289,7 +289,7 @@ class _TransferSheetState extends ConsumerState<TransferSheet> {
                 ),
               ),
               const FieldLabel('Hacia', required: true),
-              _cuentaDropdown(
+              cuentaDropdown(
                 cuentas: cuentas,
                 value: _destino,
                 permitirNula: false,
@@ -383,7 +383,7 @@ class _PlanSheetState extends ConsumerState<PlanSheet> {
               const FieldLabel('Primera fecha'),
               DateField(value: _fecha, onChanged: (v) => setState(() => _fecha = v)),
               const FieldLabel('Cuenta donde llega'),
-              _cuentaDropdown(cuentas: cuentas, value: _cuenta, nula: 'Ninguna (solo registrar)', onChanged: (v) => setState(() => _cuenta = v)),
+              cuentaDropdown(cuentas: cuentas, value: _cuenta, nula: 'Ninguna (solo registrar)', onChanged: (v) => setState(() => _cuenta = v)),
             ],
           ),
         ),
@@ -448,7 +448,7 @@ class _VerifySheetState extends ConsumerState<VerifySheet> {
         const FieldLabel('Fecha en que llegó'),
         DateField(value: _fecha, onChanged: (v) => setState(() => _fecha = v)),
         const FieldLabel('Cuenta'),
-        _cuentaDropdown(cuentas: cuentas, value: _cuenta, nula: 'Ninguna (solo registrar)', onChanged: (v) => setState(() => _cuenta = v)),
+        cuentaDropdown(cuentas: cuentas, value: _cuenta, nula: 'Ninguna (solo registrar)', onChanged: (v) => setState(() => _cuenta = v)),
       ],
     );
   }
@@ -692,7 +692,7 @@ class _ContributionSheetState extends ConsumerState<ContributionSheet> {
           if (falta > 0) ActionChip(label: const Text('Lo que falta'), onPressed: () => _monto.text = miles(falta.round())),
         ]),
         const FieldLabel('Tomar el dinero de'),
-        _cuentaDropdown(
+        cuentaDropdown(
           cuentas: cuentas,
           value: _cuenta,
           nula: 'No descontar de ninguna cuenta',

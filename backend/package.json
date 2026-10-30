@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch server.ts",
     "start": "tsx server.ts",
-    "test": "tsx lib/cycleValidation.test.ts && tsx --test lib/tiempoReal.test.ts lib/finanzas/capturas.test.ts lib/agenda/disponibilidad.test.ts lib/agenda/rutas.integracion.test.ts"
+    "test": "tsx lib/cycleValidation.test.ts && tsx --test lib/tiempoReal.test.ts lib/finanzas/capturas.test.ts lib/finanzas/inversiones.test.ts lib/agenda/disponibilidad.test.ts lib/agenda/rutas.integracion.test.ts"
   },
   "keywords": [],
   "author": "",

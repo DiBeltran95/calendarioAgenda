@@ -13,6 +13,7 @@ import '../../../core/motion.dart';
 import '../../../core/widgets/fields.dart';
 import '../../../core/widgets/ui.dart';
 import '../finance_logic.dart';
+import '../inversiones/inversiones_repository.dart';
 import '../finance_providers.dart';
 
 class ChartsTab extends ConsumerWidget {
@@ -24,7 +25,7 @@ class ChartsTab extends ConsumerWidget {
     final p = context.palette;
     final rango = ref.watch(rangoAnaliticaProvider);
     final txs = ref.watch(txAnaliticaProvider(rango)).value ?? const <Transaccion>[];
-    final a = Analitica(cuentas: cuentas, transacciones: txs, rango: rango);
+    final a = Analitica(cuentas: cuentas, transacciones: txs, rango: rango, inversiones: ref.watch(inversionesProvider).value ?? const []);
     final nombreCat = ref.watch(nombreCategoriaProvider);
     var i = 0;
 

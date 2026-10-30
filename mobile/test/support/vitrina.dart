@@ -15,6 +15,8 @@ import 'package:agendaservi/features/citas/citas_repository.dart';
 import 'package:agendaservi/features/cycle/cycle_repository.dart';
 import 'package:agendaservi/features/events/events_repository.dart';
 import 'package:agendaservi/features/finance/finance_repository.dart';
+import 'package:agendaservi/features/finance/inversiones/inversiones_logica.dart';
+import 'package:agendaservi/features/finance/inversiones/inversiones_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -58,6 +60,12 @@ Future<void> _sembrar(FakeBackend backend) async {
   await fi.crearTransaccion(TransaccionInput(tipo: 'gasto', monto: 350000, descripcion: 'Mercado', fecha: hoy, cuentaId: ah, categoria: 'comida'));
   await fi.crearTransaccion(TransaccionInput(tipo: 'gasto', monto: 900000, descripcion: 'Celular', fecha: hoy, cuentaId: tc, cuotas: 3));
   await fi.crearMeta(const MetaInput(nombre: 'Viaje', montoObjetivo: 2000000, montoActual: 500000));
+  final inv = c.read(inversionesRepoProvider);
+  c.listen(inversionesProvider, (_, _) {});
+  await c.read(inversionesProvider.future);
+  await inv.crear(nombre: '10 novillos de levante', tipo: 'ganado', monto: 2000000, fecha: sumarDiasYmd(hoy, -90), cuentaId: ah);
+  final casa = await inv.crear(nombre: 'Casa en Villeta', tipo: 'inmueble', monto: 180000000, fecha: '2021-03-15');
+  await inv.agregarMovimiento(casa, tipo: TipoMovimiento.valoracion, monto: 215000000, fecha: hoy);
   final ahora = DateTime.now();
   await fi.guardarPresupuesto(categoria: 'comida', limite: 400000, mes: ahora.month, anio: ahora.year);
 
@@ -141,6 +149,7 @@ void main() {
         ('ciclo', '/ciclo'),
         ('perfil', '/perfil'),
         ('pagos', '/finanzas/pagos'),
+        ('inversiones', '/finanzas/inversiones'),
         ('bienvenida', '/bienvenida'),
       ]) {
         router.go(ruta);

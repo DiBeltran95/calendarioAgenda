@@ -22,6 +22,7 @@ import '../../core/widgets/ui.dart';
 import '../events/events_repository.dart';
 import 'finance_logic.dart';
 import 'finance_providers.dart';
+import 'inversiones/inversiones_repository.dart';
 import 'pagos/pagos_repository.dart';
 import 'sheets/finance_sheets.dart';
 import 'sheets/transaction_sheet.dart';
@@ -240,15 +241,15 @@ class _Movimientos extends ConsumerWidget {
 
 // ─────────────────────────── Patrimonio ───────────────────────────
 
-class _Patrimonio extends StatelessWidget {
+class _Patrimonio extends ConsumerWidget {
   const _Patrimonio({required this.cuentas, required this.txMes});
   final List<Cuenta> cuentas;
   final List<Transaccion> txMes;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
-    final r = ResumenFinanciero(cuentas: cuentas, txMes: txMes);
+    final r = ResumenFinanciero(cuentas: cuentas, txMes: txMes, inversiones: ref.watch(valorInversionesProvider));
     final suave = p.onAccent.withValues(alpha: 0.86);
     return TarjetaHeroe(
       child: Column(
@@ -260,7 +261,7 @@ class _Patrimonio extends StatelessWidget {
           const VGap.md(),
           Row(
             children: [
-              Expanded(child: _Mini(icon: Icons.savings_rounded, label: 'Ahorros e inversiones', valor: r.ahorros)),
+              Expanded(child: _Mini(icon: Icons.savings_rounded, label: 'Cuentas y ahorros', valor: r.ahorros)),
               Container(width: 1, height: 36, color: p.onAccent.withValues(alpha: 0.3)),
               const HGap.md(),
               Expanded(child: _Mini(icon: Icons.credit_card_rounded, label: 'Deuda tarjetas', valor: r.deudaTarjetas)),
@@ -272,6 +273,33 @@ class _Patrimonio extends StatelessWidget {
             const SizedBox(height: 4),
             Text('Uso de cupo: ${r.usoCredito.toStringAsFixed(0)}% de ${cop(r.cupoTarjetas)}', style: context.text.bodySmall?.copyWith(color: suave)),
           ],
+          const VGap.md(),
+          // Entrada al apartado de inversiones.
+          Pressable(
+            onTap: () => context.push(rutaInversiones),
+            semanticLabel: 'Inversiones: ${cop(r.inversiones)}. Abrir inversiones y patrimonio',
+            scale: 0.985,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 48),
+              padding: const EdgeInsets.symmetric(horizontal: Gap.sm, vertical: Gap.xs),
+              decoration: BoxDecoration(color: p.onAccent.withValues(alpha: 0.14), borderRadius: Radii.rMd),
+              child: Row(children: [
+                Icon(Icons.trending_up_rounded, color: p.onAccent, size: IconSizes.md),
+                const HGap.xs(),
+                Expanded(child: Text('Inversiones', style: context.text.titleSmall?.copyWith(color: p.onAccent))),
+                const HGap.xs(),
+                Flexible(
+                  fit: FlexFit.tight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Text(cop(r.inversiones), style: context.text.titleSmall?.copyWith(color: p.onAccent, fontFeatures: const [FontFeature.tabularFigures()])),
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, color: p.onAccent),
+              ]),
+            ),
+          ),
         ],
       ),
     );

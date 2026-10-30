@@ -32,6 +32,7 @@ import '../events/events_repository.dart';
 import '../events/widgets/event_form_sheet.dart';
 import '../events/widgets/event_tiles.dart';
 import '../finance/finance_logic.dart';
+import '../finance/inversiones/inversiones_repository.dart';
 import '../finance/pagos/pagos_repository.dart';
 import '../finance/sheets/transaction_sheet.dart';
 import '../notifications/notification_service.dart';
@@ -75,7 +76,7 @@ class TodayScreen extends ConsumerWidget {
       ..sort((a, b) => a.fecha.compareTo(b.fecha));
 
     final celdas = [
-      if (conFinanzas) CeldaBento(_FinanzasMini(cuentas: boot.cuentas, tx: mes?.transacciones ?? const []), ancha: !conCiclo),
+      if (conFinanzas) CeldaBento(_FinanzasMini(cuentas: boot.cuentas, tx: mes?.transacciones ?? const [], inversiones: ref.watch(valorInversionesProvider)), ancha: !conCiclo),
       if (conCiclo) CeldaBento(const _CicloMini(), ancha: !conFinanzas),
     ];
 
@@ -485,14 +486,15 @@ class _Pagos extends ConsumerWidget {
 // ─────────────────────────── Finanzas y ciclo ───────────────────────────
 
 class _FinanzasMini extends StatelessWidget {
-  const _FinanzasMini({required this.cuentas, required this.tx});
+  const _FinanzasMini({required this.cuentas, required this.tx, required this.inversiones});
   final List<Cuenta> cuentas;
   final List<Transaccion> tx;
+  final double inversiones;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final r = ResumenFinanciero(cuentas: cuentas, txMes: tx);
+    final r = ResumenFinanciero(cuentas: cuentas, txMes: tx, inversiones: inversiones);
     final usoGastos = r.ingresosMes > 0 ? r.gastosMes / r.ingresosMes : (r.gastosMes > 0 ? 1.0 : 0.0);
     return AppCard(
       onTap: () => context.go('/finanzas'),

@@ -68,6 +68,82 @@ class FakeBackend implements HttpClientAdapter {
     return c;
   }
 
+  final inversiones = <Map<String, dynamic>>[];
+
+  /// Servidor sin desplegar: la ruta de inversiones aún no existe.
+  bool sinInversiones = false;
+
+  /// Como lib/finanzas/inversiones.ts: mover dinero cambia el saldo de la cuenta
+  /// sin crear una transacción.
+  void _moverCuenta(Map<String, dynamic> mov, int signo) {
+    final id = mov['cuenta_id'] as int?;
+    if (id == null || mov['tipo'] == 'valoracion') return;
+    final credito = esCredito(_cuenta(id)['tipo'] as String);
+    final monto = (mov['monto'] as num).toDouble();
+    final efecto = (mov['tipo'] == 'aporte') == credito ? monto : -monto;
+    _saldo(id, efecto * signo);
+  }
+
+  Map<String, dynamic> _movimiento(Map<String, dynamic> b) {
+    final cuenta = b['tipo'] == 'valoracion' ? null : b['cuenta_id'] as int?;
+    return {
+      'id': _id(),
+      'tipo': b['tipo'],
+      'monto': b['monto'],
+      'fecha': b['fecha'],
+      'cuenta_id': cuenta,
+      'cuenta_nombre': cuenta == null ? null : _cuenta(cuenta)['nombre'],
+      'nota': b['nota'] ?? '',
+    };
+  }
+
+  _Resp _inversiones(String m, List<String> seg, Map<String, dynamic> b, int uid) {
+    if (sinInversiones) return _err(404, 'Route not found');
+    final id = seg.length > 3 ? int.tryParse(seg[3]) : null;
+    List<Map<String, dynamic>> movs(Map<String, dynamic> i) => (i['movimientos'] as List).cast<Map<String, dynamic>>();
+    if (seg[2] == 'inversion-movimientos') {
+      final duena = inversiones.firstWhere((i) => i['user_id'] == uid && movs(i).any((x) => x['id'] == id));
+      final viejo = movs(duena).firstWhere((x) => x['id'] == id);
+      _moverCuenta(viejo, -1);
+      final lugar = movs(duena).indexOf(viejo);
+      movs(duena).removeAt(lugar);
+      if (m == 'PUT') {
+        final nuevo = {..._movimiento(b), 'id': id};
+        _moverCuenta(nuevo, 1);
+        movs(duena).insert(lugar, nuevo);
+      }
+      return const _Resp(200, {'ok': true});
+    }
+    switch (m) {
+      case 'GET':
+        return _Resp(200, inversiones.where((i) => i['user_id'] == uid).toList().reversed.toList());
+      case 'POST' when seg.length > 4:
+        final i = inversiones.firstWhere((x) => x['id'] == id && x['user_id'] == uid);
+        final mov = _movimiento(b);
+        _moverCuenta(mov, 1);
+        movs(i).add(mov);
+        return _Resp(200, {'id': mov['id']});
+      case 'POST':
+        final mov = _movimiento({...b, 'tipo': 'aporte'});
+        _moverCuenta(mov, 1);
+        final i = {'id': _id(), 'user_id': uid, 'nombre': b['nombre'], 'tipo': b['tipo'], 'nota': b['nota'] ?? '', 'movimientos': [mov]};
+        inversiones.add(i);
+        return _Resp(200, {'id': i['id']});
+      case 'PUT':
+        final i = inversiones.firstWhere((x) => x['id'] == id && x['user_id'] == uid);
+        i.addAll({'nombre': b['nombre'], 'tipo': b['tipo'], 'nota': b['nota'] ?? ''});
+        return const _Resp(200, {'ok': true});
+      case 'DELETE':
+        final i = inversiones.firstWhere((x) => x['id'] == id && x['user_id'] == uid);
+        for (final x in movs(i)) {
+          _moverCuenta(x, -1);
+        }
+        inversiones.remove(i);
+        return const _Resp(200, {'ok': true});
+    }
+    return _err(404, 'No existe');
+  }
+
   _Resp _capturas(String m, List<String> seg, Map<String, dynamic> q, Map<String, dynamic> b, int uid) {
     final accion = seg.length > 2 ? seg[2] : '';
     final mias = capturas.where((c) => c['user_id'] == uid);
@@ -224,6 +300,7 @@ class FakeBackend implements HttpClientAdapter {
 
     if (seg.length > 1 && seg[1] == 'agenda') return agenda._privada(m, seg, q, b, uid);
     if (seg.length > 1 && seg[1] == 'capturas') return _capturas(m, seg, q, b, uid);
+    if (seg.length > 2 && seg[1] == 'finanzas' && (seg[2] == 'inversiones' || seg[2] == 'inversion-movimientos')) return _inversiones(m, seg, b, uid);
     switch ((m, seg.length > 1 ? seg[1] : '')) {
       case ('GET', 'dashboard') when seg[2] == 'bootstrap':
         return _Resp(200, {

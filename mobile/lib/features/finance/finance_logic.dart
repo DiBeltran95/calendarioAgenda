@@ -6,6 +6,7 @@ import '../../app/theme/palette.dart';
 import '../../app/theme/tokens.dart';
 import '../../core/dates.dart';
 import '../../data/models.dart';
+import 'inversiones/inversiones_logica.dart';
 import '../../core/money.dart';
 
 // ─────────────────────────── Tipos de cuenta ───────────────────────────
@@ -339,9 +340,12 @@ class Consejo {
 }
 
 class ResumenFinanciero {
-  ResumenFinanciero({required this.cuentas, required this.txMes});
+  ResumenFinanciero({required this.cuentas, required this.txMes, this.inversiones = 0});
   final List<Cuenta> cuentas;
   final List<Transaccion> txMes;
+
+  /// Valor de las inversiones (ganado, casa…), que suman al patrimonio.
+  final double inversiones;
 
   late final double ahorros = cuentas
       .where((c) => c.tipo == 'ahorros' || c.tipo == 'efectivo' || c.tipo == 'cdt' || c.tipo == 'corriente' || c.tipo == 'otro')
@@ -349,7 +353,7 @@ class ResumenFinanciero {
   late final double deudaTarjetas = cuentas.where((c) => esCredito(c.tipo)).fold(0.0, (s, c) => s + c.saldo);
   late final double cupoTarjetas = cuentas.where((c) => esCredito(c.tipo)).fold(0.0, (s, c) => s + c.limite);
   late final double usoCredito = cupoTarjetas > 0 ? deudaTarjetas / cupoTarjetas * 100 : 0;
-  late final double patrimonio = ahorros - deudaTarjetas;
+  late final double patrimonio = ahorros + inversiones - deudaTarjetas;
   late final double ingresosMes = txMes.where((t) => t.tipo == 'ingreso').fold(0.0, (s, t) => s + t.monto);
   late final double gastosMes = txMes.where((t) => t.tipo == 'gasto').fold(0.0, (s, t) => s + t.monto);
   late final double balanceMes = ingresosMes - gastosMes;
@@ -496,7 +500,7 @@ class BarraMes {
 }
 
 class Analitica {
-  Analitica({required this.cuentas, required this.transacciones, required this.rango, String? hoy}) {
+  Analitica({required this.cuentas, required this.transacciones, required this.rango, this.inversiones = const [], String? hoy}) {
     final today = hoy ?? hoyYmd();
     fin = today;
     inicio = sumarDiasYmd(today, -(rango.dias - 1));
@@ -508,6 +512,7 @@ class Analitica {
   /// Todas las transacciones desde (hoy - rango) — también se usan para
   /// reconstruir el patrimonio hacia atrás.
   final List<Transaccion> transacciones;
+  final List<Inversion> inversiones;
   final RangoAnalitica rango;
   late final String inicio;
   late final String fin;
@@ -526,10 +531,23 @@ class Analitica {
     for (final t in transacciones) {
       (porDia[t.fecha] ??= []).add(t);
     }
+    // Lo que las inversiones movieron en las cuentas: invertir o vender cambia
+    // el saldo sin ser una transacción.
+    final enCuentas = <String, double>{};
+    for (final inv in inversiones) {
+      for (final m in inv.movimientos.where((m) => m.cuentaId != null)) {
+        final efecto = switch (m.tipo) {
+          TipoMovimiento.aporte => -m.monto,
+          TipoMovimiento.retiro || TipoMovimiento.venta => m.monto,
+          TipoMovimiento.valoracion => 0.0,
+        };
+        enCuentas[m.fecha] = (enCuentas[m.fecha] ?? 0) + efecto;
+      }
+    }
     final puntos = <PuntoSerie>[];
     for (var i = 0; i < rango.dias; i++) {
       final f = sumarDiasYmd(fin, -i);
-      puntos.add(PuntoSerie(f, bal));
+      puntos.add(PuntoSerie(f, bal + inversiones.fold(0.0, (s, inv) => s + inv.valorEn(f))));
       for (final t in porDia[f] ?? const <Transaccion>[]) {
         if (t.tipo == 'ingreso') {
           bal -= t.monto;
@@ -537,6 +555,7 @@ class Analitica {
           bal += t.monto;
         }
       }
+      bal -= enCuentas[f] ?? 0;
     }
     return puntos.reversed.toList();
   }();

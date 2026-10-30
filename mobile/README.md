@@ -36,6 +36,7 @@ Identidad propia de la app (la web conserva la suya): neutros Tinta/Papel, viole
 - **Estados de carga**: `Esqueleto` / `EsqueletoLista`, y `EstadoError` con "Reintentar". Una pantalla no debe mostrar vacío cuando en realidad falló.
 - **Módulos**: cada persona elige los suyos en la bienvenida o en Perfil; "Hoy" y la barra inferior se adaptan.
 - **Formularios**: `SheetScaffold` bloquea el doble envío y, con `hayCambios`, pregunta antes de descartar.
+- **Inversiones y patrimonio** (`features/finance/inversiones`, `backend/lib/finanzas/inversiones.ts`): ganado, casa, vehículo, negocio… Cada inversión guarda sus movimientos con fecha, monto y cuenta. Mover dinero cambia el saldo pero no es un gasto del mes; el patrimonio neto es cuentas + inversiones − tarjetas.
 - **Extras**: bloqueo con Face ID o huella (`features/seguridad`), captura rápida por texto o voz (`features/captura`) y widgets de pantalla de inicio en Android (`features/widgets_inicio`, `WidgetsInicio.kt`).
 
 Para revisar el diseño con datos de prueba, sin tocar la API real:
