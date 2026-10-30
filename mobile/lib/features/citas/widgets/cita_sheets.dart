@@ -256,6 +256,10 @@ class _NuevaCitaSheetState extends ConsumerState<NuevaCitaSheet> {
   bool _notificar = true;
   bool _guardando = false;
 
+  /// Ya intentó guardar: desde ahora se marcan los campos que faltan.
+  bool _intento = false;
+  final _focoNombre = FocusNode();
+
   List<ProfesionalAgenda> get _prestadores =>
       _servicio == null ? const [] : [for (final p in widget.config.equipoActivo) if (_servicio!.profesionales.contains(p.id)) p];
 
@@ -270,6 +274,7 @@ class _NuevaCitaSheetState extends ConsumerState<NuevaCitaSheet> {
     _nombre.dispose();
     _numero.dispose();
     _nota.dispose();
+    _focoNombre.dispose();
     super.dispose();
   }
 
@@ -293,8 +298,11 @@ class _NuevaCitaSheetState extends ConsumerState<NuevaCitaSheet> {
   Future<void> _enviar({bool forzar = false}) async {
     final toaster = Toaster.of(context);
     if (_servicio == null || _profesional == null) return toaster.show('Elige el servicio', error: true);
-    if (_hora == null) return toaster.show('Elige la hora', error: true);
-    if (_nombre.text.trim().length < 2) return toaster.show('Escribe el nombre del cliente', error: true);
+    setState(() => _intento = true);
+    if (_hora == null || _nombre.text.trim().length < 2) {
+      if (_nombre.text.trim().length < 2 && _hora != null) _focoNombre.requestFocus();
+      return;
+    }
     setState(() => _guardando = true);
     try {
       final numero = _numero.text.replaceAll(RegExp(r'\D'), '');
@@ -337,6 +345,7 @@ class _NuevaCitaSheetState extends ConsumerState<NuevaCitaSheet> {
       primaryLabel: 'Agendar',
       busy: _guardando,
       onPrimary: _enviar,
+      hayCambios: () => _nombre.text.isNotEmpty || _numero.text.isNotEmpty || _nota.text.isNotEmpty,
       children: [
         if (servicios.isEmpty)
           const EmptyState(icon: Icons.spa_outlined, title: 'Primero crea un servicio', message: 'Ve a Ajustes de citas → Servicios.', compact: true)
@@ -410,10 +419,26 @@ class _NuevaCitaSheetState extends ConsumerState<NuevaCitaSheet> {
                             ],
                           ),
           ),
+          if (_intento && _hora == null)
+            Padding(
+              padding: const EdgeInsets.only(top: Gap.xs),
+              child: Text('Elige la hora de la cita', style: context.text.bodySmall?.copyWith(color: p.danger)),
+            ),
           const VGap.lg(),
           Text('Cliente', style: context.text.titleMedium),
           const VGap.sm(),
-          TextField(controller: _nombre, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Nombre')),
+          TextField(
+            controller: _nombre,
+            focusNode: _focoNombre,
+            textCapitalization: TextCapitalization.words,
+            onChanged: (_) {
+              if (_intento) setState(() {});
+            },
+            decoration: InputDecoration(
+              labelText: 'Nombre',
+              errorText: _intento && _nombre.text.trim().length < 2 ? 'Escribe el nombre del cliente' : null,
+            ),
+          ),
           const VGap.sm(),
           TextField(
             controller: _numero,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -8,12 +10,16 @@ import '../motion.dart';
 /// Abre una hoja inferior con el estilo de la app. Se desliza desde abajo
 /// (su origen natural en móvil), se cierra arrastrando o tocando el fondo.
 Future<T?> showAppSheet<T>(BuildContext context, WidgetBuilder builder) {
-  return showModalBottomSheet<T>(
-    context: context,
+  // Sobre el navegador raíz: la hoja cubre también la barra inferior.
+  final nav = Navigator.of(context, rootNavigator: true);
+  final textos = MaterialLocalizations.of(context);
+  return nav.push(_RutaHoja<T>(
+    builder: builder,
+    capturedThemes: InheritedTheme.capture(from: context, to: nav.context),
+    barrierLabel: textos.scrimLabel,
+    barrierOnTapHint: textos.scrimOnTapHint(textos.bottomSheetLabel),
     isScrollControlled: true,
     useSafeArea: true,
-    // Sobre el navegador raíz: la hoja cubre también la barra inferior.
-    useRootNavigator: true,
     showDragHandle: true,
     constraints: const BoxConstraints(maxWidth: 640),
     sheetAnimationStyle: AnimationStyle(
@@ -22,13 +28,103 @@ Future<T?> showAppSheet<T>(BuildContext context, WidgetBuilder builder) {
       curve: Motion.enter,
       reverseCurve: Motion.exit,
     ),
-    builder: builder,
-  );
+  ));
+}
+
+/// Hoja que no se deja cerrar sin avisar si el formulario tiene cambios: vale
+/// para la X, tocar el fondo, arrastrarla hacia abajo y el gesto de atrás.
+class _RutaHoja<T> extends ModalBottomSheetRoute<T> {
+  _RutaHoja({
+    required super.builder,
+    super.capturedThemes,
+    super.barrierLabel,
+    super.barrierOnTapHint,
+    required super.isScrollControlled,
+    super.useSafeArea,
+    super.showDragHandle,
+    super.constraints,
+    super.sheetAnimationStyle,
+  });
+
+  /// Lo fija [SheetScaffold]: ¿hay algo que se perdería al cerrar?
+  bool Function()? hayCambios;
+  bool _preguntando = false;
+  bool _descartar = false;
+
+  @override
+  bool didPop(T? result) {
+    if (_descartar || hayCambios == null || !hayCambios!()) return super.didPop(result);
+    // Si venía de arrastrarla, vuelve a su sitio mientras se decide.
+    controller?.forward();
+    if (!_preguntando) {
+      _preguntando = true;
+      // El navegador sigue ocupado con este "pop": el diálogo espera su turno.
+      scheduleMicrotask(_preguntar);
+    }
+    return false;
+  }
+
+  Future<void> _preguntar() async {
+    final nav = navigator;
+    if (nav == null) return;
+    final si = await confirmar(
+      nav.context,
+      titulo: '¿Descartar cambios?',
+      mensaje: 'Lo que escribiste en este formulario no se ha guardado.',
+      confirmar: 'Descartar',
+      destructivo: true,
+    );
+    _preguntando = false;
+    if (si && isActive) {
+      _descartar = true;
+      if (isCurrent) {
+        nav.pop();
+      } else {
+        nav.removeRoute(this);
+      }
+    }
+  }
+}
+
+/// Valida un formulario y, si falla, lleva al primer campo con error: lo hace
+/// visible y le da el foco para corregirlo enseguida.
+bool validarFormulario(GlobalKey<FormState> form) {
+  final estado = form.currentState;
+  if (estado == null) return false;
+  if (estado.validate()) return true;
+  Element? primero;
+  void buscar(Element e) {
+    if (primero != null) return;
+    if (e is StatefulElement && e.state is FormFieldState && (e.state as FormFieldState).hasError) {
+      primero = e;
+      return;
+    }
+    e.visitChildren(buscar);
+  }
+
+  form.currentContext?.visitChildElements(buscar);
+  final campo = primero;
+  if (campo != null) {
+    Scrollable.ensureVisible(campo, alignment: 0.2, duration: const Duration(milliseconds: 200));
+    void enfocar(Element e) {
+      if (e is StatefulElement && e.widget is EditableText) {
+        (e.widget as EditableText).focusNode.requestFocus();
+        return;
+      }
+      e.visitChildren(enfocar);
+    }
+
+    campo.visitChildren(enfocar);
+  }
+  return false;
 }
 
 /// Estructura común de las hojas: título, contenido desplazable y una barra
 /// inferior fija con la acción principal (se eleva sobre el teclado).
-class SheetScaffold extends StatelessWidget {
+///
+/// Mientras corre [onPrimary] el botón queda ocupado: un segundo toque no
+/// repite la operación.
+class SheetScaffold extends StatefulWidget {
   const SheetScaffold({
     super.key,
     required this.title,
@@ -40,6 +136,7 @@ class SheetScaffold extends StatelessWidget {
     this.busy = false,
     this.secondary,
     this.headerAction,
+    this.hayCambios,
   });
 
   final String title;
@@ -47,17 +144,43 @@ class SheetScaffold extends StatelessWidget {
   final IconData? icon;
   final List<Widget> children;
   final String? primaryLabel;
-  final VoidCallback? onPrimary;
+  final FutureOr<void> Function()? onPrimary;
   final bool busy;
 
   /// Acción secundaria a la izquierda de la principal (p. ej. Eliminar).
   final Widget? secondary;
   final Widget? headerAction;
 
+  /// Si devuelve true, cerrar la hoja pregunta antes de descartar.
+  final bool Function()? hayCambios;
+
+  @override
+  State<SheetScaffold> createState() => _SheetScaffoldState();
+}
+
+class _SheetScaffoldState extends State<SheetScaffold> {
+  bool _ocupado = false;
+
+  Future<void> _primaria() async {
+    if (_ocupado) return;
+    final r = widget.onPrimary?.call();
+    if (r is! Future) return;
+    setState(() => _ocupado = true);
+    try {
+      await r;
+    } finally {
+      if (mounted) setState(() => _ocupado = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final insets = MediaQuery.viewInsetsOf(context).bottom;
+    final busy = widget.busy || _ocupado;
+    final ruta = ModalRoute.of(context);
+    // Guardar también cierra la hoja: eso no es descartar.
+    if (ruta is _RutaHoja) ruta.hayCambios = widget.hayCambios == null ? null : () => !busy && !_ocupado && widget.hayCambios!();
     return AnimatedPadding(
       duration: Motion.of(context, Motion.fast),
       curve: Motion.standard,
@@ -72,17 +195,17 @@ class SheetScaffold extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(Gap.lg, 0, Gap.sm, Gap.sm),
               child: Row(
                 children: [
-                  if (icon != null) ...[IconBadge(icon!, size: 40), const HGap.sm()],
+                  if (widget.icon != null) ...[IconBadge(widget.icon!, size: 40), const HGap.sm()],
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Semantics(header: true, child: Text(title, style: context.text.titleLarge)),
-                        if (subtitle != null) Text(subtitle!, style: context.text.bodySmall),
+                        Semantics(header: true, child: Text(widget.title, style: context.text.titleLarge)),
+                        if (widget.subtitle != null) Text(widget.subtitle!, style: context.text.bodySmall),
                       ],
                     ),
                   ),
-                  ?headerAction,
+                  ?widget.headerAction,
                   IconButton(
                     tooltip: 'Cerrar',
                     onPressed: () => Navigator.of(context).maybePop(),
@@ -94,10 +217,10 @@ class SheetScaffold extends StatelessWidget {
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.xs, Gap.lg, Gap.lg),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: widget.children),
               ),
             ),
-            if (primaryLabel != null)
+            if (widget.primaryLabel != null)
               Container(
                 padding: EdgeInsets.fromLTRB(Gap.lg, Gap.sm, Gap.lg, Gap.sm + MediaQuery.paddingOf(context).bottom),
                 decoration: BoxDecoration(
@@ -106,10 +229,10 @@ class SheetScaffold extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    if (secondary != null) ...[secondary!, const HGap.sm()],
+                    if (widget.secondary != null) ...[widget.secondary!, const HGap.sm()],
                     Expanded(
                       child: FilledButton(
-                        onPressed: busy ? null : onPrimary,
+                        onPressed: busy || widget.onPrimary == null ? null : _primaria,
                         child: AnimatedSwitcher(
                           duration: Motion.of(context, Motion.fast),
                           child: busy
@@ -119,7 +242,7 @@ class SheetScaffold extends StatelessWidget {
                                   height: 22,
                                   child: CircularProgressIndicator(strokeWidth: 2.4, color: p.textSecondary),
                                 )
-                              : Text(primaryLabel!, key: const ValueKey('label')),
+                              : Text(widget.primaryLabel!, key: const ValueKey('label')),
                         ),
                       ),
                     ),

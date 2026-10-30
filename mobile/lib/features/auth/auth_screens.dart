@@ -10,6 +10,7 @@ import '../../app/theme/tokens.dart';
 import '../../core/motion.dart';
 import '../../core/providers.dart';
 import '../../core/session.dart';
+import '../../core/widgets/sheets.dart' show validarFormulario;
 import 'auth_repository.dart';
 import 'auth_widgets.dart';
 
@@ -54,7 +55,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _entrar() async {
-    if (_cargando || !(_form.currentState?.validate() ?? false)) return;
+    if (_cargando || !validarFormulario(_form)) return;
     FocusScope.of(context).unfocus();
     setState(() {
       _cargando = true;
@@ -157,7 +158,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Future<void> _registrar() async {
-    if (_cargando || !(_form.currentState?.validate() ?? false)) return;
+    if (_cargando || !validarFormulario(_form)) return;
     FocusScope.of(context).unfocus();
     setState(() {
       _cargando = true;

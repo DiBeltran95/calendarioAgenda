@@ -31,13 +31,13 @@ class EventoInput {
   final String tipoTransaccion;
   final String estadoPago;
 
-  factory EventoInput.desde(Evento e) => EventoInput(
+  factory EventoInput.desde(Evento e, {String? frecuencia}) => EventoInput(
         titulo: e.titulo,
         fecha: e.fecha,
         hora: e.hora,
         categoria: e.categoria,
         ubicacion: e.ubicacion,
-        frecuencia: e.frecuencia,
+        frecuencia: frecuencia ?? e.frecuencia,
         costo: e.costo,
         tipoTransaccion: e.tipoTransaccion,
         estadoPago: e.estadoPago,
@@ -133,8 +133,12 @@ class EventsRepository {
     await _sync.despuesDeCambio(bootstrap: false);
   }
 
-  /// "Deshacer" de un evento único: se vuelve a crear con los mismos datos.
+  /// "Deshacer": se vuelve a crear con los mismos datos. Si se repite, el
+  /// servidor genera de nuevo las repeticiones desde esa fecha.
   Future<void> restaurar(Evento e) => crear(EventoInput.desde(e));
+
+  /// "Deshacer" de una sola repetición: vuelve esa fecha, sin regenerar la serie.
+  Future<void> restaurarOcurrencia(Evento e) => crear(EventoInput.desde(e, frecuencia: 'unica'));
 
   /// Marca pagado/pendiente. Se aplica al instante en pantalla (optimista) y
   /// se revierte si el servidor falla.

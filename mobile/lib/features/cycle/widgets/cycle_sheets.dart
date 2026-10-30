@@ -204,16 +204,20 @@ class _DayLogSheetState extends ConsumerState<DayLogSheet> {
       onPrimary: () async {
         final nav = Navigator.of(context);
         final toaster = Toaster.of(context);
-        await ref.read(cycleRepoProvider).guardarRegistroDia(
-              fecha: widget.fecha,
-              flujo: _flujo,
-              animo: _animo,
-              sintomas: _sintomas,
-              nota: _nota.text,
-            );
-        HapticFeedback.mediumImpact();
-        nav.pop();
-        toaster.show('Registro del día guardado', icon: Icons.favorite_rounded);
+        try {
+          await ref.read(cycleRepoProvider).guardarRegistroDia(
+                fecha: widget.fecha,
+                flujo: _flujo,
+                animo: _animo,
+                sintomas: _sintomas,
+                nota: _nota.text,
+              );
+          HapticFeedback.mediumImpact();
+          nav.pop();
+          toaster.show('Registro del día guardado', icon: Icons.favorite_rounded);
+        } catch (e) {
+          toaster.show('No se pudo guardar. Inténtalo de nuevo.', error: true);
+        }
       },
       children: [
         const FieldLabel('Flujo'),

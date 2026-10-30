@@ -432,18 +432,13 @@ class GuiaAtajoSheet extends ConsumerWidget {
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
             onPressed: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('¿Generar una clave nueva?'),
-                  content: const Text('La clave actual dejará de funcionar y tendrás que pegar la nueva en el atajo.'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-                    FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Generar')),
-                  ],
-                ),
+              final ok = await confirmar(
+                context,
+                titulo: '¿Generar una clave nueva?',
+                mensaje: 'La clave actual dejará de funcionar y tendrás que pegar la nueva en el atajo.',
+                confirmar: 'Generar',
               );
-              if (ok == true) await ref.read(pagosRepoProvider).nuevaClave();
+              if (ok) await ref.read(pagosRepoProvider).nuevaClave();
             },
             icon: const Icon(Icons.autorenew_rounded),
             label: const Text('Generar una clave nueva'),

@@ -76,6 +76,9 @@ class _AccountSheetState extends ConsumerState<AccountSheet> {
   late String _tipo;
   late String _fechaInicio;
   late final TextEditingController _nombre, _saldo, _limite, _tasa, _plazo, _corte;
+  late final String _inicial = _firma();
+
+  String _firma() => [_nombre, _saldo, _limite, _tasa, _plazo, _corte].map((c) => c.text).join('|');
 
   @override
   void initState() {
@@ -89,6 +92,7 @@ class _AccountSheetState extends ConsumerState<AccountSheet> {
     _tasa = TextEditingController(text: (c?.interesTasa ?? 0) == 0 ? '' : c!.interesTasa.toString());
     _plazo = TextEditingController(text: (c?.plazoDias ?? 0) == 0 ? '' : '${c!.plazoDias}');
     _corte = TextEditingController(text: c?.diaCorte?.toString() ?? '');
+    _inicial;
   }
 
   @override
@@ -106,10 +110,11 @@ class _AccountSheetState extends ConsumerState<AccountSheet> {
     final t = tipoCuenta(_tipo);
     return SheetScaffold(
       title: widget.cuenta == null ? 'Nueva cuenta' : 'Editar cuenta',
+      hayCambios: () => _firma() != _inicial,
       icon: t.icon,
       primaryLabel: widget.cuenta == null ? 'Crear cuenta' : 'Guardar cambios',
-      onPrimary: () {
-        if (!(_form.currentState?.validate() ?? false)) return;
+      onPrimary: () async {
+        if (!validarFormulario(_form)) return;
         final input = CuentaInput(
           nombre: _nombre.text,
           tipo: _tipo,
@@ -121,7 +126,7 @@ class _AccountSheetState extends ConsumerState<AccountSheet> {
           diaCorte: int.tryParse(_corte.text),
         );
         final repo = ref.read(financeRepoProvider);
-        _ejecutar(
+        await _ejecutar(
           context,
           () => widget.cuenta == null ? repo.crearCuenta(input) : repo.actualizarCuenta(widget.cuenta!.id, input),
           ok: widget.cuenta == null ? 'Cuenta creada' : 'Cuenta actualizada',
@@ -247,9 +252,9 @@ class _TransferSheetState extends ConsumerState<TransferSheet> {
       subtitle: 'Pagar tarjeta, mover a ahorros, retirar efectivo…',
       icon: Icons.swap_horiz_rounded,
       primaryLabel: 'Transferir',
-      onPrimary: () {
-        if (!(_form.currentState?.validate() ?? false)) return;
-        _ejecutar(
+      onPrimary: () async {
+        if (!validarFormulario(_form)) return;
+        await _ejecutar(
           context,
           () => ref.read(financeRepoProvider).transferir(
                 origenId: _origen!,
@@ -344,9 +349,9 @@ class _PlanSheetState extends ConsumerState<PlanSheet> {
       subtitle: 'Salario, arriendo que cobras, pagos recurrentes…',
       icon: Icons.event_repeat_rounded,
       primaryLabel: 'Guardar',
-      onPrimary: () {
-        if (!(_form.currentState?.validate() ?? false)) return;
-        _ejecutar(
+      onPrimary: () async {
+        if (!validarFormulario(_form)) return;
+        await _ejecutar(
           context,
           () => ref.read(financeRepoProvider).crearPlan(
                 descripcion: _desc.text,
@@ -465,7 +470,10 @@ class GoalSheet extends ConsumerStatefulWidget {
 class _GoalSheetState extends ConsumerState<GoalSheet> {
   final _form = GlobalKey<FormState>();
   late final TextEditingController _nombre, _desc, _objetivo, _actual;
+  late final String _inicial = _firma();
   String? _fecha;
+
+  String _firma() => [_nombre, _desc, _objetivo, _actual].map((c) => c.text).join('|');
   late String _icono;
   late int _color;
 
@@ -477,6 +485,7 @@ class _GoalSheetState extends ConsumerState<GoalSheet> {
     _desc = TextEditingController(text: m?.descripcion ?? '');
     _objetivo = TextEditingController(text: montoInicial(m?.montoObjetivo ?? 0));
     _actual = TextEditingController(text: montoInicial(m?.montoActual ?? 0));
+    _inicial;
     _fecha = m?.fechaObjetivo;
     _icono = m?.icono ?? 'savings';
     _color = m?.color ?? coloresMeta.first;
@@ -495,10 +504,11 @@ class _GoalSheetState extends ConsumerState<GoalSheet> {
     final p = context.palette;
     return SheetScaffold(
       title: widget.meta == null ? 'Nueva meta de ahorro' : 'Editar meta',
+      hayCambios: () => _firma() != _inicial,
       icon: iconoPorNombre(_icono),
       primaryLabel: widget.meta == null ? 'Crear meta' : 'Guardar cambios',
-      onPrimary: () {
-        if (!(_form.currentState?.validate() ?? false)) return;
+      onPrimary: () async {
+        if (!validarFormulario(_form)) return;
         final input = MetaInput(
           nombre: _nombre.text,
           descripcion: _desc.text,
@@ -509,7 +519,7 @@ class _GoalSheetState extends ConsumerState<GoalSheet> {
           color: _color,
         );
         final repo = ref.read(financeRepoProvider);
-        _ejecutar(context, () => widget.meta == null ? repo.crearMeta(input) : repo.actualizarMeta(widget.meta!.id, input),
+        await _ejecutar(context, () => widget.meta == null ? repo.crearMeta(input) : repo.actualizarMeta(widget.meta!.id, input),
             ok: widget.meta == null ? 'Meta creada' : 'Meta actualizada', icon: Icons.flag_rounded);
       },
       children: [

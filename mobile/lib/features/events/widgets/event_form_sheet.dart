@@ -63,6 +63,9 @@ class _EventFormSheetState extends ConsumerState<EventFormSheet> {
   late final TextEditingController _anio;
   late final TextEditingController _telefono;
   late final TextEditingController _mensaje;
+  late final String _inicial;
+
+  String _firma() => [_titulo, _ubicacion, _costo, _anio, _telefono, _mensaje].map((c) => c.text).join('|');
 
   late String _categoria;
   late String _fecha;
@@ -94,6 +97,7 @@ class _EventFormSheetState extends ConsumerState<EventFormSheet> {
     _anio = TextEditingController(text: c?.anioNacimiento?.toString() ?? '');
     _telefono = TextEditingController(text: c?.telefono ?? '');
     _mensaje = TextEditingController(text: c?.mensaje ?? '');
+    _inicial = _firma();
   }
 
   @override
@@ -105,7 +109,7 @@ class _EventFormSheetState extends ConsumerState<EventFormSheet> {
   }
 
   Future<void> _guardar() async {
-    if (!(_form.currentState?.validate() ?? false)) return;
+    if (!validarFormulario(_form)) return;
     final repo = ref.read(eventsRepoProvider);
     final nav = Navigator.of(context);
     final toaster = Toaster.of(context);
@@ -174,6 +178,7 @@ class _EventFormSheetState extends ConsumerState<EventFormSheet> {
       primaryLabel: _editando ? 'Guardar cambios' : 'Crear',
       busy: _guardando,
       onPrimary: _guardar,
+      hayCambios: () => _firma() != _inicial,
       children: [
         Form(
           key: _form,

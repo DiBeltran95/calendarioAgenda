@@ -29,6 +29,9 @@ Future<void> eliminarEvento(BuildContext context, WidgetRef ref, Evento e) async
     final a = await preguntarAlcance(context, borrar: true);
     if (a == null) return;
     alcance = a;
+  } else {
+    final si = await confirmar(context, titulo: '¿Eliminar este evento?', mensaje: e.titulo, confirmar: 'Eliminar', destructivo: true, icon: Icons.delete_outline_rounded);
+    if (!si) return;
   }
   try {
     await repo.eliminar(e, alcance);
@@ -36,7 +39,7 @@ Future<void> eliminarEvento(BuildContext context, WidgetRef ref, Evento e) async
     toaster.show(
       alcance == AlcanceSerie.esteYFuturos ? 'Evento y sus repeticiones pendientes eliminados' : 'Evento eliminado',
       icon: Icons.delete_outline_rounded,
-      onUndo: serie ? null : () => repo.restaurar(e),
+      onUndo: () => alcance == AlcanceSerie.soloEste && serie ? repo.restaurarOcurrencia(e) : repo.restaurar(e),
     );
   } catch (err) {
     toaster.show('$err', error: true);
@@ -239,14 +242,22 @@ class EventDetailSheet extends ConsumerWidget {
         Navigator.pop(context);
         abrirFormularioEvento(parentContext, evento: e);
       },
-      secondary: OutlinedButton.icon(
-        onPressed: () async {
-          Navigator.pop(context);
-          await eliminarEvento(parentContext, ref, e);
-        },
-        style: OutlinedButton.styleFrom(foregroundColor: p.danger, side: BorderSide(color: p.danger.withValues(alpha: 0.5))),
-        icon: const Icon(Icons.delete_outline_rounded),
-        label: const Text('Eliminar'),
+      headerAction: PopupMenuButton<void>(
+        tooltip: 'Más opciones',
+        icon: const Icon(Icons.more_horiz_rounded),
+        itemBuilder: (_) => [
+          PopupMenuItem(
+            onTap: () async {
+              Navigator.pop(context);
+              await eliminarEvento(parentContext, ref, e);
+            },
+            child: Row(children: [
+              Icon(Icons.delete_outline_rounded, color: p.danger, size: IconSizes.md),
+              const HGap.sm(),
+              Text('Eliminar', style: TextStyle(color: p.danger)),
+            ]),
+          ),
+        ],
       ),
       children: [
         fila(Icons.calendar_today_rounded, '${fechaConDia(e.fecha)} ${parseYmd(e.fecha).year} · ${fechaRelativa(e.fecha)}'),

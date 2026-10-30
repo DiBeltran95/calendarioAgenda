@@ -63,6 +63,7 @@ class _TransactionSheetState extends ConsumerState<TransactionSheet> {
   late int _cuotas;
   late final TextEditingController _monto;
   late final TextEditingController _desc;
+  late final String _inicial;
   bool _guardando = false;
 
   @override
@@ -76,6 +77,7 @@ class _TransactionSheetState extends ConsumerState<TransactionSheet> {
     _cuotas = t?.cuotas ?? 1;
     _monto = TextEditingController(text: montoInicial(t?.monto ?? widget.monto ?? 0));
     _desc = TextEditingController(text: t?.descripcion ?? widget.descripcion ?? '');
+    _inicial = '${_monto.text}|${_desc.text}';
     // La vista previa de cuotas depende del monto: se recalcula al escribir.
     _monto.addListener(() => setState(() {}));
   }
@@ -88,7 +90,7 @@ class _TransactionSheetState extends ConsumerState<TransactionSheet> {
   }
 
   Future<void> _guardar() async {
-    if (!(_form.currentState?.validate() ?? false)) return;
+    if (!validarFormulario(_form)) return;
     final nav = Navigator.of(context);
     final toaster = Toaster.of(context);
     setState(() => _guardando = true);
@@ -147,6 +149,7 @@ class _TransactionSheetState extends ConsumerState<TransactionSheet> {
       primaryLabel: widget.tx == null ? (_tipo == 'gasto' ? 'Registrar gasto' : 'Registrar ingreso') : 'Guardar cambios',
       busy: _guardando,
       onPrimary: _guardar,
+      hayCambios: () => '${_monto.text}|${_desc.text}' != _inicial,
       children: [
         Form(
           key: _form,
