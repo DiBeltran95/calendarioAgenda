@@ -14,6 +14,8 @@ import '../../../core/widgets/ui.dart';
 import '../finance_logic.dart';
 import '../finance_providers.dart';
 import '../finance_repository.dart';
+import '../inversiones/inversion_sheets.dart';
+import '../inversiones/inversiones_repository.dart';
 import '../sheets/transaction_sheet.dart';
 
 class HistoryTab extends ConsumerStatefulWidget {
@@ -33,6 +35,18 @@ class _HistoryTabState extends ConsumerState<HistoryTab> {
   /// emita los cambios (un Dismissible descartado no puede reconstruirse).
   final _ocultos = <int>{};
 
+  /// Lo que movió dinero sin ser gasto ni ingreso: transferencias (el abono a un
+  /// crédito es una) y lo que entró o salió de las inversiones.
+  List<Traspaso> _traspasos() {
+    final prefijo = '${widget.mes.year}-${widget.mes.month.toString().padLeft(2, '0')}';
+    return traspasosDelMes(
+      transferencias: ref.watch(transferenciasMesProvider((widget.mes.year, widget.mes.month))).value ?? const [],
+      inversiones: ref.watch(inversionesProvider).value ?? const [],
+      cuentas: ref.watch(cuentasProvider).value ?? const [],
+      prefijoMes: prefijo,
+    ).where((t) => widget.dia == null || t.fecha == widget.dia).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final lista = widget.txMes
@@ -44,18 +58,23 @@ class _HistoryTabState extends ConsumerState<HistoryTab> {
     for (final t in lista) {
       (porDia[t.fecha] ??= []).add(t);
     }
-    final dias = porDia.keys.toList()..sort((a, b) => b.compareTo(a));
+    final traspasos = _filtro == 'gasto' || _filtro == 'ingreso' ? const <Traspaso>[] : _traspasos();
+    final traspasosPorDia = <String, List<Traspaso>>{};
+    for (final t in traspasos) {
+      (traspasosPorDia[t.fecha] ??= []).add(t);
+    }
+    final dias = {...porDia.keys, ...traspasosPorDia.keys}.toList()..sort((a, b) => b.compareTo(a));
     var i = 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Wrap(spacing: Gap.xs, children: [
-          for (final (k, l) in const [('todos', 'Todos'), ('gasto', 'Gastos'), ('ingreso', 'Ingresos')])
+          for (final (k, l) in const [('todos', 'Todos'), ('gasto', 'Gastos'), ('ingreso', 'Ingresos'), ('traspaso', 'Abonos y traspasos')])
             ChoiceChip(label: Text(l), selected: _filtro == k, showCheckmark: false, onSelected: (_) => setState(() => _filtro = k)),
         ]),
         const VGap.md(),
-        if (lista.isEmpty)
+        if (dias.isEmpty)
           EmptyState(
             icon: Icons.receipt_long_rounded,
             title: 'Sin movimientos',
@@ -75,20 +94,58 @@ class _HistoryTabState extends ConsumerState<HistoryTab> {
                   style: context.text.labelMedium?.copyWith(color: context.palette.text, fontWeight: FontWeight.w600),
                 ),
               ),
-              const HGap.xs(),
-              Text(
-                copConSigno(porDia[d]!.fold(0.0, (s, t) => s + (t.tipo == 'ingreso' ? t.monto : -t.monto))),
-                style: context.text.labelMedium,
-              ),
+              // Mover dinero entre lo propio no suma ni resta al balance del día.
+              if (porDia[d] != null) ...[
+                const HGap.xs(),
+                Text(
+                  copConSigno(porDia[d]!.fold(0.0, (s, t) => s + (t.tipo == 'ingreso' ? t.monto : -t.monto))),
+                  style: context.text.labelMedium,
+                ),
+              ],
             ]),
           ),
-          for (final t in porDia[d]!)
+          for (final t in porDia[d] ?? const <Transaccion>[])
             Padding(
               padding: const EdgeInsets.only(bottom: Gap.xs),
               child: Entrance(index: i++, child: TxTile(tx: t, onRemoved: () => setState(() => _ocultos.add(t.id)))),
             ),
+          for (final t in traspasosPorDia[d] ?? const <Traspaso>[])
+            Padding(
+              padding: const EdgeInsets.only(bottom: Gap.xs),
+              child: Entrance(index: i++, child: _FilaTraspaso(traspaso: t)),
+            ),
         ],
       ],
+    );
+  }
+}
+
+/// Dinero que pasó de un lugar a otro. Se ve en el historial pero no cuenta como
+/// gasto ni como ingreso: un abono baja la deuda de una compra ya registrada.
+class _FilaTraspaso extends StatelessWidget {
+  const _FilaTraspaso({required this.traspaso});
+  final Traspaso traspaso;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = traspaso;
+    final inversionId = t.inversionId;
+    return AppCard(
+      padding: const EdgeInsets.all(Gap.sm),
+      onTap: inversionId == null ? null : () => showAppSheet(context, (_) => InversionDetalleSheet(id: inversionId)),
+      semanticLabel: '${t.titulo}, ${cop(t.monto)}. ${t.detalle}',
+      child: Row(children: [
+        IconBadge(t.icono, color: context.palette.info, size: 40),
+        const HGap.sm(),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(t.titulo, style: context.text.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(t.detalle, style: context.text.bodySmall, maxLines: 2, overflow: TextOverflow.ellipsis),
+          ]),
+        ),
+        const HGap.xs(),
+        Text(cop(t.monto), style: context.text.titleSmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+      ]),
     );
   }
 }

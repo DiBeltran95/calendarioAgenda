@@ -96,6 +96,41 @@ void main() {
     });
   });
 
+  group('historial', () {
+    const cuentas = [Cuenta(id: 1, nombre: 'Ahorros', tipo: 'ahorros'), Cuenta(id: 2, nombre: 'Addi', tipo: 'tarjeta_credito')];
+
+    test('muestra abonos e inversiones que movieron dinero, en su mes', () {
+      final lista = traspasosDelMes(
+        transferencias: const [
+          Transferencia(id: 1, cuentaOrigenId: 1, cuentaDestinoId: 2, monto: 200000, descripcion: 'Pago: Cuota', fecha: '2026-10-18'),
+        ],
+        inversiones: [
+          inv([
+            mov(1, TipoMovimiento.aporte, 4000000, '2026-10-05', cuenta: 1),
+            mov(2, TipoMovimiento.valoracion, 5000000, '2026-10-06'),
+            mov(3, TipoMovimiento.aporte, 900000, '2026-10-07'),
+            mov(4, TipoMovimiento.venta, 6000000, '2026-11-01', cuenta: 1),
+          ]),
+        ],
+        cuentas: cuentas,
+        prefijoMes: '2026-10',
+      );
+      expect(lista.map((t) => t.titulo), ['Abono a Addi', 'Inversión: Novillos']);
+      expect(lista.first.detalle, 'Desde Ahorros · Pago: Cuota');
+      expect((lista.first.fecha, lista.first.monto), ('2026-10-18', 200000.0));
+    });
+
+    test('una transferencia a una cuenta normal no se llama abono', () {
+      final lista = traspasosDelMes(
+        transferencias: const [Transferencia(id: 1, cuentaOrigenId: 2, cuentaDestinoId: 1, monto: 5, descripcion: '', fecha: '2026-10-18T05:00:00.000Z')],
+        inversiones: const [],
+        cuentas: cuentas,
+        prefijoMes: '2026-10',
+      );
+      expect((lista.single.titulo, lista.single.fecha), ('Transferencia a Ahorros', '2026-10-18'));
+    });
+  });
+
   group('contra el servidor', () {
     late ProviderContainer c;
     late FakeBackend backend;

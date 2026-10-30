@@ -441,6 +441,57 @@ String slugCategoria(String label) {
   return s.length > 50 ? s.substring(0, 50) : s;
 }
 
+/// Una línea del historial que mueve dinero sin ser gasto ni ingreso.
+class Traspaso {
+  const Traspaso({required this.fecha, required this.titulo, required this.detalle, required this.monto, required this.icono, this.inversionId});
+  final String fecha;
+  final String titulo;
+  final String detalle;
+  final double monto;
+  final IconData icono;
+
+  /// Si viene de una inversión, para abrir su detalle.
+  final int? inversionId;
+}
+
+/// Transferencias y movimientos de inversiones del mes, listos para el historial.
+List<Traspaso> traspasosDelMes({
+  required List<Transferencia> transferencias,
+  required List<Inversion> inversiones,
+  required List<Cuenta> cuentas,
+  required String prefijoMes,
+}) {
+  final porId = {for (final c in cuentas) c.id: c};
+  String nombre(int? id) => porId[id]?.nombre ?? 'Cuenta eliminada';
+  return [
+    for (final t in transferencias)
+      () {
+        final fecha = t.fecha.length >= 10 ? t.fecha.substring(0, 10) : t.fecha;
+        final destino = porId[t.cuentaDestinoId];
+        final abono = destino != null && esCredito(destino.tipo);
+        return Traspaso(
+          fecha: fecha,
+          titulo: abono ? 'Abono a ${destino.nombre}' : 'Transferencia a ${nombre(t.cuentaDestinoId)}',
+          detalle: ['Desde ${nombre(t.cuentaOrigenId)}', if (t.descripcion.isNotEmpty) t.descripcion].join(' · '),
+          monto: t.monto,
+          icono: abono ? Icons.credit_score_rounded : Icons.swap_horiz_rounded,
+        );
+      }(),
+    // Sin cuenta no se movió dinero (por ejemplo, algo que ya se tenía).
+    for (final i in inversiones)
+      for (final m in i.movimientos)
+        if (m.cuentaId != null && m.tipo != TipoMovimiento.valoracion && m.fecha.startsWith(prefijoMes))
+          Traspaso(
+            fecha: m.fecha,
+            titulo: '${m.tipo == TipoMovimiento.aporte ? 'Inversión' : 'Venta'}: ${i.nombre}',
+            detalle: '${m.tipo == TipoMovimiento.aporte ? 'Desde' : 'A'} ${m.cuentaNombre ?? nombre(m.cuentaId)}',
+            monto: m.monto,
+            icono: m.tipo == TipoMovimiento.aporte ? Icons.trending_up_rounded : Icons.sell_rounded,
+            inversionId: i.id,
+          ),
+  ];
+}
+
 /// Colores por categoría para las gráficas (base + paleta para personalizadas).
 const coloresCategoriaBase = <String, ColorPar>{
   'comida': ColorPar(Color(0xFFB83D0B), Color(0xFFFF8A65)),

@@ -153,6 +153,36 @@ void main() {
       expect(find.text('Confirmar pago'), findsNothing);
       expect(saldo(backend, addi), deuda - 200000);
       expect(saldo(backend, ahorros), 800000);
+
+      // El abono se ve en el historial, sin contar como gasto.
+      await t.tap(find.text('Finanzas').last);
+      await esperar(t);
+      // Deja lo buscado en la parte alta: abajo lo tapan los botones flotantes.
+      Future<void> mostrar(Finder f) async {
+        final lista = find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down);
+        await t.scrollUntilVisible(f, 200, scrollable: lista.last, maxScrolls: 40);
+        await esperar(t, 2);
+        Scrollable.ensureVisible(t.element(f), alignment: 0.25);
+        await esperar(t, 4);
+      }
+
+      await mostrar(find.text('Historial'));
+      await t.tap(find.text('Historial'));
+      await esperar(t);
+      await mostrar(find.text('Abono a Addi'));
+      expect(find.text('Abono a Addi'), findsOneWidget);
+      expect(find.textContaining('Desde Ahorros'), findsOneWidget);
+      expect(find.textContaining('Pago: Cuota Addi'), findsOneWidget);
+
+      // Filtrar por gastos lo oculta; por abonos, solo queda él.
+      await mostrar(find.text('Gastos'));
+      await t.tap(find.text('Gastos'));
+      await esperar(t, 6);
+      expect(find.text('Abono a Addi'), findsNothing);
+      await t.tap(find.text('Abonos y traspasos'));
+      await esperar(t, 6);
+      expect(find.text('Abono a Addi'), findsOneWidget);
+      expect(find.text('Celular'), findsNothing);
       await salir(t);
     });
 
