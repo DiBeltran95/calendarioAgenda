@@ -756,6 +756,8 @@ class FakeBackend implements HttpClientAdapter {
       case ('DELETE', 'cuentas'):
         cuentas.removeWhere((c) => c['id'] == id);
         return const _Resp(200, {'message': 'ok'});
+      case ('GET', 'transacciones'):
+        return _Resp(200, transacciones.where((t) => t['user_id'] == uid).toList());
       case ('POST', 'transacciones'):
         final monto = (b['monto'] as num).toDouble();
         final cuentaId = b['cuenta_id'] as int?;

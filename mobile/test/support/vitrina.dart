@@ -63,6 +63,16 @@ Future<void> _sembrar(FakeBackend backend) async {
   await fi.crearTransaccion(TransaccionInput(tipo: 'gasto', monto: 350000, descripcion: 'Mercado', fecha: hoy, cuentaId: ah, categoria: 'comida'));
   await fi.crearTransaccion(TransaccionInput(tipo: 'gasto', monto: 900000, descripcion: 'Celular', fecha: hoy, cuentaId: tc, cuotas: 3));
   await fi.crearMeta(const MetaInput(nombre: 'Viaje', montoObjetivo: 2000000, montoActual: 500000));
+  // Lo de siempre, para la lista de "Registrar rápido".
+  for (final (desc, monto, categoria, veces) in const [('Almuerzo', 25000.0, 'comida', 9), ('Tinto', 3500.0, 'comida', 7), ('Gasolina moto', 40000.0, 'transporte', 5), ('Mercado', 350000.0, 'comida', 2)]) {
+    for (var i = 1; i <= veces; i++) {
+      await fi.crearTransaccion(TransaccionInput(tipo: 'gasto', monto: monto, descripcion: desc, fecha: sumarDiasYmd(hoy, -i * 3), cuentaId: ah, categoria: categoria));
+    }
+  }
+  await fi.crearTransaccion(TransaccionInput(tipo: 'ingreso', monto: 4500000, descripcion: 'Salario', fecha: sumarDiasYmd(hoy, -30), cuentaId: ah));
+  for (final i in [7, 21]) {
+    await ev.crear(EventoInput(titulo: 'Clase de inglés', fecha: sumarDiasYmd(hoy, -i), hora: '18:30', categoria: 'reunion'));
+  }
   final inv = c.read(inversionesRepoProvider);
   c.listen(inversionesProvider, (_, _) {});
   await c.read(inversionesProvider.future);
@@ -205,6 +215,12 @@ void main() {
 
       router.go('/capturar');
       await esperar();
+      await foto('captura_frecuentes');
+      await t.tap(find.text('Almuerzo'));
+      await esperar(6);
+      await foto('captura_elegido');
+      await t.tap(find.text('Cambiar'));
+      await esperar(4);
       await t.enterText(find.byType(TextField).last, 'almuerzo 25 mil');
       await esperar(6);
       await foto('captura');
