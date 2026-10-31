@@ -18,6 +18,7 @@ import '../finance_providers.dart';
 import 'inversion_sheets.dart';
 import 'inversiones_logica.dart';
 import 'inversiones_repository.dart';
+import '../prestamos/prestamos_repository.dart';
 
 /// Patrimonio completo (cuentas + inversiones − deudas) y las inversiones.
 class InversionesScreen extends ConsumerWidget {
@@ -81,7 +82,7 @@ class _HeroPatrimonio extends ConsumerWidget {
     final p = context.palette;
     final cuentas = ref.watch(cuentasProvider).value ?? const <Cuenta>[];
     final inversiones = ref.watch(valorInversionesProvider);
-    final r = ResumenFinanciero(cuentas: cuentas, txMes: const [], inversiones: inversiones);
+    final r = ResumenFinanciero(cuentas: cuentas, txMes: const [], inversiones: inversiones, porCobrar: ref.watch(porCobrarProvider));
     final suave = p.onAccent.withValues(alpha: 0.86);
 
     Widget fila(IconData icono, String etiqueta, String valor) => Padding(
@@ -111,6 +112,7 @@ class _HeroPatrimonio extends ConsumerWidget {
         const VGap.sm(),
         fila(Icons.account_balance_wallet_rounded, 'Cuentas y ahorros', cop(r.ahorros)),
         fila(Icons.trending_up_rounded, 'Inversiones', cop(r.inversiones)),
+        if (r.porCobrar > 0) fila(Icons.handshake_rounded, 'Préstamos por cobrar', cop(r.porCobrar)),
         fila(Icons.credit_card_rounded, 'Deuda de tarjetas', r.deudaTarjetas > 0 ? '- ${cop(r.deudaTarjetas)}' : cop(0)),
       ]),
     );
@@ -130,7 +132,7 @@ class _Lista extends StatelessWidget {
         child: EmptyState(
           icon: Icons.trending_up_rounded,
           title: 'Registra tu primera inversión',
-          message: 'Ganado, una casa, un vehículo, un negocio… Queda la fecha, el monto y de qué cuenta salió el dinero.',
+          message: 'Dólares, ganado, una casa, un vehículo, un negocio… Queda la fecha, el monto y de qué cuenta salió el dinero.',
           actionLabel: 'Nueva inversión',
           onAction: () => showAppSheet(context, (_) => const InversionSheet()),
         ),
@@ -180,14 +182,14 @@ class _Tarjeta extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(i.nombre, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.text.titleSmall),
               Text(
-                [t.etiqueta, ?desde].join(' · '),
+                [t.etiqueta, if (i.esDolares && !i.vendida) '≈ ${cop(i.valor)}', ?desde].join(' · '),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: context.text.bodySmall,
               ),
               const SizedBox(height: Gap.xxs),
               Wrap(spacing: Gap.xs, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                Text(cop(i.vendida ? i.recibido : i.valor), style: context.text.titleMedium?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+                Text(i.esDolares && !i.vendida ? usd(i.usd) : cop(i.vendida ? i.recibido : i.valor), style: context.text.titleMedium?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
                 Text(resultado, style: context.text.labelMedium?.copyWith(color: color, fontWeight: FontWeight.w600)),
               ]),
             ]),

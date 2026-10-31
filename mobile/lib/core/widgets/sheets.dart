@@ -263,6 +263,7 @@ Future<bool> confirmar(
   required String titulo,
   required String mensaje,
   String confirmar = 'Confirmar',
+  String cancelar = 'Cancelar',
   bool destructivo = false,
   IconData? icon,
 }) async {
@@ -278,7 +279,7 @@ Future<bool> confirmar(
         TextButton(
           onPressed: () => Navigator.pop(ctx, false),
           style: TextButton.styleFrom(foregroundColor: p.textSecondary),
-          child: const Text('Cancelar'),
+          child: Text(cancelar),
         ),
         FilledButton(
           onPressed: () {

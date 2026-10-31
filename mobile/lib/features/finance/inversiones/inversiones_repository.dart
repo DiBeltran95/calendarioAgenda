@@ -58,12 +58,13 @@ class InversionesRepository {
   }
 
   /// Registra la inversión con su primer aporte.
-  Future<int> crear({required String nombre, required String tipo, required double monto, required String fecha, int? cuentaId, String nota = ''}) {
+  Future<int> crear({required String nombre, required String tipo, required double monto, double? montoUsd, required String fecha, int? cuentaId, String nota = ''}) {
     if (monto <= 0) throw const FinanzasError('El monto debe ser mayor a 0');
     return _op(() async => asInt(asMap(await _api.post('/api/finanzas/inversiones', body: {
           'nombre': nombre.trim(),
           'tipo': tipo,
           'monto': monto,
+          'monto_usd': montoUsd,
           'fecha': fecha,
           'cuenta_id': cuentaId,
           'nota': nota.trim(),
@@ -76,19 +77,20 @@ class InversionesRepository {
   /// Borra la inversión y deshace lo que movió en las cuentas.
   Future<void> eliminar(int id) => _op(() => _api.delete('/api/finanzas/inversiones/$id'));
 
-  Map<String, dynamic> _cuerpo(TipoMovimiento tipo, double monto, String fecha, int? cuentaId, String nota) => {
+  Map<String, dynamic> _cuerpo(TipoMovimiento tipo, double monto, double? montoUsd, String fecha, int? cuentaId, String nota) => {
         'tipo': tipo.valor,
         'monto': monto,
+        'monto_usd': montoUsd,
         'fecha': fecha,
         'cuenta_id': cuentaId,
         'nota': nota.trim(),
       };
 
-  Future<void> agregarMovimiento(int inversionId, {required TipoMovimiento tipo, required double monto, required String fecha, int? cuentaId, String nota = ''}) =>
-      _op(() => _api.post('/api/finanzas/inversiones/$inversionId/movimientos', body: _cuerpo(tipo, monto, fecha, cuentaId, nota)));
+  Future<void> agregarMovimiento(int inversionId, {required TipoMovimiento tipo, required double monto, double? montoUsd, required String fecha, int? cuentaId, String nota = ''}) =>
+      _op(() => _api.post('/api/finanzas/inversiones/$inversionId/movimientos', body: _cuerpo(tipo, monto, montoUsd, fecha, cuentaId, nota)));
 
-  Future<void> actualizarMovimiento(int id, {required TipoMovimiento tipo, required double monto, required String fecha, int? cuentaId, String nota = ''}) =>
-      _op(() => _api.put('/api/finanzas/inversion-movimientos/$id', body: _cuerpo(tipo, monto, fecha, cuentaId, nota)));
+  Future<void> actualizarMovimiento(int id, {required TipoMovimiento tipo, required double monto, double? montoUsd, required String fecha, int? cuentaId, String nota = ''}) =>
+      _op(() => _api.put('/api/finanzas/inversion-movimientos/$id', body: _cuerpo(tipo, monto, montoUsd, fecha, cuentaId, nota)));
 
   Future<void> eliminarMovimiento(int id) => _op(() => _api.delete('/api/finanzas/inversion-movimientos/$id'));
 }

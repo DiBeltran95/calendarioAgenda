@@ -78,7 +78,14 @@ class _AccountSheetState extends ConsumerState<AccountSheet> {
   late final TextEditingController _nombre, _saldo, _limite, _tasa, _plazo, _corte;
   late final String _inicial = _firma();
 
-  String _firma() => [_nombre, _saldo, _limite, _tasa, _plazo, _corte].map((c) => c.text).join('|');
+  /// ¿Esta cuenta suma sola sus ganancias de cada día?
+  late bool _ganancias = widget.cuenta?.tieneGanancias ?? false;
+  late String _gananciasDesde = widget.cuenta?.gananciasDesde ?? hoyYmd();
+  late final TextEditingController _gananciasTasa;
+
+  String _firma() => [_nombre, _saldo, _limite, _tasa, _plazo, _corte, _gananciasTasa, _ganancias, _gananciasDesde].map((c) => c is TextEditingController ? c.text : '$c').join('|');
+
+  double get _tasaGanancias => double.tryParse(_gananciasTasa.text.trim().replaceAll(',', '.')) ?? 0;
 
   @override
   void initState() {
@@ -92,15 +99,78 @@ class _AccountSheetState extends ConsumerState<AccountSheet> {
     _tasa = TextEditingController(text: (c?.interesTasa ?? 0) == 0 ? '' : c!.interesTasa.toString());
     _plazo = TextEditingController(text: (c?.plazoDias ?? 0) == 0 ? '' : '${c!.plazoDias}');
     _corte = TextEditingController(text: c?.diaCorte?.toString() ?? '');
+    final tasaGanancia = (c?.gananciasTasa ?? 0) > 0 ? c!.gananciasTasa : (c?.interesTasa ?? 0);
+    _gananciasTasa = TextEditingController(text: tasaGanancia == 0 ? '' : tasaGanancia.toString());
+    _gananciasTasa.addListener(() => setState(() {}));
     _inicial;
   }
 
   @override
   void dispose() {
-    for (final c in [_nombre, _saldo, _limite, _tasa, _plazo, _corte]) {
+    for (final c in [_nombre, _saldo, _limite, _tasa, _plazo, _corte, _gananciasTasa]) {
       c.dispose();
     }
     super.dispose();
+  }
+
+  /// Aplica lo que cambió en las ganancias, preguntando qué hacer con lo ya sumado.
+  Future<Future<void> Function()?> _preguntarGanancias(FinanceRepository repo, int? id) async {
+    final antes = widget.cuenta;
+    final credito = esCredito(_tipo);
+    final activar = _ganancias && !credito;
+    if (antes == null) {
+      return activar ? () => repo.activarGanancias(id!, tasa: _tasaGanancias, desde: _gananciasDesde) : null;
+    }
+    if (!activar) {
+      if (!antes.tieneGanancias) return null;
+      final quitar = await confirmar(
+        context,
+        titulo: '¿Quitar lo que ya sumó?',
+        mensaje: 'Las ganancias dejan de calcularse. Si fue un error, también puedes quitar del saldo y del historial lo que ya se había sumado.',
+        confirmar: 'Quitar lo sumado',
+        cancelar: 'Dejarlo',
+        destructivo: true,
+      );
+      return () => repo.apagarGanancias(antes.id, quitar: quitar);
+    }
+    final cambioTasa = antes.gananciasTasa != _tasaGanancias;
+    final cambioFecha = antes.gananciasDesde != _gananciasDesde;
+    if (antes.tieneGanancias && !cambioTasa && !cambioFecha) return null;
+    var recalcular = false;
+    if (antes.generaGanancias && antes.gananciasDesde!.compareTo(hoyYmd()) < 0) {
+      recalcular = await confirmar(
+        context,
+        titulo: '¿Corregir lo ya sumado?',
+        mensaje: 'Si la tasa cambió de hoy en adelante, deja lo anterior como está. Si estaba mal, recalcula todo desde la fecha elegida.',
+        confirmar: 'Recalcular todo',
+        cancelar: 'Dejar lo anterior',
+      );
+    }
+    return () => repo.activarGanancias(antes.id, tasa: _tasaGanancias, desde: _gananciasDesde, recalcular: recalcular);
+  }
+
+  Future<void> _eliminar() async {
+    final c = widget.cuenta!;
+    final nav = Navigator.of(context);
+    final toaster = Toaster.of(context);
+    final ok = await confirmar(
+      context,
+      titulo: '¿Eliminar "${c.nombre}"?',
+      mensaje: c.tieneGanancias
+          ? 'Se quitan las ganancias que sumó. Sus demás movimientos se conservan en el historial sin cuenta asociada y sus transferencias se eliminan.'
+          : 'Sus movimientos se conservan en el historial sin cuenta asociada y sus transferencias se eliminan.',
+      confirmar: 'Eliminar',
+      destructivo: true,
+      icon: Icons.delete_outline_rounded,
+    );
+    if (!ok) return;
+    try {
+      await ref.read(financeRepoProvider).eliminarCuenta(c.id);
+      nav.pop();
+      toaster.show('Cuenta eliminada', icon: Icons.delete_outline_rounded);
+    } catch (_) {
+      toaster.show('No se pudo eliminar. Revisa tu conexión.', error: true);
+    }
   }
 
   @override
@@ -108,10 +178,14 @@ class _AccountSheetState extends ConsumerState<AccountSheet> {
     final credito = esCredito(_tipo);
     final cdt = _tipo == 'cdt';
     final t = tipoCuenta(_tipo);
+    final diaria = rendimientoDiarioCdt(parseMonto(_saldo.text), _tasaGanancias);
     return SheetScaffold(
       title: widget.cuenta == null ? 'Nueva cuenta' : 'Editar cuenta',
       hayCambios: () => _firma() != _inicial,
       icon: t.icon,
+      headerAction: widget.cuenta == null
+          ? null
+          : IconButton(tooltip: 'Eliminar cuenta', onPressed: _eliminar, icon: Icon(Icons.delete_outline_rounded, color: context.palette.danger)),
       primaryLabel: widget.cuenta == null ? 'Crear cuenta' : 'Guardar cambios',
       onPrimary: () async {
         if (!validarFormulario(_form)) return;
@@ -126,10 +200,23 @@ class _AccountSheetState extends ConsumerState<AccountSheet> {
           diaCorte: int.tryParse(_corte.text),
         );
         final repo = ref.read(financeRepoProvider);
+        final nueva = widget.cuenta == null;
+        // Las preguntas se hacen antes de guardar nada.
+        final ganancias = nueva ? null : await _preguntarGanancias(repo, widget.cuenta!.id);
+        if (!context.mounted) return;
         await _ejecutar(
           context,
-          () => widget.cuenta == null ? repo.crearCuenta(input) : repo.actualizarCuenta(widget.cuenta!.id, input),
-          ok: widget.cuenta == null ? 'Cuenta creada' : 'Cuenta actualizada',
+          () async {
+            if (nueva) {
+              final id = await repo.crearCuenta(input);
+              final activar = await _preguntarGanancias(repo, id);
+              await activar?.call();
+            } else {
+              await repo.actualizarCuenta(widget.cuenta!.id, input);
+              await ganancias?.call();
+            }
+          },
+          ok: nueva ? 'Cuenta creada' : 'Cuenta actualizada',
         );
       },
       children: [
@@ -145,7 +232,7 @@ class _AccountSheetState extends ConsumerState<AccountSheet> {
                 children: [
                   for (final tc in tiposCuenta)
                     ChoiceChip(
-                      avatar: Icon(tc.icon, size: IconSizes.sm, color: tc.value == _tipo ? tc.colors.first : context.palette.textSecondary),
+                      avatar: Icon(tc.icon, size: IconSizes.sm, color: tc.value == _tipo ? context.legible(tc.colors.first) : context.palette.textSecondary),
                       label: Text(tc.label),
                       selected: tc.value == _tipo,
                       showCheckmark: false,
@@ -208,6 +295,36 @@ class _AccountSheetState extends ConsumerState<AccountSheet> {
                           prefixIcon: Icon(Icons.timelapse_rounded),
                         ),
                       ),
+                    ],
+                    if (!credito) ...[
+                      const VGap.sm(),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text('Genera ganancias cada día', style: context.text.titleSmall),
+                        subtitle: Text('Se suman solas a tu saldo, historial y patrimonio', style: context.text.bodySmall),
+                        value: _ganancias,
+                        onChanged: (v) => setState(() {
+                          _ganancias = v;
+                          // Un CDT ya dice su tasa: no pedirla dos veces.
+                          if (v && _gananciasTasa.text.isEmpty) _gananciasTasa.text = _tasa.text;
+                        }),
+                      ),
+                      if (_ganancias) ...[
+                        const FieldLabel('Tasa efectiva anual (%)', required: true),
+                        TextFormField(
+                          controller: _gananciasTasa,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(hintText: 'La que te da tu banco. Ej. 9', prefixIcon: Icon(Icons.percent_rounded)),
+                          validator: (_) => _tasaGanancias <= 0 || _tasaGanancias > 100 ? 'Escribe una tasa entre 0 y 100' : null,
+                        ),
+                        const FieldLabel('¿Desde qué fecha?'),
+                        DateField(value: _gananciasDesde, onChanged: (v) => setState(() => _gananciasDesde = v)),
+                        const VGap.xs(),
+                        Text(
+                          diaria > 0 ? 'Con este saldo son unos ${cop(diaria)} al día. Cada día se calcula sobre el saldo actual.' : 'Cada día se calcula sobre el saldo actual.',
+                          style: context.text.bodySmall,
+                        ),
+                      ],
                     ],
                   ],
                 ),

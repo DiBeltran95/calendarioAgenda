@@ -33,6 +33,7 @@ import '../events/widgets/event_tiles.dart';
 import '../events/widgets/pago_evento_sheet.dart';
 import '../finance/finance_logic.dart';
 import '../finance/inversiones/inversiones_repository.dart';
+import '../finance/prestamos/prestamos_repository.dart';
 import '../finance/pagos/pagos_repository.dart';
 import '../finance/sheets/transaction_sheet.dart';
 import '../notifications/notification_service.dart';
@@ -76,7 +77,7 @@ class TodayScreen extends ConsumerWidget {
       ..sort((a, b) => a.fecha.compareTo(b.fecha));
 
     final celdas = [
-      if (conFinanzas) CeldaBento(_FinanzasMini(cuentas: boot.cuentas, tx: mes?.transacciones ?? const [], inversiones: ref.watch(valorInversionesProvider)), ancha: !conCiclo),
+      if (conFinanzas) CeldaBento(_FinanzasMini(cuentas: boot.cuentas, tx: mes?.transacciones ?? const [], inversiones: ref.watch(valorInversionesProvider) + ref.watch(porCobrarProvider)), ancha: !conCiclo),
       if (conCiclo) CeldaBento(const _CicloMini(), ancha: !conFinanzas),
     ];
 
@@ -216,7 +217,7 @@ class EstadoSincronizacion extends ConsumerWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
-        Text(texto, style: context.text.labelSmall),
+        Flexible(child: Text(texto, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.labelSmall)),
       ]),
     );
   }

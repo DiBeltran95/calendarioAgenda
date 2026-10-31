@@ -16,6 +16,8 @@ import '../finance_providers.dart';
 import '../finance_repository.dart';
 import '../inversiones/inversion_sheets.dart';
 import '../inversiones/inversiones_repository.dart';
+import '../prestamos/prestamo_sheets.dart';
+import '../prestamos/prestamos_repository.dart';
 import '../sheets/transaction_sheet.dart';
 
 class HistoryTab extends ConsumerStatefulWidget {
@@ -42,6 +44,7 @@ class _HistoryTabState extends ConsumerState<HistoryTab> {
     return traspasosDelMes(
       transferencias: ref.watch(transferenciasMesProvider((widget.mes.year, widget.mes.month))).value ?? const [],
       inversiones: ref.watch(inversionesProvider).value ?? const [],
+      prestamos: ref.watch(prestamosProvider).value ?? const [],
       cuentas: ref.watch(cuentasProvider).value ?? const [],
       prefijoMes: prefijo,
     ).where((t) => widget.dia == null || t.fecha == widget.dia).toList();
@@ -51,14 +54,18 @@ class _HistoryTabState extends ConsumerState<HistoryTab> {
   Widget build(BuildContext context) {
     final lista = widget.txMes
         .where((t) => widget.dia == null || t.fecha == widget.dia)
-        .where((t) => _filtro == 'todos' || t.tipo == _filtro)
+        .where((t) => switch (_filtro) {
+              'todos' => true,
+              'ganancia' => esGanancia(t),
+              _ => t.tipo == _filtro,
+            })
         .where((t) => !_ocultos.contains(t.id))
         .toList();
     final porDia = <String, List<Transaccion>>{};
     for (final t in lista) {
       (porDia[t.fecha] ??= []).add(t);
     }
-    final traspasos = _filtro == 'gasto' || _filtro == 'ingreso' ? const <Traspaso>[] : _traspasos();
+    final traspasos = _filtro == 'gasto' || _filtro == 'ingreso' || _filtro == 'ganancia' ? const <Traspaso>[] : _traspasos();
     final traspasosPorDia = <String, List<Traspaso>>{};
     for (final t in traspasos) {
       (traspasosPorDia[t.fecha] ??= []).add(t);
@@ -70,7 +77,7 @@ class _HistoryTabState extends ConsumerState<HistoryTab> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Wrap(spacing: Gap.xs, children: [
-          for (final (k, l) in const [('todos', 'Todos'), ('gasto', 'Gastos'), ('ingreso', 'Ingresos'), ('traspaso', 'Abonos y traspasos')])
+          for (final (k, l) in const [('todos', 'Todos'), ('gasto', 'Gastos'), ('ingreso', 'Ingresos'), ('ganancia', 'Ganancias'), ('traspaso', 'Abonos y traspasos')])
             ChoiceChip(label: Text(l), selected: _filtro == k, showCheckmark: false, onSelected: (_) => setState(() => _filtro = k)),
         ]),
         const VGap.md(),
@@ -130,9 +137,14 @@ class _FilaTraspaso extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = traspaso;
     final inversionId = t.inversionId;
+    final prestamoId = t.prestamoId;
     return AppCard(
       padding: const EdgeInsets.all(Gap.sm),
-      onTap: inversionId == null ? null : () => showAppSheet(context, (_) => InversionDetalleSheet(id: inversionId)),
+      onTap: inversionId != null
+          ? () => showAppSheet(context, (_) => InversionDetalleSheet(id: inversionId))
+          : prestamoId != null
+              ? () => showAppSheet(context, (_) => PrestamoDetalleSheet(id: prestamoId))
+              : null,
       semanticLabel: '${t.titulo}, ${cop(t.monto)}. ${t.detalle}',
       child: Row(children: [
         IconBadge(t.icono, color: context.palette.info, size: 40),
@@ -212,7 +224,7 @@ class TxTile extends ConsumerWidget {
         child: Row(
           children: [
             IconBadge(
-              ingreso ? Icons.north_east_rounded : iconoPorNombre(cat?.icono),
+              esGanancia(tx) ? Icons.trending_up_rounded : (ingreso ? Icons.north_east_rounded : iconoPorNombre(cat?.icono)),
               color: ingreso ? p.success : colorCategoria(context, tx.categoria),
               size: 40,
             ),
@@ -225,7 +237,7 @@ class TxTile extends ConsumerWidget {
                   Text(
                     [
                       if (!ingreso) cat?.label ?? tx.categoria,
-                      cuenta?.nombre ?? 'Sin cuenta',
+                      if (tx.categoria == categoriaIntereses) 'Se suma a lo que te deben' else if (tx.categoria == categoriaRendimientos) 'Ganancia del día · ${cuenta?.nombre ?? 'Sin cuenta'}' else cuenta?.nombre ?? 'Sin cuenta',
                       if (tx.cuotas > 1) '${tx.cuotas} cuotas',
                     ].join(' · '),
                     style: context.text.bodySmall,

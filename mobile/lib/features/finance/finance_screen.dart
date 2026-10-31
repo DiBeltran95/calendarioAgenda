@@ -24,6 +24,7 @@ import 'finance_logic.dart';
 import 'finance_providers.dart';
 import 'inversiones/inversiones_repository.dart';
 import 'pagos/pagos_repository.dart';
+import 'prestamos/prestamos_repository.dart';
 import 'sheets/finance_sheets.dart';
 import 'sheets/transaction_sheet.dart';
 import 'tabs/accounts_tab.dart';
@@ -56,7 +57,11 @@ class FinanceScreen extends ConsumerWidget {
     final txMes = ref.watch(txMesProvider((mes.year, mes.month))).value ?? const <Transaccion>[];
     final prefs = ref.watch(preferenciasProvider).value ?? const Preferencias();
     final calendario = ref.watch(finCalendarioProvider);
-    void reintentar() => ref.read(sincronizadorProvider).refrescarTodo();
+    void reintentar() {
+      ref.read(sincronizadorProvider).refrescarTodo();
+      ref.read(inversionesProvider.notifier).refrescar();
+      ref.read(prestamosProvider.notifier).refrescar();
+    }
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -107,14 +112,15 @@ class FinanceScreen extends ConsumerWidget {
                 ],
               ),
             ],
-            if (tab != FinTab.graficos && !(tab == FinTab.historial && calendario)) ...[
+            // En Cuentas los saldos son los de hoy: el mes solo aplica a sus transferencias.
+            if (tab != FinTab.graficos && tab != FinTab.cuentas && !(tab == FinTab.historial && calendario)) ...[
               const VGap.sm(),
               _SelectorMes(mes: mes),
             ],
             const VGap.sm(),
             SmoothSwitcher(
               child: KeyedSubtree(
-                key: ValueKey('${tab.name}-${tab == FinTab.historial ? '' : mes.month}'),
+                key: ValueKey('${tab.name}-${tab == FinTab.historial || tab == FinTab.cuentas ? '' : mes.month}'),
                 child: switch (tab) {
                   FinTab.resumen => SummaryTab(mes: mes, dia: null, txMes: txMes, cuentas: cuentas),
                   FinTab.cuentas => AccountsTab(cuentas: cuentas, mes: mes),
@@ -188,6 +194,7 @@ class _Movimientos extends ConsumerWidget {
       transacciones: txMes,
       transferencias: ref.watch(transferenciasMesProvider((mes.year, mes.month))).value ?? const [],
       inversiones: ref.watch(inversionesProvider).value ?? const [],
+      prestamos: ref.watch(prestamosProvider).value ?? const [],
       cuentas: ref.watch(cuentasProvider).value ?? const [],
       prefijoMes: '${mes.year}-${mes.month.toString().padLeft(2, '0')}',
     );
@@ -259,7 +266,7 @@ class _Patrimonio extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
-    final r = ResumenFinanciero(cuentas: cuentas, txMes: txMes, inversiones: ref.watch(valorInversionesProvider));
+    final r = ResumenFinanciero(cuentas: cuentas, txMes: txMes, inversiones: ref.watch(valorInversionesProvider), porCobrar: ref.watch(porCobrarProvider));
     final suave = p.onAccent.withValues(alpha: 0.86);
     return TarjetaHeroe(
       child: Column(
@@ -310,6 +317,35 @@ class _Patrimonio extends ConsumerWidget {
               ]),
             ),
           ),
+          // También es patrimonio: si no se viera aquí, las cuentas no cuadrarían.
+          if (r.porCobrar > 0) ...[
+            const VGap.xs(),
+            Pressable(
+              onTap: () => ref.read(finTabProvider.notifier).set(FinTab.cuentas),
+              semanticLabel: 'Préstamos por cobrar: ${cop(r.porCobrar)}. Ver en Cuentas',
+              scale: 0.985,
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 48),
+                padding: const EdgeInsets.symmetric(horizontal: Gap.sm, vertical: Gap.xs),
+                decoration: BoxDecoration(color: p.onAccent.withValues(alpha: 0.14), borderRadius: Radii.rMd),
+                child: Row(children: [
+                  Icon(Icons.handshake_rounded, color: p.onAccent, size: IconSizes.md),
+                  const HGap.xs(),
+                  Expanded(child: Text('Por cobrar', style: context.text.titleSmall?.copyWith(color: p.onAccent))),
+                  const HGap.xs(),
+                  Flexible(
+                    fit: FlexFit.tight,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(cop(r.porCobrar), style: context.text.titleSmall?.copyWith(color: p.onAccent, fontFeatures: const [FontFeature.tabularFigures()])),
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: p.onAccent),
+                ]),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -424,6 +460,7 @@ Color colorMarca(BuildContext context, MarcaDia m) {
     MarcaDia.compra => p.danger,
     MarcaDia.pagoCredito => p.info,
     MarcaDia.inversion => p.gold,
+    MarcaDia.prestamo => p.success,
   };
 }
 
@@ -451,10 +488,13 @@ class _FinDayCell extends StatelessWidget {
       // En el orden de la leyenda, para que siempre se lean igual.
       markers: marcas.isEmpty
           ? null
-          : Row(mainAxisSize: MainAxisSize.min, children: [
-              for (final m in MarcaDia.values)
-                if (marcas.contains(m)) Icon(m.icono, size: 14, color: colorMarca(context, m)),
-            ]),
+          : FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                for (final m in MarcaDia.values)
+                  if (marcas.contains(m)) Icon(m.icono, size: 14, color: colorMarca(context, m)),
+              ]),
+            ),
       markersAbajo: n == null
           ? null
           : Text(

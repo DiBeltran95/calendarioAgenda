@@ -19,6 +19,7 @@ import 'package:agendaservi/features/finance/finance_repository.dart';
 import 'package:agendaservi/features/finance/finance_screen.dart';
 import 'package:agendaservi/features/finance/inversiones/inversiones_logica.dart';
 import 'package:agendaservi/features/finance/inversiones/inversiones_repository.dart';
+import 'package:agendaservi/features/finance/prestamos/prestamos_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -72,6 +73,19 @@ Future<void> _sembrar(FakeBackend backend) async {
   await fi.transferir(origenId: ah, destinoId: tc, monto: 300000, fecha: sumarDiasYmd(hoy, -1), descripcion: 'Pago: Cuota');
   await fi.crearTransaccion(TransaccionInput(tipo: 'gasto', monto: 80000, descripcion: 'Zapatos', fecha: sumarDiasYmd(hoy, -2), cuentaId: ah, categoria: 'otros'));
   await inv.crear(nombre: 'Terneros', tipo: 'ganado', monto: 500000, fecha: sumarDiasYmd(hoy, -2), cuentaId: ah);
+  // Cuentas de todo tipo, dólares y préstamos.
+  final nu = await fi.crearCuenta(const CuentaInput(nombre: 'Nu', tipo: 'ahorros', saldo: 6200000));
+  await fi.activarGanancias(nu, tasa: 9, desde: sumarDiasYmd(hoy, -6));
+  await fi.crearCuenta(const CuentaInput(nombre: 'Billetera', tipo: 'efectivo', saldo: 180000));
+  await fi.crearCuenta(CuentaInput(nombre: 'CDT Bancolombia', tipo: 'cdt', saldo: 5000000, interesTasa: 10.5, fechaInicio: sumarDiasYmd(hoy, -60), plazoDias: 180));
+  final arq = await inv.crear(nombre: 'ARQ', tipo: 'dolares', monto: 2050000, montoUsd: 500, fecha: sumarDiasYmd(hoy, -45), cuentaId: ah);
+  await inv.agregarMovimiento(arq, tipo: TipoMovimiento.aporte, monto: 1260000, montoUsd: 300, fecha: sumarDiasYmd(hoy, -5), cuentaId: ah);
+  final pr = c.read(prestamosRepoProvider);
+  c.listen(prestamosProvider, (_, _) {});
+  await c.read(prestamosProvider.future);
+  final ana = await pr.crear(persona: 'Ana María Gómez', monto: 2000000, fecha: sumarDiasYmd(hoy, -40), cuentaId: ah, tasaMensual: 2, interesDesde: sumarDiasYmd(hoy, -40), vencimiento: sumarDiasYmd(hoy, 20));
+  await pr.agregarMovimiento(ana, tipo: 'abono', capital: 500000, interes: 30000, fecha: sumarDiasYmd(hoy, -5), cuentaId: ah);
+  await pr.crear(persona: 'Carlos Ruiz', monto: 300000, fecha: sumarDiasYmd(hoy, -30), vencimiento: sumarDiasYmd(hoy, -3));
   final ahora = DateTime.now();
   await fi.guardarPresupuesto(categoria: 'comida', limite: 400000, mes: ahora.month, anio: ahora.year);
 
@@ -162,6 +176,21 @@ void main() {
         await esperar();
         await foto(nombre);
       }
+
+      // Cuentas por secciones: la pantalla es larga.
+      c.read(finTabProvider.notifier).set(FinTab.cuentas);
+      router.go('/finanzas');
+      await esperar();
+      final desplazable = find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down);
+      for (final (k, ancla) in const ['Efectivo y bancos', 'Tarjetas y créditos', 'Inversiones', 'Préstamos que hiciste', 'Transferencias'].indexed) {
+        await t.scrollUntilVisible(find.text(ancla), 200, scrollable: desplazable.last, maxScrolls: 40);
+        await esperar(2);
+        Scrollable.ensureVisible(t.element(find.text(ancla)), alignment: 0.1);
+        await esperar(6);
+        await foto('cuentas_$k');
+      }
+      await t.drag(desplazable.last, const Offset(0, 6000));
+      await esperar(6);
 
       c.read(finTabProvider.notifier).set(FinTab.historial);
       c.read(finCalendarioProvider.notifier).set(true);

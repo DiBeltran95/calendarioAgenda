@@ -19,7 +19,7 @@ import 'inversiones_logica.dart';
 import 'inversiones_repository.dart';
 
 /// Guarda, cierra la hoja y avisa; si el servidor rechaza, deja la hoja abierta.
-Future<void> _guardar(BuildContext context, Future<void> Function() op, {required String aviso}) async {
+Future<void> guardarYCerrar(BuildContext context, Future<void> Function() op, {required String aviso}) async {
   final nav = Navigator.of(context);
   final toaster = Toaster.of(context);
   try {
@@ -36,8 +36,8 @@ Future<void> _guardar(BuildContext context, Future<void> Function() op, {require
 
 /// Avisa si lo que sale de la cuenta es más de lo que tiene (no lo impide: las
 /// transferencias tampoco, y la persona puede estar poniéndose al día).
-class _AvisoSaldo extends StatelessWidget {
-  const _AvisoSaldo({required this.cuentas, required this.cuentaId, required this.monto});
+class AvisoSaldo extends StatelessWidget {
+  const AvisoSaldo({super.key, required this.cuentas, required this.cuentaId, required this.monto});
   final List<Cuenta> cuentas;
   final int? cuentaId;
   final double monto;
@@ -56,10 +56,13 @@ class _AvisoSaldo extends StatelessWidget {
 // ─────────────────────────── Nueva inversión / editar ───────────────────────────
 
 class InversionSheet extends ConsumerStatefulWidget {
-  const InversionSheet({super.key, this.inversion});
+  const InversionSheet({super.key, this.inversion, this.tipoInicial});
 
   /// Si viene, se editan sus datos; el dinero se corrige en sus movimientos.
   final Inversion? inversion;
+
+  /// Si viene, se abre directo para ese tipo, sin preguntar en qué invierte.
+  final String? tipoInicial;
 
   @override
   ConsumerState<InversionSheet> createState() => _InversionSheetState();
@@ -70,16 +73,19 @@ class _InversionSheetState extends ConsumerState<InversionSheet> {
   late final _nombre = TextEditingController(text: widget.inversion?.nombre ?? '');
   late final _nota = TextEditingController(text: widget.inversion?.nota ?? '');
   final _monto = TextEditingController();
-  late String _tipo = widget.inversion?.tipo ?? 'ganado';
+  final _dolares = TextEditingController();
+  late String _tipo = widget.inversion?.tipo ?? widget.tipoInicial ?? 'ganado';
   String _fecha = hoyYmd();
   int? _cuenta;
 
   bool get _editando => widget.inversion != null;
+  bool get _esDolares => _tipo == 'dolares';
 
   @override
   void initState() {
     super.initState();
     _monto.addListener(() => setState(() {}));
+    _dolares.addListener(() => setState(() {}));
   }
 
   @override
@@ -87,6 +93,7 @@ class _InversionSheetState extends ConsumerState<InversionSheet> {
     _nombre.dispose();
     _nota.dispose();
     _monto.dispose();
+    _dolares.dispose();
     super.dispose();
   }
 
@@ -94,12 +101,12 @@ class _InversionSheetState extends ConsumerState<InversionSheet> {
     if (!validarFormulario(_form)) return;
     final repo = ref.read(inversionesRepoProvider);
     if (_editando) {
-      return _guardar(context, () => repo.actualizar(widget.inversion!.id, nombre: _nombre.text, tipo: _tipo, nota: _nota.text), aviso: 'Inversión actualizada');
+      return guardarYCerrar(context, () => repo.actualizar(widget.inversion!.id, nombre: _nombre.text, tipo: _tipo, nota: _nota.text), aviso: 'Inversión actualizada');
     }
-    return _guardar(
+    return guardarYCerrar(
       context,
-      () => repo.crear(nombre: _nombre.text, tipo: _tipo, monto: parseMonto(_monto.text), fecha: _fecha, cuentaId: _cuenta, nota: _nota.text),
-      aviso: 'Inversión registrada',
+      () => repo.crear(nombre: _nombre.text, tipo: _tipo, monto: parseMonto(_monto.text), montoUsd: _esDolares ? parseDecimal(_dolares.text) : null, fecha: _fecha, cuentaId: _cuenta, nota: _nota.text),
+      aviso: _esDolares ? 'Compra de dólares registrada' : 'Inversión registrada',
     );
   }
 
@@ -107,11 +114,13 @@ class _InversionSheetState extends ConsumerState<InversionSheet> {
   Widget build(BuildContext context) {
     final cuentas = ref.watch(cuentasProvider).value ?? const <Cuenta>[];
     final tipo = tipoInversion(_tipo);
+    final dolares = parseDecimal(_dolares.text);
+    final pesos = parseMonto(_monto.text);
     return SheetScaffold(
-      title: _editando ? 'Editar inversión' : 'Nueva inversión',
-      subtitle: _editando ? null : 'Queda registrada la fecha, el monto y de dónde salió el dinero',
+      title: _editando ? 'Editar inversión' : (_esDolares ? 'Comprar dólares' : 'Nueva inversión'),
+      subtitle: _editando ? null : (_esDolares ? 'Queda cuántos dólares compraste, cuánto pagaste y cuándo' : 'Queda registrada la fecha, el monto y de dónde salió el dinero'),
       icon: tipo.icono,
-      primaryLabel: _editando ? 'Guardar cambios' : 'Registrar inversión',
+      primaryLabel: _editando ? 'Guardar cambios' : (_esDolares ? 'Registrar compra' : 'Registrar inversión'),
       onPrimary: _enviar,
       hayCambios: () => _editando
           ? _nombre.text != widget.inversion!.nombre || _nota.text != widget.inversion!.nota
@@ -122,14 +131,20 @@ class _InversionSheetState extends ConsumerState<InversionSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const FieldLabel('¿En qué inviertes?'),
-              ChoiceChips<String>(
-                options: [for (final t in tiposInversion) (t.valor, t.etiqueta)],
-                value: _tipo,
-                onChanged: (v) => setState(() => _tipo = v),
-              ),
-              const VGap.md(),
-              const FieldLabel('Nombre', required: true),
+              // Una inversión en dólares no se convierte en otra: sus movimientos son en dólares.
+              if (widget.tipoInicial == null && !(_editando && _esDolares)) ...[
+                const FieldLabel('¿En qué inviertes?'),
+                ChoiceChips<String>(
+                  options: [
+                    for (final t in tiposInversion)
+                      if (!_editando || t.valor != 'dolares') (t.valor, t.etiqueta),
+                  ],
+                  value: _tipo,
+                  onChanged: (v) => setState(() => _tipo = v),
+                ),
+                const VGap.md(),
+              ],
+              FieldLabel(_esDolares ? '¿Dónde los tienes?' : 'Nombre', required: true),
               TextFormField(
                 controller: _nombre,
                 textCapitalization: TextCapitalization.sentences,
@@ -138,15 +153,24 @@ class _InversionSheetState extends ConsumerState<InversionSheet> {
                 validator: (v) => (v ?? '').trim().length < 2 ? 'Escribe un nombre para la inversión' : null,
               ),
               if (!_editando) ...[
+                if (_esDolares) ...[
+                  const VGap.md(),
+                  const FieldLabel('¿Cuántos dólares compraste?', required: true),
+                  DolaresField(controller: _dolares, big: true, validator: (v) => v <= 0 ? 'Escribe cuántos dólares' : null),
+                ],
                 const VGap.md(),
-                const FieldLabel('¿Cuánto invertiste?', required: true),
-                MoneyField(controller: _monto, big: true, validator: (v) => v <= 0 ? 'Escribe el monto invertido' : null),
+                FieldLabel(_esDolares ? '¿Cuánto pagaste en pesos?' : '¿Cuánto invertiste?', required: true),
+                MoneyField(controller: _monto, big: !_esDolares, validator: (v) => v <= 0 ? (_esDolares ? 'Escribe cuánto pagaste' : 'Escribe el monto invertido') : null),
+                if (_esDolares && dolares > 0 && pesos > 0) ...[
+                  const VGap.xs(),
+                  Text('El dólar te salió a ${cop(pesos / dolares)}.', style: context.text.bodySmall),
+                ],
                 const VGap.md(),
                 DateField(value: _fecha, last: DateTime.now(), label: '¿Cuándo?', onChanged: (v) => setState(() => _fecha = v)),
                 const VGap.md(),
                 const FieldLabel('¿De dónde salió el dinero?'),
                 cuentaDropdown(cuentas: cuentas, value: _cuenta, nula: 'De ninguna cuenta (ya lo tenía)', onChanged: (v) => setState(() => _cuenta = v)),
-                _AvisoSaldo(cuentas: cuentas, cuentaId: _cuenta, monto: parseMonto(_monto.text)),
+                AvisoSaldo(cuentas: cuentas, cuentaId: _cuenta, monto: parseMonto(_monto.text)),
                 const VGap.xs(),
                 Text('No cuenta como gasto del mes: el dinero sigue siendo parte de tu patrimonio.', style: context.text.bodySmall),
               ],
@@ -177,31 +201,61 @@ class MovimientoSheet extends ConsumerStatefulWidget {
 
 class _MovimientoSheetState extends ConsumerState<MovimientoSheet> {
   final _form = GlobalKey<FormState>();
-  late final _monto = TextEditingController(text: montoInicial(widget.movimiento?.monto ?? 0));
+  late final _monto = TextEditingController(text: _montoParaCampo());
   late final _nota = TextEditingController(text: widget.movimiento?.nota ?? '');
   late String _fecha = widget.movimiento?.fecha ?? hoyYmd();
   late int? _cuenta = widget.movimiento?.cuentaId;
-  late final _inicial = '${_monto.text}|${_nota.text}';
+  late final _dolares = TextEditingController(text: decimalInicial(_dolaresIniciales));
+  late final _inicial = '${_monto.text}|${_dolares.text}|${_nota.text}';
 
   bool get _editando => widget.movimiento != null;
   bool get _aporte => widget.tipo == TipoMovimiento.aporte;
   bool get _valoracion => widget.tipo == TipoMovimiento.valoracion;
+  bool get _esDolares => widget.inversion.esDolares;
+
+  /// Al actualizar o vender todo se parte de lo que hay hoy.
+  double get _dolaresIniciales {
+    if (widget.movimiento != null) return widget.movimiento!.montoUsd ?? 0;
+    return widget.tipo == TipoMovimiento.valoracion || widget.tipo == TipoMovimiento.venta ? widget.inversion.usd : 0;
+  }
+
+  /// Al actualizar el saldo en dólares se pregunta a cuánto está el dólar, no los pesos.
+  bool get _pideDolar => _esDolares && _valoracion;
+
+  String _montoParaCampo() {
+    final m = widget.movimiento;
+    if (!_pideDolar) return montoInicial(m?.monto ?? 0);
+    final usd = m?.montoUsd ?? 0;
+    final tasa = m != null && usd > 0 ? m.monto / usd : (widget.inversion.tasaActual ?? 0);
+    return montoInicial(tasa);
+  }
+
+  double get _montoEnPesos => _pideDolar ? parseDecimal(_dolares.text) * parseMonto(_monto.text) : parseMonto(_monto.text);
 
   @override
   void initState() {
     super.initState();
     _inicial;
     _monto.addListener(() => setState(() {}));
+    _dolares.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _monto.dispose();
     _nota.dispose();
+    _dolares.dispose();
     super.dispose();
   }
 
-  (String, String, IconData) get _textos => switch (widget.tipo) {
+  (String, String, IconData) get _textos => _esDolares
+      ? switch (widget.tipo) {
+          TipoMovimiento.aporte => ('Comprar dólares', '¿Cuánto pagaste en pesos?', Icons.add_rounded),
+          TipoMovimiento.retiro => ('Vender dólares', '¿Cuánto recibiste en pesos?', Icons.sell_rounded),
+          TipoMovimiento.venta => ('Vender todo', '¿Cuánto recibiste en pesos?', Icons.sell_rounded),
+          TipoMovimiento.valoracion => ('Actualizar saldo', '¿A cuánto está el dólar?', Icons.trending_up_rounded),
+        }
+      : switch (widget.tipo) {
         TipoMovimiento.aporte => ('Agregar dinero', '¿Cuánto agregaste?', Icons.add_rounded),
         TipoMovimiento.retiro => ('Vender una parte', '¿Cuánto recibiste?', Icons.sell_rounded),
         TipoMovimiento.venta => ('Vender todo', '¿Cuánto recibiste?', Icons.sell_rounded),
@@ -211,12 +265,13 @@ class _MovimientoSheetState extends ConsumerState<MovimientoSheet> {
   Future<void> _enviar() async {
     if (!validarFormulario(_form)) return;
     final repo = ref.read(inversionesRepoProvider);
-    final monto = parseMonto(_monto.text);
-    return _guardar(
+    final monto = _montoEnPesos;
+    final dolares = _esDolares ? parseDecimal(_dolares.text) : null;
+    return guardarYCerrar(
       context,
       () => _editando
-          ? repo.actualizarMovimiento(widget.movimiento!.id, tipo: widget.tipo, monto: monto, fecha: _fecha, cuentaId: _valoracion ? null : _cuenta, nota: _nota.text)
-          : repo.agregarMovimiento(widget.inversion.id, tipo: widget.tipo, monto: monto, fecha: _fecha, cuentaId: _valoracion ? null : _cuenta, nota: _nota.text),
+          ? repo.actualizarMovimiento(widget.movimiento!.id, tipo: widget.tipo, monto: monto, montoUsd: dolares, fecha: _fecha, cuentaId: _valoracion ? null : _cuenta, nota: _nota.text)
+          : repo.agregarMovimiento(widget.inversion.id, tipo: widget.tipo, monto: monto, montoUsd: dolares, fecha: _fecha, cuentaId: _valoracion ? null : _cuenta, nota: _nota.text),
       aviso: _editando ? 'Movimiento corregido' : 'Movimiento registrado',
     );
   }
@@ -255,7 +310,7 @@ class _MovimientoSheetState extends ConsumerState<MovimientoSheet> {
       icon: icono,
       primaryLabel: _editando ? 'Guardar cambios' : 'Registrar',
       onPrimary: _enviar,
-      hayCambios: () => '${_monto.text}|${_nota.text}' != _inicial,
+      hayCambios: () => '${_monto.text}|${_dolares.text}|${_nota.text}' != _inicial,
       headerAction: _editando ? IconButton(tooltip: 'Eliminar movimiento', onPressed: _eliminar, icon: Icon(Icons.delete_outline_rounded, color: p.danger)) : null,
       children: [
         Form(
@@ -263,8 +318,24 @@ class _MovimientoSheetState extends ConsumerState<MovimientoSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (_esDolares) ...[
+                FieldLabel(
+                  switch (widget.tipo) {
+                    TipoMovimiento.aporte => '¿Cuántos dólares compraste?',
+                    TipoMovimiento.valoracion => '¿Cuántos dólares tienes hoy?',
+                    _ => '¿Cuántos dólares vendiste?',
+                  },
+                  required: true,
+                ),
+                DolaresField(controller: _dolares, big: true, validator: (v) => v <= 0 && !_valoracion && widget.tipo != TipoMovimiento.venta ? 'Escribe cuántos dólares' : null),
+                const VGap.md(),
+              ],
               FieldLabel(pregunta, required: true),
-              MoneyField(controller: _monto, big: true, validator: _valoracion ? null : (v) => v <= 0 ? 'Escribe el monto' : null),
+              MoneyField(controller: _monto, big: !_esDolares, validator: _valoracion && !_esDolares ? null : (v) => v <= 0 ? 'Escribe el monto' : null),
+              if (_pideDolar && _montoEnPesos > 0) ...[
+                const VGap.xs(),
+                Text('Hoy equivalen a ${cop(_montoEnPesos)}.', style: context.text.bodySmall),
+              ],
               const VGap.md(),
               DateField(value: _fecha, last: DateTime.now(), label: '¿Cuándo?', onChanged: (v) => setState(() => _fecha = v)),
               if (!_valoracion) ...[
@@ -276,7 +347,7 @@ class _MovimientoSheetState extends ConsumerState<MovimientoSheet> {
                   nula: _aporte ? 'De ninguna cuenta (ya lo tenía)' : 'A ninguna cuenta',
                   onChanged: (v) => setState(() => _cuenta = v),
                 ),
-                if (_aporte) _AvisoSaldo(cuentas: cuentas, cuentaId: _cuenta, monto: parseMonto(_monto.text)),
+                if (_aporte) AvisoSaldo(cuentas: cuentas, cuentaId: _cuenta, monto: parseMonto(_monto.text)),
               ] else ...[
                 const VGap.xs(),
                 Text('Cambia tu patrimonio, pero no mueve dinero de ninguna cuenta.', style: context.text.bodySmall),
@@ -351,7 +422,7 @@ class InversionDetalleSheet extends ConsumerWidget {
       title: i.nombre,
       subtitle: i.vendida ? '${t.etiqueta} · Vendida' : t.etiqueta,
       icon: t.icono,
-      primaryLabel: i.vendida ? null : 'Agregar dinero',
+      primaryLabel: i.vendida ? null : (i.esDolares ? 'Comprar dólares' : 'Agregar dinero'),
       onPrimary: i.vendida ? null : () => abrir(TipoMovimiento.aporte),
       headerAction: PopupMenuButton<VoidCallback>(
         tooltip: 'Más opciones',
@@ -363,12 +434,28 @@ class InversionDetalleSheet extends ConsumerWidget {
         ],
       ),
       children: [
+        if (i.esDolares && !i.vendida) ...[
+          Row(children: [
+            dato('Tienes', usd(i.usd)),
+            const HGap.sm(),
+            dato('Dólares comprados', usd(i.usdComprados)),
+          ]),
+          const VGap.md(),
+        ],
         Row(children: [
           dato(i.vendida ? 'Recibido' : 'Vale hoy', cop(i.vendida ? i.recibido : i.valor)),
           const HGap.sm(),
-          dato('Invertido', cop(i.invertido)),
+          dato(i.esDolares ? 'Pagaste' : 'Invertido', cop(i.invertido)),
         ]),
         const VGap.md(),
+        if (i.esDolares && i.dolarPromedio != null) ...[
+          Row(children: [
+            dato('Dólar promedio', cop(i.dolarPromedio!)),
+            const HGap.sm(),
+            dato('Último dólar', cop(i.tasaActual ?? 0)),
+          ]),
+          const VGap.md(),
+        ],
         Row(children: [
           dato(g >= 0 ? 'Ganancia' : 'Pérdida', copConSigno(g), color: g >= 0 ? p.success : p.danger),
           const HGap.sm(),
@@ -381,23 +468,24 @@ class InversionDetalleSheet extends ConsumerWidget {
         if (!i.vendida) ...[
           const VGap.lg(),
           Wrap(spacing: Gap.xs, runSpacing: Gap.xs, children: [
-            OutlinedButton.icon(onPressed: () => abrir(TipoMovimiento.valoracion), icon: const Icon(Icons.trending_up_rounded, size: IconSizes.md), label: const Text('Actualizar valor')),
-            OutlinedButton.icon(onPressed: () => abrir(TipoMovimiento.retiro), icon: const Icon(Icons.sell_outlined, size: IconSizes.md), label: const Text('Vender una parte')),
+            OutlinedButton.icon(onPressed: () => abrir(TipoMovimiento.valoracion), icon: const Icon(Icons.trending_up_rounded, size: IconSizes.md), label: Text(i.esDolares ? 'Actualizar saldo' : 'Actualizar valor')),
+            OutlinedButton.icon(onPressed: () => abrir(TipoMovimiento.retiro), icon: const Icon(Icons.sell_outlined, size: IconSizes.md), label: Text(i.esDolares ? 'Vender dólares' : 'Vender una parte')),
             OutlinedButton.icon(onPressed: () => abrir(TipoMovimiento.venta), icon: const Icon(Icons.sell_rounded, size: IconSizes.md), label: const Text('Vender todo')),
           ]),
         ],
         const VGap.lg(),
         const SectionHeader('Historial'),
-        for (final m in i.movimientos.reversed) _FilaMovimiento(movimiento: m, onTap: () => abrir(m.tipo, m)),
+        for (final m in i.movimientos.reversed) _FilaMovimiento(movimiento: m, dolares: i.esDolares, onTap: () => abrir(m.tipo, m)),
       ],
     );
   }
 }
 
 class _FilaMovimiento extends StatelessWidget {
-  const _FilaMovimiento({required this.movimiento, required this.onTap});
+  const _FilaMovimiento({required this.movimiento, required this.onTap, this.dolares = false});
   final MovimientoInversion movimiento;
   final VoidCallback onTap;
+  final bool dolares;
 
   @override
   Widget build(BuildContext context) {
@@ -417,9 +505,19 @@ class _FilaMovimiento extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       onTap: onTap,
       leading: IconBadge(icono, color: color, size: 40),
-      title: Text(m.tipo.etiqueta, style: context.text.titleSmall),
+      title: Text(
+        dolares
+            ? switch (m.tipo) {
+                TipoMovimiento.aporte => 'Compra de dólares',
+                TipoMovimiento.retiro => 'Venta de dólares',
+                TipoMovimiento.venta => 'Venta total',
+                TipoMovimiento.valoracion => 'Saldo actualizado',
+              }
+            : m.tipo.etiqueta,
+        style: context.text.titleSmall,
+      ),
       subtitle: Text(
-        ['${fechaCorta(m.fecha)} ${parseYmd(m.fecha).year}', ?cuenta, if (m.nota.isNotEmpty) m.nota].join(' · '),
+        ['${fechaCorta(m.fecha)} ${parseYmd(m.fecha).year}', if (dolares && m.montoUsd != null) cop(m.monto), ?cuenta, if (m.nota.isNotEmpty) m.nota].join(' · '),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: context.text.bodySmall,
@@ -429,7 +527,7 @@ class _FilaMovimiento extends StatelessWidget {
         child: FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerRight,
-          child: Text(cop(m.monto), style: context.text.titleSmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+          child: Text(dolares && m.montoUsd != null ? usd(m.montoUsd!) : cop(m.monto), style: context.text.titleSmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
         ),
       ),
     );

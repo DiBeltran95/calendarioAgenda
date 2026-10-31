@@ -37,6 +37,9 @@ abstract final class IconSizes {
 /// Colores base de la marca, independientes del módulo. Neutros cálidos
 /// "Tinta / Papel" con el violeta de Agendaservi y el coral como firma.
 abstract final class Brand {
+  /// Sello "USD" de las tarjetas de dólares.
+  static const oroDolares = Color(0xFFF5C451);
+
   static const darkBg = Color(0xFF0F1115);
   static const darkSurface = Color(0xFF171A21);
   static const darkSurfaceHigh = Color(0xFF1F232C);

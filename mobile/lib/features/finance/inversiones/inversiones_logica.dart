@@ -16,6 +16,7 @@ class TipoInversion {
 }
 
 const tiposInversion = <TipoInversion>[
+  TipoInversion('dolares', 'Dólares', Icons.attach_money_rounded, ColorPar(Color(0xFF8F5706), Color(0xFFF5C451)), 'Ej.: ARQ'),
   TipoInversion('ganado', 'Ganado', Icons.agriculture_rounded, ColorPar(Color(0xFF8F5706), Color(0xFFFBBF24)), 'Ej.: 10 novillos de levante'),
   TipoInversion('inmueble', 'Casa o terreno', Icons.home_work_rounded, ColorPar(Color(0xFF1D4ED8), Color(0xFF60A5FA)), 'Ej.: Casa en Villeta'),
   TipoInversion('vehiculo', 'Vehículo', Icons.directions_car_rounded, ColorPar(Color(0xFF0E7490), Color(0xFF22D3EE)), 'Ej.: Moto de trabajo'),
@@ -47,12 +48,13 @@ enum TipoMovimiento {
 }
 
 class MovimientoInversion {
-  const MovimientoInversion({required this.id, required this.tipo, required this.monto, required this.fecha, this.cuentaId, this.cuentaNombre, this.nota = ''});
+  const MovimientoInversion({required this.id, required this.tipo, required this.monto, this.montoUsd, required this.fecha, this.cuentaId, this.cuentaNombre, this.nota = ''});
 
   factory MovimientoInversion.fromJson(Map<String, dynamic> m) => MovimientoInversion(
         id: asInt(m['id']),
         tipo: TipoMovimiento.de(asString(m['tipo'])),
         monto: asDouble(m['monto']),
+        montoUsd: m['monto_usd'] == null ? null : asDouble(m['monto_usd']),
         fecha: asString(m['fecha']),
         cuentaId: asIntOrNull(m['cuenta_id']),
         cuentaNombre: m['cuenta_nombre'] == null ? null : asString(m['cuenta_nombre']),
@@ -62,6 +64,9 @@ class MovimientoInversion {
   final int id;
   final TipoMovimiento tipo;
   final double monto;
+
+  /// Dólares comprados, vendidos o que se tienen hoy (en inversiones en dólares).
+  final double? montoUsd;
   final String fecha;
   final int? cuentaId;
   final String? cuentaNombre;
@@ -71,6 +76,7 @@ class MovimientoInversion {
         'id': id,
         'tipo': tipo.valor,
         'monto': monto,
+        'monto_usd': montoUsd,
         'fecha': fecha,
         'cuenta_id': cuentaId,
         'cuenta_nombre': cuentaNombre,
@@ -109,8 +115,55 @@ class Inversion {
         'movimientos': [for (final m in movimientos) m.toJson()],
       };
 
+  /// Dólares comprados en ARQ y similares: se lleva la cuenta en dólares y el valor
+  /// en pesos sale del dólar más reciente que se conozca.
+  bool get esDolares => tipo == 'dolares';
+
+  /// Dólares que había al terminar el día [fecha].
+  double usdEn(String fecha) {
+    var u = 0.0;
+    for (final m in movimientos) {
+      if (m.fecha.compareTo(fecha) > 0) break;
+      final d = m.montoUsd ?? 0;
+      switch (m.tipo) {
+        case TipoMovimiento.aporte:
+          u += d;
+        case TipoMovimiento.retiro:
+          u = u > d ? u - d : 0;
+        case TipoMovimiento.venta:
+          u = 0;
+        case TipoMovimiento.valoracion:
+          u = d;
+      }
+    }
+    return u;
+  }
+
+  /// Dólares que hay hoy.
+  double get usd => usdEn('9999-12-31');
+
+  /// Pesos por dólar en la operación más reciente hasta [fecha].
+  double? tasaEn(String fecha) {
+    double? t;
+    for (final m in movimientos) {
+      if (m.fecha.compareTo(fecha) > 0) break;
+      final d = m.montoUsd ?? 0;
+      if (d > 0 && m.monto > 0) t = m.monto / d;
+    }
+    return t;
+  }
+
+  double? get tasaActual => tasaEn('9999-12-31');
+
+  /// Todos los dólares que se han comprado.
+  double get usdComprados => movimientos.where((m) => m.tipo == TipoMovimiento.aporte).fold(0, (s, m) => s + (m.montoUsd ?? 0));
+
+  /// A cuánto salió cada dólar comprado, en promedio.
+  double? get dolarPromedio => usdComprados > 0 ? invertido / usdComprados : null;
+
   /// Valor de la inversión al terminar el día [fecha] (YYYY-MM-DD).
   double valorEn(String fecha) {
+    if (esDolares) return usdEn(fecha) * (tasaEn(fecha) ?? 0);
     var v = 0.0;
     for (final m in movimientos) {
       if (m.fecha.compareTo(fecha) > 0) break;

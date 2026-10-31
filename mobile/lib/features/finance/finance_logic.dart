@@ -7,28 +7,45 @@ import '../../app/theme/tokens.dart';
 import '../../core/dates.dart';
 import '../../data/models.dart';
 import 'inversiones/inversiones_logica.dart';
+import 'prestamos/prestamos_logica.dart';
 import '../../core/money.dart';
 
 // ─────────────────────────── Tipos de cuenta ───────────────────────────
 
 class TipoCuenta {
-  const TipoCuenta(this.value, this.label, this.icon, this.colors);
+  const TipoCuenta(this.value, this.label, this.corto, this.icon, this.colors);
   final String value;
   final String label;
+
+  /// Para las tarjetas, donde no cabe la etiqueta completa.
+  final String corto;
   final IconData icon;
 
-  /// Degradado de la tarjeta visual.
+  /// Degradado de la tarjeta visual. El texto blanco pasa 4,5:1 en todo el degradado.
   final List<Color> colors;
 }
 
 const tiposCuenta = <TipoCuenta>[
-  TipoCuenta('ahorros', 'Ahorros · tarjeta débito', Icons.savings_rounded, [Color(0xFF059669), Color(0xFF065F46)]),
-  TipoCuenta('corriente', 'Corriente · tarjeta débito', Icons.account_balance_rounded, [Color(0xFF2563EB), Color(0xFF1E3A8A)]),
-  TipoCuenta('tarjeta_credito', 'Tarjeta de crédito', Icons.credit_card_rounded, [Color(0xFF7C3AED), Color(0xFF3B0764)]),
-  TipoCuenta('cdt', 'Inversión / CDT / Cajita', Icons.trending_up_rounded, [Color(0xFFD97706), Color(0xFF78350F)]),
-  TipoCuenta('efectivo', 'Efectivo', Icons.payments_rounded, [Color(0xFF0D9488), Color(0xFF134E4A)]),
-  TipoCuenta('otro', 'Otro / Ahorros especiales', Icons.work_rounded, [Color(0xFF475569), Color(0xFF1E293B)]),
+  TipoCuenta('ahorros', 'Ahorros · tarjeta débito', 'Ahorros', Icons.savings_rounded, [Color(0xFF047857), Color(0xFF064E3B)]),
+  TipoCuenta('corriente', 'Corriente · tarjeta débito', 'Corriente', Icons.account_balance_rounded, [Color(0xFF1D4ED8), Color(0xFF1E3A8A)]),
+  TipoCuenta('tarjeta_credito', 'Tarjeta de crédito', 'Crédito', Icons.credit_card_rounded, [Color(0xFF6D28D9), Color(0xFF3B0764)]),
+  TipoCuenta('cdt', 'Inversión / CDT / Cajita', 'Inversión', Icons.trending_up_rounded, [Color(0xFFA34A08), Color(0xFF78350F)]),
+  TipoCuenta('efectivo', 'Efectivo', 'Efectivo', Icons.payments_rounded, [Color(0xFF0F766E), Color(0xFF134E4A)]),
+  TipoCuenta('otro', 'Otro / Ahorros especiales', 'Otro', Icons.work_rounded, [Color(0xFF475569), Color(0xFF1E293B)]),
 ];
+
+/// Tarjeta de los dólares: oscura, para que no se confunda con una cuenta en pesos.
+const coloresDolares = [Color(0xFF263447), Color(0xFF0B1220)];
+
+/// Categorías de las ganancias que el servidor suma cada día.
+const categoriaRendimientos = 'rendimientos';
+const categoriaIntereses = 'intereses_prestamo';
+
+bool esGanancia(Transaccion t) => t.categoria == categoriaRendimientos || t.categoria == categoriaIntereses;
+
+/// Lo que una cuenta ganó sola en esos movimientos.
+double gananciaDelMes(List<Transaccion> tx, int cuentaId) =>
+    tx.where((t) => t.categoria == categoriaRendimientos && t.cuentaId == cuentaId).fold(0, (s, t) => s + t.monto);
 
 TipoCuenta tipoCuenta(String v) => tiposCuenta.firstWhere((t) => t.value == v, orElse: () => tiposCuenta.last);
 
@@ -340,12 +357,15 @@ class Consejo {
 }
 
 class ResumenFinanciero {
-  ResumenFinanciero({required this.cuentas, required this.txMes, this.inversiones = 0});
+  ResumenFinanciero({required this.cuentas, required this.txMes, this.inversiones = 0, this.porCobrar = 0});
   final List<Cuenta> cuentas;
   final List<Transaccion> txMes;
 
   /// Valor de las inversiones (ganado, casa…), que suman al patrimonio.
   final double inversiones;
+
+  /// Lo que le deben por préstamos, con sus intereses.
+  final double porCobrar;
 
   late final double ahorros = cuentas
       .where((c) => c.tipo == 'ahorros' || c.tipo == 'efectivo' || c.tipo == 'cdt' || c.tipo == 'corriente' || c.tipo == 'otro')
@@ -353,7 +373,7 @@ class ResumenFinanciero {
   late final double deudaTarjetas = cuentas.where((c) => esCredito(c.tipo)).fold(0.0, (s, c) => s + c.saldo);
   late final double cupoTarjetas = cuentas.where((c) => esCredito(c.tipo)).fold(0.0, (s, c) => s + c.limite);
   late final double usoCredito = cupoTarjetas > 0 ? deudaTarjetas / cupoTarjetas * 100 : 0;
-  late final double patrimonio = ahorros + inversiones - deudaTarjetas;
+  late final double patrimonio = ahorros + inversiones + porCobrar - deudaTarjetas;
   late final double ingresosMes = txMes.where((t) => t.tipo == 'ingreso').fold(0.0, (s, t) => s + t.monto);
   late final double gastosMes = txMes.where((t) => t.tipo == 'gasto').fold(0.0, (s, t) => s + t.monto);
   late final double balanceMes = ingresosMes - gastosMes;
@@ -445,7 +465,8 @@ String slugCategoria(String label) {
 enum MarcaDia {
   compra('Compra', Icons.shopping_bag_rounded),
   pagoCredito('Pago de crédito', Icons.credit_score_rounded),
-  inversion('Inversión', Icons.trending_up_rounded);
+  inversion('Inversión', Icons.trending_up_rounded),
+  prestamo('Préstamo', Icons.handshake_rounded);
 
   const MarcaDia(this.etiqueta, this.icono);
   final String etiqueta;
@@ -457,6 +478,7 @@ Map<String, Set<MarcaDia>> marcasDelMes({
   required List<Transaccion> transacciones,
   required List<Transferencia> transferencias,
   required List<Inversion> inversiones,
+  List<Prestamo> prestamos = const [],
   required List<Cuenta> cuentas,
   required String prefijoMes,
 }) {
@@ -485,12 +507,17 @@ Map<String, Set<MarcaDia>> marcasDelMes({
       if (m.tipo != TipoMovimiento.valoracion) marcar(m.fecha, MarcaDia.inversion);
     }
   }
+  for (final p in prestamos) {
+    for (final m in p.movimientos) {
+      marcar(m.fecha, MarcaDia.prestamo);
+    }
+  }
   return out;
 }
 
 /// Una línea del historial que mueve dinero sin ser gasto ni ingreso.
 class Traspaso {
-  const Traspaso({required this.fecha, required this.titulo, required this.detalle, required this.monto, required this.icono, this.inversionId});
+  const Traspaso({required this.fecha, required this.titulo, required this.detalle, required this.monto, required this.icono, this.inversionId, this.prestamoId});
   final String fecha;
   final String titulo;
   final String detalle;
@@ -499,12 +526,17 @@ class Traspaso {
 
   /// Si viene de una inversión, para abrir su detalle.
   final int? inversionId;
+
+  /// Si viene de un préstamo, para abrir su detalle.
+  final int? prestamoId;
 }
 
-/// Transferencias y movimientos de inversiones del mes, listos para el historial.
+/// Transferencias y movimientos de inversiones y préstamos del mes, listos para el
+/// historial.
 List<Traspaso> traspasosDelMes({
   required List<Transferencia> transferencias,
   required List<Inversion> inversiones,
+  List<Prestamo> prestamos = const [],
   required List<Cuenta> cuentas,
   required String prefijoMes,
 }) {
@@ -530,11 +562,30 @@ List<Traspaso> traspasosDelMes({
         if (m.cuentaId != null && m.tipo != TipoMovimiento.valoracion && m.fecha.startsWith(prefijoMes))
           Traspaso(
             fecha: m.fecha,
-            titulo: '${m.tipo == TipoMovimiento.aporte ? 'Inversión' : 'Venta'}: ${i.nombre}',
-            detalle: '${m.tipo == TipoMovimiento.aporte ? 'Desde' : 'A'} ${m.cuentaNombre ?? nombre(m.cuentaId)}',
+            titulo: '${i.esDolares ? (m.tipo == TipoMovimiento.aporte ? 'Compra de dólares' : 'Venta de dólares') : (m.tipo == TipoMovimiento.aporte ? 'Inversión' : 'Venta')}: ${i.nombre}',
+            detalle: [
+              if (i.esDolares && m.montoUsd != null) usd(m.montoUsd!),
+              '${m.tipo == TipoMovimiento.aporte ? 'Desde' : 'A'} ${m.cuentaNombre ?? nombre(m.cuentaId)}',
+            ].join(' · '),
             monto: m.monto,
             icono: m.tipo == TipoMovimiento.aporte ? Icons.trending_up_rounded : Icons.sell_rounded,
             inversionId: i.id,
+          ),
+    // Prestar y cobrar mueven dinero propio. Los intereses ya salen como ingreso el
+    // día en que se ganan; aquí solo se ve cuándo llegó el dinero.
+    for (final p in prestamos)
+      for (final m in p.movimientos)
+        if (m.cuentaId != null && m.fecha.startsWith(prefijoMes))
+          Traspaso(
+            fecha: m.fecha,
+            titulo: m.esDesembolso ? 'Préstamo a ${p.persona}' : 'Abono de ${p.persona}',
+            detalle: [
+              '${m.esDesembolso ? 'Desde' : 'A'} ${m.cuentaNombre ?? nombre(m.cuentaId)}',
+              if (m.interes > 0) 'incluye ${cop(m.interes)} de intereses',
+            ].join(' · '),
+            monto: m.total,
+            icono: Icons.handshake_rounded,
+            prestamoId: p.id,
           ),
   ];
 }
@@ -598,7 +649,7 @@ class BarraMes {
 }
 
 class Analitica {
-  Analitica({required this.cuentas, required this.transacciones, required this.rango, this.inversiones = const [], String? hoy}) {
+  Analitica({required this.cuentas, required this.transacciones, required this.rango, this.inversiones = const [], this.prestamos = const [], String? hoy}) {
     final today = hoy ?? hoyYmd();
     fin = today;
     inicio = sumarDiasYmd(today, -(rango.dias - 1));
@@ -611,6 +662,7 @@ class Analitica {
   /// reconstruir el patrimonio hacia atrás.
   final List<Transaccion> transacciones;
   final List<Inversion> inversiones;
+  final List<Prestamo> prestamos;
   final RangoAnalitica rango;
   late final String inicio;
   late final String fin;
@@ -624,7 +676,7 @@ class Analitica {
 
   /// Patrimonio neto día a día, reconstruido hacia atrás desde los saldos actuales.
   late final List<PuntoSerie> patrimonio = () {
-    var bal = cuentas.fold<double>(0, (s, c) => s + (esCredito(c.tipo) ? -c.saldo : c.saldo));
+    var bal = cuentas.fold<double>(0, (s, c) => s + (esCredito(c.tipo) ? -c.saldo : c.saldo)) + porCobrarTotal(prestamos);
     final porDia = <String, List<Transaccion>>{};
     for (final t in transacciones) {
       (porDia[t.fecha] ??= []).add(t);
@@ -640,6 +692,18 @@ class Analitica {
           TipoMovimiento.valoracion => 0.0,
         };
         enCuentas[m.fecha] = (enCuentas[m.fecha] ?? 0) + efecto;
+      }
+    }
+    // Prestar y cobrar con una cuenta no cambia el patrimonio (el dinero solo pasa de
+    // la cuenta a "por cobrar") y sus intereses ya van en las transacciones. Sí lo
+    // cambia lo que se movió sin cuenta, y dar un préstamo por perdido.
+    for (final pr in prestamos) {
+      for (final m in pr.movimientos.where((m) => m.cuentaId == null)) {
+        enCuentas[m.fecha] = (enCuentas[m.fecha] ?? 0) + (m.esDesembolso ? m.capital : -m.total);
+      }
+      if (pr.cerrado) {
+        final perdido = pr.capitalPendiente + pr.interesPendiente;
+        enCuentas[pr.cerradoEn!] = (enCuentas[pr.cerradoEn!] ?? 0) - perdido;
       }
     }
     final puntos = <PuntoSerie>[];

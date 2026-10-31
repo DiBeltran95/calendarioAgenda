@@ -160,6 +160,14 @@ class FinanceRepository {
 
   Future<void> eliminarCuenta(int id) => _op(() => _api.delete('/api/finanzas/cuentas/$id'));
 
+  /// Activa o cambia las ganancias automáticas de una cuenta. Con [recalcular] rehace
+  /// lo ya sumado; sin él, la tasa nueva aplica de aquí en adelante.
+  Future<void> activarGanancias(int id, {required double tasa, required String desde, bool recalcular = false}) =>
+      _op(() => _api.put('/api/finanzas/cuentas/$id/ganancias', body: {'tasa': tasa, 'desde': desde, 'recalcular': recalcular}));
+
+  /// Las apaga. Con [quitar], también borra lo que ya se había sumado al saldo.
+  Future<void> apagarGanancias(int id, {bool quitar = false}) => _op(() => _api.put('/api/finanzas/cuentas/$id/ganancias', body: {'desde': null, 'quitar': quitar}));
+
   // ─────────────── Transacciones ───────────────
 
   Future<int> crearTransaccion(TransaccionInput i) {

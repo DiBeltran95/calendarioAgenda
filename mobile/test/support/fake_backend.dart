@@ -11,8 +11,9 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:agendaservi/features/events/events_repository.dart' show fechaOcurrencia, maxOcurrencias;
-import 'package:agendaservi/features/finance/finance_logic.dart' show cobrosTarjeta, esCredito;
-import 'package:agendaservi/core/dates.dart' show sumarDiasYmd;
+import 'package:agendaservi/features/finance/finance_logic.dart' show cobrosTarjeta, esCredito, rendimientoDiarioCdt;
+import 'package:agendaservi/core/dates.dart' show hoyYmd, sumarDiasYmd;
+import 'package:agendaservi/core/money.dart' show redondear2;
 import 'package:dio/dio.dart';
 
 part 'fake_agenda.dart';
@@ -147,6 +148,7 @@ class FakeBackend implements HttpClientAdapter {
       'id': _id(),
       'tipo': b['tipo'],
       'monto': b['monto'],
+      'monto_usd': b['monto_usd'],
       'fecha': b['fecha'],
       'cuenta_id': cuenta,
       'cuenta_nombre': cuenta == null ? null : _cuenta(cuenta)['nombre'],
@@ -199,6 +201,152 @@ class FakeBackend implements HttpClientAdapter {
         return const _Resp(200, {'ok': true});
     }
     return _err(404, 'No existe');
+  }
+
+  final prestamos = <Map<String, dynamic>>[];
+
+  /// Servidor sin desplegar: la ruta de préstamos aún no existe.
+  bool sinPrestamos = false;
+
+  /// Como lib/finanzas/ganancias.ts: cada día desde interes_desde es un ingreso sin cuenta.
+  void _causarIntereses(Map<String, dynamic> p, {String? hoy}) {
+    transacciones.removeWhere((t) => t['prestamo_id'] == p['id']);
+    final tasa = (p['tasa_mensual'] as num).toDouble();
+    final desde = p['interes_desde'] as String?;
+    var causado = 0.0;
+    if (tasa > 0 && desde != null) {
+      final movs = (p['movimientos'] as List).cast<Map<String, dynamic>>();
+      final hasta = hoy ?? hoyYmd();
+      final cerrado = p['cerrado_en'] as String?;
+      final fin = cerrado != null && cerrado.compareTo(hasta) < 0 ? cerrado : hasta;
+      for (var d = sumarDiasYmd(desde, 1); d.compareTo(fin) <= 0; d = sumarDiasYmd(d, 1)) {
+        final capital = movs.where((m) => (m['fecha'] as String).compareTo(d) < 0).fold(0.0, (s, m) => s + (m['tipo'] == 'desembolso' ? (m['capital'] as num).toDouble() : -(m['capital'] as num).toDouble()));
+        final monto = redondear2(capital * tasa / 100 / 30);
+        if (monto <= 0) continue;
+        causado += monto;
+        transacciones.add({'id': _id(), 'user_id': p['user_id'], 'cuenta_id': null, 'tipo': 'ingreso', 'monto': _dec(monto), 'descripcion': 'Intereses: ${p['persona']}', 'fecha': d, 'categoria': 'intereses_prestamo', 'cuotas': 1, 'ingreso_planificado_id': null, 'prestamo_id': p['id']});
+      }
+    }
+    p['interes_causado'] = causado;
+  }
+
+  void _moverPrestamo(Map<String, dynamic> mov, int signo) {
+    final id = mov['cuenta_id'] as int?;
+    if (id == null) return;
+    final credito = esCredito(_cuenta(id)['tipo'] as String);
+    final total = (mov['capital'] as num).toDouble() + (mov['interes'] as num).toDouble();
+    _saldo(id, ((mov['tipo'] == 'desembolso') == credito ? total : -total) * signo);
+  }
+
+  Map<String, dynamic> _movPrestamo(Map<String, dynamic> b) {
+    final cuenta = b['cuenta_id'] as int?;
+    return {
+      'id': _id(),
+      'tipo': b['tipo'],
+      'capital': b['capital'] ?? 0,
+      'interes': b['interes'] ?? 0,
+      'fecha': b['fecha'],
+      'cuenta_id': cuenta,
+      'cuenta_nombre': cuenta == null ? null : _cuenta(cuenta)['nombre'],
+      'nota': b['nota'] ?? '',
+    };
+  }
+
+  _Resp _prestamos(String m, List<String> seg, Map<String, dynamic> b, int uid) {
+    if (sinPrestamos) return _err(404, 'Route ${m.toUpperCase()}:/${seg.join('/')} not found');
+    final id = seg.length > 3 ? int.tryParse(seg[3]) : null;
+    List<Map<String, dynamic>> movs(Map<String, dynamic> p) => (p['movimientos'] as List).cast<Map<String, dynamic>>();
+    Map<String, dynamic> mio() => prestamos.firstWhere((x) => x['id'] == id && x['user_id'] == uid);
+    if (seg[2] == 'prestamo-movimientos') {
+      final duena = prestamos.firstWhere((p) => p['user_id'] == uid && movs(p).any((x) => x['id'] == id));
+      final viejo = movs(duena).firstWhere((x) => x['id'] == id);
+      _moverPrestamo(viejo, -1);
+      final lugar = movs(duena).indexOf(viejo);
+      movs(duena).removeAt(lugar);
+      if (m == 'PUT') {
+        final nuevo = {..._movPrestamo(b), 'id': id};
+        _moverPrestamo(nuevo, 1);
+        movs(duena).insert(lugar, nuevo);
+      }
+      _causarIntereses(duena);
+      return const _Resp(200, {'ok': true});
+    }
+    switch (m) {
+      case 'GET':
+        return _Resp(200, prestamos.where((p) => p['user_id'] == uid).toList().reversed.toList());
+      case 'POST' when seg.length > 4 && seg[4] == 'cerrar':
+        final p = mio();
+        p['cerrado_en'] = b['cerrado'] == false ? null : b['fecha'];
+        _causarIntereses(p);
+        return const _Resp(200, {'ok': true});
+      case 'POST' when seg.length > 4:
+        final p = mio();
+        final mov = _movPrestamo(b);
+        _moverPrestamo(mov, 1);
+        movs(p).add(mov);
+        _causarIntereses(p);
+        return _Resp(200, {'id': mov['id']});
+      case 'POST':
+        final mov = _movPrestamo({...b, 'tipo': 'desembolso'});
+        _moverPrestamo(mov, 1);
+        final p = {
+          'id': _id(),
+          'user_id': uid,
+          'persona': b['persona'],
+          'tasa_mensual': b['tasa_mensual'] ?? 0,
+          'interes_desde': b['interes_desde'],
+          'vencimiento': b['vencimiento'],
+          'cerrado_en': null,
+          'nota': b['nota'] ?? '',
+          'interes_causado': 0.0,
+          'movimientos': [mov],
+        };
+        prestamos.add(p);
+        _causarIntereses(p);
+        return _Resp(200, {'id': p['id']});
+      case 'PUT':
+        final p = mio();
+        p.addAll({'persona': b['persona'], 'tasa_mensual': b['tasa_mensual'] ?? 0, 'interes_desde': b['interes_desde'], 'vencimiento': b['vencimiento'], 'nota': b['nota'] ?? ''});
+        _causarIntereses(p);
+        return const _Resp(200, {'ok': true});
+      case 'DELETE':
+        final p = mio();
+        for (final x in movs(p)) {
+          _moverPrestamo(x, -1);
+        }
+        p['tasa_mensual'] = 0;
+        _causarIntereses(p);
+        prestamos.remove(p);
+        return const _Resp(200, {'ok': true});
+    }
+    return _err(404, 'No existe');
+  }
+
+  /// Como PUT /cuentas/:id/ganancias: cada día es un ingreso en la cuenta.
+  _Resp _gananciasCuenta(int id, Map<String, dynamic> b) {
+    final c = _cuenta(id);
+    final desde = b['desde'] as String?;
+    void quitar() {
+      for (final t in transacciones.where((t) => t['ganancia_cuenta'] == id).toList()) {
+        _saldo(id, -double.parse('${t['monto']}'));
+        transacciones.remove(t);
+      }
+    }
+
+    if (desde == null ? b['quitar'] == true : b['recalcular'] == true) quitar();
+    c['ganancias_desde'] = desde;
+    c['ganancias_tasa'] = desde == null ? 0 : b['tasa'];
+    if (desde != null) {
+      final tasa = (b['tasa'] as num).toDouble();
+      for (var d = sumarDiasYmd(desde, 1); d.compareTo(hoyYmd()) <= 0; d = sumarDiasYmd(d, 1)) {
+        if (transacciones.any((t) => t['ganancia_cuenta'] == id && t['fecha'] == d)) continue;
+        final monto = redondear2(rendimientoDiarioCdt(double.parse('${c['saldo']}'), tasa));
+        if (monto <= 0) continue;
+        _saldo(id, monto);
+        transacciones.add({'id': _id(), 'user_id': c['user_id'], 'cuenta_id': id, 'tipo': 'ingreso', 'monto': _dec(monto), 'descripcion': 'Ganancia: ${c['nombre']}', 'fecha': d, 'categoria': 'rendimientos', 'cuotas': 1, 'ingreso_planificado_id': null, 'ganancia_cuenta': id});
+      }
+    }
+    return const _Resp(200, {'ok': true});
   }
 
   _Resp _capturas(String m, List<String> seg, Map<String, dynamic> q, Map<String, dynamic> b, int uid) {
@@ -358,6 +506,8 @@ class FakeBackend implements HttpClientAdapter {
     if (seg.length > 1 && seg[1] == 'agenda') return agenda._privada(m, seg, q, b, uid);
     if (seg.length > 1 && seg[1] == 'capturas') return _capturas(m, seg, q, b, uid);
     if (seg.length > 2 && seg[1] == 'finanzas' && (seg[2] == 'inversiones' || seg[2] == 'inversion-movimientos')) return _inversiones(m, seg, b, uid);
+    if (seg.length > 2 && seg[1] == 'finanzas' && (seg[2] == 'prestamos' || seg[2] == 'prestamo-movimientos')) return _prestamos(m, seg, b, uid);
+    if (m == 'PUT' && seg.length == 5 && seg[1] == 'finanzas' && seg[2] == 'cuentas' && seg[4] == 'ganancias') return _gananciasCuenta(int.parse(seg[3]), b);
     if (m == 'POST' && seg.length == 4 && seg[1] == 'events' && seg[3] == 'pagar') return _pagarEvento(idEn(2)!, b, uid);
     if (m == 'DELETE' && seg.length == 4 && seg[1] == 'events' && seg[3] == 'pago') return _quitarPago(idEn(2)!, uid);
     switch ((m, seg.length > 1 ? seg[1] : '')) {

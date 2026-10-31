@@ -12,6 +12,14 @@ String cop(num valor) {
   return n < 0 ? '-$s' : s;
 }
 
+final _dolares = NumberFormat('#,##0.00', 'es_CO');
+
+/// `US\$ 1.250,50`: los dólares sí llevan centavos.
+String usd(num valor) {
+  final s = 'US\$ ${_dolares.format(valor.abs())}';
+  return valor < 0 ? '-$s' : s;
+}
+
 /// Versión con signo explícito para flujos: `+$ 50.000` / `-$ 20.000`.
 String copConSigno(num valor) => valor >= 0 ? '+${cop(valor)}' : cop(valor);
 

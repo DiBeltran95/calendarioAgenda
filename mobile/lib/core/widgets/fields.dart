@@ -76,6 +76,64 @@ class MoneyField extends StatelessWidget {
   }
 }
 
+/// Miles y hasta dos decimales mientras se escribe ("1.250,5"). Algunos teclados
+/// solo traen punto: si queda al final se toma como la coma de los decimales.
+class _DecimalFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    var t = newValue.text;
+    if (t.endsWith('.')) t = '${t.substring(0, t.length - 1)},';
+    final coma = t.indexOf(',');
+    final entero = (coma < 0 ? t : t.substring(0, coma)).replaceAll(RegExp(r'[^0-9]'), '');
+    var decimales = coma < 0 ? null : t.substring(coma + 1).replaceAll(RegExp(r'[^0-9]'), '');
+    if (entero.isEmpty && decimales == null) return const TextEditingValue();
+    if (decimales != null && decimales.length > 2) decimales = decimales.substring(0, 2);
+    final base = miles(int.parse(entero.isEmpty ? '0' : (entero.length > 12 ? entero.substring(0, 12) : entero)));
+    final txt = decimales == null ? base : '$base,$decimales';
+    return TextEditingValue(text: txt, selection: TextSelection.collapsed(offset: txt.length));
+  }
+}
+
+double parseDecimal(String s) => double.tryParse(s.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
+
+/// "1.250,50"; vacío si es 0.
+String decimalInicial(double v) {
+  if (v <= 0) return '';
+  final entero = miles(v.truncate());
+  final centavos = ((v - v.truncate()) * 100).round();
+  return centavos == 0 ? entero : '$entero,${centavos.toString().padLeft(2, '0')}';
+}
+
+/// Campo de dinero en dólares, con centavos.
+class DolaresField extends StatelessWidget {
+  const DolaresField({super.key, required this.controller, this.validator, this.big = false});
+
+  final TextEditingController controller;
+  final String? Function(double)? validator;
+  final bool big;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final estilo = big ? context.text.headlineSmall : context.text.titleMedium;
+    return TextFormField(
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [_DecimalFormatter()],
+      style: estilo?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+      decoration: InputDecoration(
+        hintText: '0',
+        prefixIcon: Padding(
+          padding: const EdgeInsets.only(left: Gap.md, right: Gap.xs),
+          child: Text(r'US$', style: estilo?.copyWith(color: p.textSecondary)),
+        ),
+        prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+      ),
+      validator: validator == null ? null : (v) => validator!(parseDecimal(v ?? '')),
+    );
+  }
+}
+
 /// Selector de fecha que muestra "Jueves, 5 de marzo".
 class DateField extends StatelessWidget {
   const DateField({super.key, required this.value, required this.onChanged, this.first, this.last, this.label});

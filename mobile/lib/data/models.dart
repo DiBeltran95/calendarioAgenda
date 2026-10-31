@@ -201,6 +201,8 @@ class Cuenta {
     this.fechaInicio,
     this.plazoDias = 0,
     this.diaCorte,
+    this.gananciasTasa = 0,
+    this.gananciasDesde,
   });
   final int id;
   final String nombre;
@@ -216,6 +218,16 @@ class Cuenta {
   final int plazoDias;
   final int? diaCorte;
 
+  /// Tasa efectiva anual con la que el servidor suma las ganancias de cada día.
+  final double gananciasTasa;
+
+  /// Desde cuándo se calculan. null = esta cuenta no las calcula sola.
+  final String? gananciasDesde;
+
+  /// Activadas, aunque quizá todavía falte escribir la tasa.
+  bool get tieneGanancias => gananciasDesde != null;
+  bool get generaGanancias => gananciasDesde != null && gananciasTasa > 0;
+
   factory Cuenta.fromJson(Map<String, dynamic> j) => Cuenta(
         id: asInt(j['id']),
         nombre: asString(j['nombre']),
@@ -226,6 +238,8 @@ class Cuenta {
         fechaInicio: asFechaOrNull(j['fecha_inicio']),
         plazoDias: asInt(j['plazo_dias']),
         diaCorte: asIntOrNull(j['dia_corte']),
+        gananciasTasa: asDouble(j['ganancias_tasa']),
+        gananciasDesde: asFechaOrNull(j['ganancias_desde']),
       );
 
   Map<String, dynamic> toJson() => {
@@ -238,6 +252,8 @@ class Cuenta {
         'fecha_inicio': fechaInicio,
         'plazo_dias': plazoDias,
         'dia_corte': diaCorte,
+        'ganancias_tasa': gananciasTasa,
+        'ganancias_desde': gananciasDesde,
       };
 }
 

@@ -14,6 +14,7 @@ import '../../../core/widgets/fields.dart';
 import '../../../core/widgets/ui.dart';
 import '../finance_logic.dart';
 import '../inversiones/inversiones_repository.dart';
+import '../prestamos/prestamos_repository.dart';
 import '../finance_providers.dart';
 
 class ChartsTab extends ConsumerWidget {
@@ -25,7 +26,7 @@ class ChartsTab extends ConsumerWidget {
     final p = context.palette;
     final rango = ref.watch(rangoAnaliticaProvider);
     final txs = ref.watch(txAnaliticaProvider(rango)).value ?? const <Transaccion>[];
-    final a = Analitica(cuentas: cuentas, transacciones: txs, rango: rango, inversiones: ref.watch(inversionesProvider).value ?? const []);
+    final a = Analitica(cuentas: cuentas, transacciones: txs, rango: rango, inversiones: ref.watch(inversionesProvider).value ?? const [], prestamos: ref.watch(prestamosProvider).value ?? const []);
     final nombreCat = ref.watch(nombreCategoriaProvider);
     var i = 0;
 
@@ -53,7 +54,7 @@ class ChartsTab extends ConsumerWidget {
           ],
         ),
         const VGap.md(),
-        Entrance(index: i++, child: _Card(icon: Icons.show_chart_rounded, titulo: 'Patrimonio neto', sub: 'Ahorros + inversiones − tarjetas', child: _LineaPatrimonio(a: a))),
+        Entrance(index: i++, child: _Card(icon: Icons.show_chart_rounded, titulo: 'Patrimonio neto', sub: 'Ahorros + inversiones + por cobrar − tarjetas', child: _LineaPatrimonio(a: a))),
         const VGap.md(),
         if (a.porMes.isNotEmpty) ...[
           Entrance(index: i++, child: _Card(icon: Icons.bar_chart_rounded, titulo: 'Ingresos vs gastos', sub: 'Por mes', child: _BarrasMes(a: a))),

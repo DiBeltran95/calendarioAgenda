@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import Fastify, { type FastifyInstance } from 'fastify';
 import jwt from '@fastify/jwt';
 import mysql, { type Pool } from 'mysql2/promise';
-import { efectoEnCuenta, fechaValida, migrarInversiones, normalizarMovimiento, registrarInversiones } from './inversiones';
+import { ajustarDolares, efectoEnCuenta, fechaValida, migrarInversiones, normalizarMovimiento, registrarInversiones, type MovimientoEntrada } from './inversiones';
 
 describe('efecto en la cuenta', () => {
     test('invertir saca de la cuenta; en tarjeta de crédito aumenta la deuda', () => {
@@ -42,6 +42,27 @@ describe('validación', () => {
         const m = normalizarMovimiento({ tipo: 'valoracion', monto: 0, fecha: '2026-10-30', cuenta_id: 9 });
         assert.notEqual(typeof m, 'string');
         assert.equal((m as any).cuenta_id, null);
+    });
+});
+
+describe('dólares', () => {
+    const mov = (b: object) => normalizarMovimiento({ fecha: '2026-10-30', monto: 400000, ...b }) as MovimientoEntrada;
+    test('una compra en dólares necesita los dólares', () => {
+        assert.equal(typeof ajustarDolares('dolares', mov({ tipo: 'aporte' })), 'string');
+        assert.equal(typeof ajustarDolares('dolares', mov({ tipo: 'aporte', monto_usd: 0 })), 'string');
+        assert.equal((ajustarDolares('dolares', mov({ tipo: 'aporte', monto_usd: 100.5 })) as MovimientoEntrada).monto_usd, 100.5);
+    });
+    test('actualizar el saldo los necesita, aunque sean 0; vender todo no', () => {
+        assert.equal(typeof ajustarDolares('dolares', mov({ tipo: 'valoracion' })), 'string');
+        assert.notEqual(typeof ajustarDolares('dolares', mov({ tipo: 'valoracion', monto_usd: 0 })), 'string');
+        assert.notEqual(typeof ajustarDolares('dolares', mov({ tipo: 'venta' })), 'string');
+    });
+    test('en otra inversión se ignoran', () => {
+        assert.equal((ajustarDolares('ganado', mov({ tipo: 'aporte', monto_usd: 100 })) as MovimientoEntrada).monto_usd, null);
+    });
+    test('dólares inválidos', () => {
+        assert.equal(typeof normalizarMovimiento({ tipo: 'aporte', fecha: '2026-10-30', monto: 5, monto_usd: -1 }), 'string');
+        assert.equal(typeof normalizarMovimiento({ tipo: 'aporte', fecha: '2026-10-30', monto: 5, monto_usd: 'mucho' }), 'string');
     });
 });
 
@@ -173,5 +194,39 @@ describe('rutas', { skip: omitir }, () => {
         const base = await saldo(ahorros);
         assert.equal((await api('POST', '/api/finanzas/inversiones', { nombre: 'Abuso', tipo: 'otro', monto: 5, fecha: '2026-01-01', cuenta_id: ahorros }, otro)).status, 404);
         assert.equal(await saldo(ahorros), base);
+    });
+
+    test('dólares: quedan los comprados y se recuerdan al corregir', async () => {
+        const c = await app.inject({
+            method: 'POST',
+            url: '/api/finanzas/inversiones',
+            payload: { nombre: 'ARQ', tipo: 'dolares', monto: 400000, monto_usd: 100, fecha: '2026-10-01', cuenta_id: ahorros },
+            headers: { authorization: `Bearer ${token}` }
+        });
+        assert.equal(c.statusCode, 200, c.body);
+        const id = c.json().id;
+        const sinDolares = await app.inject({
+            method: 'POST',
+            url: `/api/finanzas/inversiones/${id}/movimientos`,
+            payload: { tipo: 'aporte', monto: 100, fecha: '2026-10-02' },
+            headers: { authorization: `Bearer ${token}` }
+        });
+        assert.equal(sinDolares.statusCode, 400);
+        const lista = await app.inject({ method: 'GET', url: '/api/finanzas/inversiones', headers: { authorization: `Bearer ${token}` } });
+        const arq = lista.json().find((i: any) => i.id === id);
+        assert.equal(arq.tipo, 'dolares');
+        assert.equal(arq.movimientos[0].monto_usd, 100);
+        const corrige = await app.inject({
+            method: 'PUT',
+            url: `/api/finanzas/inversion-movimientos/${arq.movimientos[0].id}`,
+            payload: { tipo: 'aporte', monto: 410000, monto_usd: 102.5, fecha: '2026-10-01', cuenta_id: ahorros },
+            headers: { authorization: `Bearer ${token}` }
+        });
+        assert.equal(corrige.statusCode, 200, corrige.body);
+        const otra = await app.inject({ method: 'GET', url: '/api/finanzas/inversiones', headers: { authorization: `Bearer ${token}` } });
+        assert.equal(otra.json().find((i: any) => i.id === id).movimientos[0].monto_usd, 102.5);
+        const aOtro = await app.inject({ method: 'PUT', url: `/api/finanzas/inversiones/${id}`, payload: { nombre: 'ARQ', tipo: 'ganado' }, headers: { authorization: `Bearer ${token}` } });
+        assert.equal(aOtro.statusCode, 400, 'no se puede convertir en otro tipo');
+        await app.inject({ method: 'DELETE', url: `/api/finanzas/inversiones/${id}`, headers: { authorization: `Bearer ${token}` } });
     });
 });

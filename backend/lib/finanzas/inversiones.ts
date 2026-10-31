@@ -10,6 +10,10 @@
 // Mover dinero a una inversión funciona como una transferencia: cambia el saldo
 // de la cuenta pero NO es un gasto del mes (el dinero sigue siendo patrimonio).
 // El valor actual y la ganancia los calcula la app a partir de los movimientos.
+//
+// Inversiones en dólares (ARQ y similares, tipo 'dolares'): además de los pesos,
+// cada movimiento guarda los dólares (monto_usd). En una compra, monto son los
+// pesos pagados; en una valoración, cuánto valen hoy esos dólares en pesos.
 
 import type { FastifyInstance } from 'fastify';
 import type { Pool, PoolConnection } from 'mysql2/promise';
@@ -46,10 +50,15 @@ const DDL = [
 
 export async function migrarInversiones(pool: Pool, log: Log) {
     for (const q of DDL) await pool.query(q);
+    try {
+        await pool.query('ALTER TABLE finanzas_inversion_movimientos ADD COLUMN monto_usd DECIMAL(14,2) NULL');
+    } catch (e: any) {
+        if (e.code !== 'ER_DUP_FIELDNAME') throw e;
+    }
     log.info('[Inversiones] Tablas listas');
 }
 
-const TIPOS = new Set(['ganado', 'inmueble', 'vehiculo', 'negocio', 'otro']);
+const TIPOS = new Set(['dolares', 'ganado', 'inmueble', 'vehiculo', 'negocio', 'otro']);
 const TIPOS_MOVIMIENTO = new Set(['aporte', 'retiro', 'venta', 'valoracion']);
 
 /** Lo máximo que cabe en el saldo de una cuenta (DECIMAL(12,2)). */
@@ -73,6 +82,7 @@ export function fechaValida(v: unknown): v is string {
 export interface MovimientoEntrada {
     tipo: string;
     monto: number;
+    monto_usd: number | null;
     fecha: string;
     cuenta_id: number | null;
     nota: string;
@@ -87,17 +97,31 @@ export function normalizarMovimiento(b: any): MovimientoEntrada | string {
     if (!Number.isFinite(monto) || monto < minimo || monto > MONTO_MAXIMO) {
         return tipo === 'valoracion' ? 'Escribe cuánto vale hoy' : 'El monto debe ser mayor a 0';
     }
+    const usd = b?.monto_usd == null || b.monto_usd === '' ? null : Number(b.monto_usd);
+    if (usd !== null && (!Number.isFinite(usd) || usd < 0 || usd > MONTO_MAXIMO)) return 'Los dólares no son válidos';
     if (!fechaValida(b?.fecha)) return 'La fecha no es válida';
     const cuenta = b?.cuenta_id == null || b.cuenta_id === '' ? null : Number(b.cuenta_id);
     if (cuenta !== null && !Number.isInteger(cuenta)) return 'La cuenta no es válida';
     return {
         tipo,
         monto: Math.round(monto * 100) / 100,
+        monto_usd: usd === null ? null : Math.round(usd * 100) / 100,
         fecha: b.fecha,
         // Actualizar el valor no mueve dinero de ninguna cuenta.
         cuenta_id: tipo === 'valoracion' ? null : cuenta,
         nota: String(b?.nota ?? '').trim().slice(0, 300)
     };
+}
+
+/**
+ * En una inversión en dólares hay que decir cuántos; en las demás no aplica.
+ * Devuelve el movimiento listo o el mensaje de error.
+ */
+export function ajustarDolares(tipoInversion: string, m: MovimientoEntrada): MovimientoEntrada | string {
+    if (tipoInversion !== 'dolares') return { ...m, monto_usd: null };
+    if (m.tipo === 'valoracion') return m.monto_usd === null ? 'Escribe cuántos dólares tienes hoy' : m;
+    if (m.tipo === 'venta') return m;
+    return !m.monto_usd ? 'Escribe cuántos dólares' : m;
 }
 
 /** Error de negocio con su código HTTP: deshace la operación y se le explica a la app. */
@@ -144,8 +168,8 @@ export function registrarInversiones(server: FastifyInstance, { pool }: { pool: 
     async function insertarMovimiento(conn: PoolConnection, userId: number, inversionId: number, m: MovimientoEntrada) {
         await moverCuenta(conn, userId, m, 1);
         const [r]: any = await conn.execute(
-            'INSERT INTO finanzas_inversion_movimientos (user_id, inversion_id, tipo, monto, fecha, cuenta_id, nota) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [userId, inversionId, m.tipo, m.monto, m.fecha, m.cuenta_id, m.nota]
+            'INSERT INTO finanzas_inversion_movimientos (user_id, inversion_id, tipo, monto, monto_usd, fecha, cuenta_id, nota) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [userId, inversionId, m.tipo, m.monto, m.monto_usd, m.fecha, m.cuenta_id, m.nota]
         );
         return r.insertId as number;
     }
@@ -166,7 +190,7 @@ export function registrarInversiones(server: FastifyInstance, { pool }: { pool: 
             [uid]
         );
         const [movimientos]: any = await pool.query(
-            `SELECT m.id, m.inversion_id, m.tipo, m.monto, DATE_FORMAT(m.fecha, '%Y-%m-%d') AS fecha, m.cuenta_id, m.nota, c.nombre AS cuenta_nombre
+            `SELECT m.id, m.inversion_id, m.tipo, m.monto, m.monto_usd, DATE_FORMAT(m.fecha, '%Y-%m-%d') AS fecha, m.cuenta_id, m.nota, c.nombre AS cuenta_nombre
              FROM finanzas_inversion_movimientos m
              LEFT JOIN finanzas_cuentas c ON c.id = m.cuenta_id AND c.user_id = m.user_id
              WHERE m.user_id = ?
@@ -175,7 +199,7 @@ export function registrarInversiones(server: FastifyInstance, { pool }: { pool: 
         );
         return inversiones.map((i: any) => ({
             ...i,
-            movimientos: movimientos.filter((m: any) => m.inversion_id === i.id).map((m: any) => ({ ...m, monto: Number(m.monto) }))
+            movimientos: movimientos.filter((m: any) => m.inversion_id === i.id).map((m: any) => ({ ...m, monto: Number(m.monto), monto_usd: m.monto_usd === null ? null : Number(m.monto_usd) }))
         }));
     });
 
@@ -183,7 +207,9 @@ export function registrarInversiones(server: FastifyInstance, { pool }: { pool: 
     server.post('/api/finanzas/inversiones', auth, async (req: any, reply) => {
         const datos = datosInversion(req.body);
         if (typeof datos === 'string') return reply.status(400).send({ message: datos });
-        const aporte = normalizarMovimiento({ ...req.body, tipo: 'aporte' });
+        const normalizado = normalizarMovimiento({ ...req.body, tipo: 'aporte' });
+        if (typeof normalizado === 'string') return reply.status(400).send({ message: normalizado });
+        const aporte = ajustarDolares(datos.tipo, normalizado);
         if (typeof aporte === 'string') return reply.status(400).send({ message: aporte });
         return atomico(reply, async (conn) => {
             const [r]: any = await conn.execute('INSERT INTO finanzas_inversiones (user_id, nombre, tipo, nota) VALUES (?, ?, ?, ?)', [req.user.id, datos.nombre, datos.tipo, datos.nota]);
@@ -195,6 +221,9 @@ export function registrarInversiones(server: FastifyInstance, { pool }: { pool: 
     server.put('/api/finanzas/inversiones/:id', auth, async (req: any, reply) => {
         const datos = datosInversion(req.body);
         if (typeof datos === 'string') return reply.status(400).send({ message: datos });
+        // Sus movimientos están en otra moneda: no se puede convertir en otro tipo.
+        const [actual]: any = await pool.execute('SELECT tipo FROM finanzas_inversiones WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+        if (actual.length && (actual[0].tipo === 'dolares') !== (datos.tipo === 'dolares')) return reply.status(400).send({ message: 'Una inversión en dólares no se puede cambiar a otro tipo' });
         const [r]: any = await pool.execute('UPDATE finanzas_inversiones SET nombre = ?, tipo = ?, nota = ? WHERE id = ? AND user_id = ?', [datos.nombre, datos.tipo, datos.nota, req.params.id, req.user.id]);
         if (!r.affectedRows) return reply.status(404).send({ message: 'Inversión no encontrada' });
         return { ok: true };
@@ -213,27 +242,35 @@ export function registrarInversiones(server: FastifyInstance, { pool }: { pool: 
     });
 
     server.post('/api/finanzas/inversiones/:id/movimientos', auth, async (req: any, reply) => {
-        const m = normalizarMovimiento(req.body);
-        if (typeof m === 'string') return reply.status(400).send({ message: m });
+        const normalizado = normalizarMovimiento(req.body);
+        if (typeof normalizado === 'string') return reply.status(400).send({ message: normalizado });
         const uid = req.user.id;
         return atomico(reply, async (conn) => {
-            const [inv]: any = await conn.execute('SELECT id FROM finanzas_inversiones WHERE id = ? AND user_id = ?', [req.params.id, uid]);
+            const [inv]: any = await conn.execute('SELECT id, tipo FROM finanzas_inversiones WHERE id = ? AND user_id = ?', [req.params.id, uid]);
             if (!inv.length) throw new ErrorRuta(404, 'Inversión no encontrada');
+            const m = ajustarDolares(inv[0].tipo, normalizado);
+            if (typeof m === 'string') throw new ErrorRuta(400, m);
             return { id: await insertarMovimiento(conn, uid, inv[0].id, m) };
         });
     });
 
     // Corregir: se revierte lo anterior y se aplica lo nuevo, en una sola operación.
     server.put('/api/finanzas/inversion-movimientos/:id', auth, async (req: any, reply) => {
-        const m = normalizarMovimiento(req.body);
-        if (typeof m === 'string') return reply.status(400).send({ message: m });
+        const normalizado = normalizarMovimiento(req.body);
+        if (typeof normalizado === 'string') return reply.status(400).send({ message: normalizado });
         const uid = req.user.id;
         return atomico(reply, async (conn) => {
-            const [filas]: any = await conn.execute('SELECT tipo, monto, cuenta_id FROM finanzas_inversion_movimientos WHERE id = ? AND user_id = ?', [req.params.id, uid]);
+            const [filas]: any = await conn.execute(
+                `SELECT m.tipo, m.monto, m.cuenta_id, i.tipo AS tipo_inversion FROM finanzas_inversion_movimientos m
+                 JOIN finanzas_inversiones i ON i.id = m.inversion_id WHERE m.id = ? AND m.user_id = ?`,
+                [req.params.id, uid]
+            );
             if (!filas.length) throw new ErrorRuta(404, 'Movimiento no encontrado');
+            const m = ajustarDolares(filas[0].tipo_inversion, normalizado);
+            if (typeof m === 'string') throw new ErrorRuta(400, m);
             await moverCuenta(conn, uid, { ...filas[0], monto: Number(filas[0].monto) }, -1);
             await moverCuenta(conn, uid, m, 1);
-            await conn.execute('UPDATE finanzas_inversion_movimientos SET tipo = ?, monto = ?, fecha = ?, cuenta_id = ?, nota = ? WHERE id = ? AND user_id = ?', [m.tipo, m.monto, m.fecha, m.cuenta_id, m.nota, req.params.id, uid]);
+            await conn.execute('UPDATE finanzas_inversion_movimientos SET tipo = ?, monto = ?, monto_usd = ?, fecha = ?, cuenta_id = ?, nota = ? WHERE id = ? AND user_id = ?', [m.tipo, m.monto, m.monto_usd, m.fecha, m.cuenta_id, m.nota, req.params.id, uid]);
             return { ok: true };
         });
     });

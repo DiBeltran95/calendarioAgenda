@@ -14,6 +14,8 @@ import { registrarTiempoReal } from './lib/tiempoReal';
 import { migrarCapturas, registrarCapturas } from './lib/finanzas/capturas';
 import { migrarInversiones, registrarInversiones } from './lib/finanzas/inversiones';
 import { migrarPagosEventos, registrarPagosEventos } from './lib/finanzas/pagosEventos';
+import { migrarPrestamos, registrarPrestamos } from './lib/finanzas/prestamos';
+import { iniciarGanancias, intentarPonerAlDia, migrarGanancias, quitarGananciasDeCuenta, registrarGanancias } from './lib/finanzas/ganancias';
 
 dotenv.config();
 
@@ -341,6 +343,8 @@ registrarTiempoReal(server);
 registrarCapturas(server, { pool });
 registrarInversiones(server, { pool });
 registrarPagosEventos(server, { pool });
+registrarPrestamos(server, { pool });
+registrarGanancias(server, { pool });
 
 // --- AGENDAMIENTO DE CITAS (lib/agenda) ---
 registrarAgenda(server, {
@@ -376,6 +380,7 @@ server.get('/api/dashboard/bootstrap', { preValidation: [(server as any).authent
     const conn = await pool.getConnection();
     try {
         const userId = request.user.id;
+        await intentarPonerAlDia(pool, userId, server.log as any);
 
         // Asegura categorías por defecto antes de consultarlas
         await ensureDefaultCategories(conn, userId);
@@ -429,6 +434,7 @@ server.get('/api/dashboard/month', { preValidation: [(server as any).authenticat
     const conn = await pool.getConnection();
     try {
         const userId = request.user.id;
+        await intentarPonerAlDia(pool, userId, server.log as any);
         const q = request.query as any;
         const now = new Date();
         const mes = q.mes !== undefined ? Number(q.mes) : now.getMonth() + 1;
@@ -1306,6 +1312,7 @@ server.delete('/api/cumpleanos/:id', { preValidation: [(server as any).authentic
 server.get('/api/finanzas/cuentas', { preValidation: [(server as any).authenticate] }, async (request: any, reply: any) => {
     try {
         const userId = request.user.id;
+        await intentarPonerAlDia(pool, userId, server.log as any);
         const [rows] = await pool.execute('SELECT * FROM finanzas_cuentas WHERE user_id = ? ORDER BY nombre ASC', [userId]);
         return reply.send(rows);
     } catch (err) {
@@ -1381,6 +1388,7 @@ server.delete('/api/finanzas/cuentas/:id', { preValidation: [(server as any).aut
     try {
         const userId = request.user.id;
         const { id } = request.params;
+        await quitarGananciasDeCuenta(pool, userId, Number(id));
         const [result]: any = await pool.execute('DELETE FROM finanzas_cuentas WHERE id = ? AND user_id = ?', [id, userId]);
         if (result.affectedRows === 0) {
             return reply.status(404).send({ message: 'Cuenta no encontrada' });
@@ -2578,6 +2586,9 @@ async function runMigrations() {
     await migrarCapturas(pool, server.log);
     await migrarInversiones(pool, server.log);
     await migrarPagosEventos(pool, server.log);
+    await migrarPrestamos(pool, server.log);
+    await migrarGanancias(pool, server.log);
+    iniciarGanancias(pool, server.log);
 
     // Índices compuestos (user_id, fecha) para que las consultas por mes sean
     // casi instantáneas aun con mucho histórico. Se crean sólo si no existen.
