@@ -169,8 +169,9 @@ void main() {
       await t.tap(find.text('Citas').last);
       await esperar(t);
       expect(find.text('Tu página para agendar'), findsOneWidget);
-      await verEn(t, find.text('María Fernanda Rodríguez'));
-      await t.tap(find.text('María Fernanda Rodríguez'));
+      // Antes de las 7:00 también sale arriba como la próxima cita: se busca la de la lista.
+      await verEn(t, find.text('María Fernanda Rodríguez').last);
+      await t.tap(find.text('María Fernanda Rodríguez').last);
       await esperar(t);
       expect(find.text('Escribir por WhatsApp', skipOffstage: false), findsNothing); // tooltip, no texto
       expect(find.byTooltip('Escribir por WhatsApp'), findsOneWidget);
