@@ -70,9 +70,6 @@ Future<void> _sembrar(FakeBackend backend) async {
     }
   }
   await fi.crearTransaccion(TransaccionInput(tipo: 'ingreso', monto: 4500000, descripcion: 'Salario', fecha: sumarDiasYmd(hoy, -30), cuentaId: ah));
-  for (final i in [7, 21]) {
-    await ev.crear(EventoInput(titulo: 'Clase de inglés', fecha: sumarDiasYmd(hoy, -i), hora: '18:30', categoria: 'reunion'));
-  }
   final inv = c.read(inversionesRepoProvider);
   c.listen(inversionesProvider, (_, _) {});
   await c.read(inversionesProvider.future);

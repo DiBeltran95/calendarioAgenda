@@ -69,6 +69,9 @@ void main() {
         tx('Rendimientos Nu', f, categoria: 'rendimientos', tipo: 'ingreso'),
         tx('Intereses de Ana', f, categoria: 'intereses_prestamo', tipo: 'ingreso'),
         tx('Rendimiento diario CDT: Nu (ID: 5)', f, categoria: 'ahorro', tipo: 'ingreso'),
+        tx('Ganancia: Nu', f, categoria: 'rendimientos', tipo: 'ingreso'),
+        tx('Rendimientos Nu', f, categoria: 'otros', tipo: 'ingreso'),
+        tx('Intereses del CDT', f, categoria: 'ahorro', tipo: 'ingreso'),
         tx('Cobro: Salario', f, tipo: 'ingreso'),
         tx('Abono de deuda: Cuota 1/3: Celular', f, tipo: 'ingreso'),
         tx('Sueldo', f, tipo: 'ingreso', plan: 4),
@@ -81,19 +84,42 @@ void main() {
     expect(r, isEmpty);
   });
 
-  test('en eventos no cuenta las series ni los cobros de tarjeta', () {
-    final fechas = ['2026-10-29', '2026-10-30'];
-    final r = calcular(e: [
-      for (final f in fechas) ...[
-        ev('Pastilla', f, frecuencia: 'diaria'),
-        ev('Hija de serie', f, padre: 9),
-        ev('Cobro tarjeta: Celular', f, tarjeta: 3, transaccion: 8),
-        ev('Cumpleaños de Ana', f, categoria: 'cumpleanos'),
-        ev('Clase de inglés', f, hora: '18:30'),
-      ],
+  test('un gasto llamado intereses sí se sugiere', () {
+    final r = calcular(t: [for (final f in ['2026-10-29', '2026-10-30']) tx('Intereses tarjeta', f)]);
+    expect(r.single.titulo, 'Intereses tarjeta');
+  });
+
+  test('no sugiere eventos', () {
+    final r = calcular(e: [for (final f in ['2026-10-29', '2026-10-30']) ev('Clase de inglés', f, hora: '18:30')]);
+    expect(r, isEmpty);
+  });
+
+  test('primero los gastos, aunque un ingreso se repita más', () {
+    final r = calcular(t: [
+      for (var i = 20; i < 30; i++) tx('Trabajo', '2026-10-$i', tipo: 'ingreso'),
+      for (final f in ['2026-09-01', '2026-09-02']) tx('Tinto', f),
     ]);
-    expect(r.single.titulo, 'Clase de inglés');
-    expect((r.single.esEvento, r.single.hora), (true, '18:30'));
+    expect(r.map((f) => f.titulo), ['Tinto', 'Trabajo']);
+  });
+
+  test('un ingreso ocupa un solo puesto cuando hay gastos de sobra', () {
+    final r = calcular(t: [
+      for (var i = 0; i < 9; i++)
+        for (final f in ['2026-10-29', '2026-10-30']) tx('Cosa $i', f),
+      for (var i = 0; i < 3; i++)
+        for (final f in ['2026-10-29', '2026-10-30']) tx('Venta $i', f, tipo: 'ingreso'),
+    ]);
+    expect(r.map((f) => f.clase), [...List.filled(limiteFrecuentes - 1, ClaseFrecuente.gasto), ClaseFrecuente.ingreso]);
+  });
+
+  test('con pocos gastos, los ingresos llenan el espacio', () {
+    final r = calcular(t: [
+      for (final f in ['2026-10-29', '2026-10-30']) tx('Tinto', f),
+      for (var i = 0; i < 9; i++)
+        for (final f in ['2026-10-29', '2026-10-30']) tx('Venta $i', f, tipo: 'ingreso'),
+    ]);
+    expect(r, hasLength(limiteFrecuentes));
+    expect(r.first.titulo, 'Tinto');
   });
 
   test('respeta el límite', () {
@@ -106,8 +132,8 @@ void main() {
   });
 
   test('se guarda y se recupera igual', () {
-    const f = Frecuente(clase: ClaseFrecuente.evento, titulo: 'Clase', veces: 3, categoria: 'reunion', monto: 5000, hora: '18:30', tipoEvento: 'gasto');
+    const f = Frecuente(clase: ClaseFrecuente.ingreso, titulo: 'Clase', veces: 3, categoria: 'otros', monto: 5000, cuentaId: 2, cuotas: 3);
     final g = Frecuente.fromJson(f.toJson());
-    expect((g.clase, g.titulo, g.veces, g.categoria, g.monto, g.hora, g.tipoEvento), (f.clase, f.titulo, f.veces, f.categoria, f.monto, f.hora, f.tipoEvento));
+    expect((g.clase, g.titulo, g.veces, g.categoria, g.monto, g.cuentaId, g.cuotas), (f.clase, f.titulo, f.veces, f.categoria, f.monto, f.cuentaId, f.cuotas));
   });
 }

@@ -15,9 +15,6 @@ import '../../core/widgets/fields.dart';
 import '../../core/widgets/sheets.dart';
 import '../../core/widgets/ui.dart';
 import '../../data/models.dart';
-import '../events/event_categories.dart';
-import '../events/events_repository.dart';
-import '../events/widgets/event_form_sheet.dart';
 import '../finance/finance_logic.dart';
 import '../finance/finance_providers.dart';
 import '../finance/finance_repository.dart';
@@ -30,7 +27,7 @@ import 'voz.dart';
 
 Future<void> abrirCaptura(BuildContext context, {bool escuchar = false}) => showAppSheet(context, (_) => CapturaSheet(escuchar: escuchar));
 
-/// Registrar algo escribiéndolo o diciéndolo como se le contaría a alguien.
+/// Registrar un gasto o un ingreso escribiéndolo o diciéndolo como se le contaría a alguien.
 class CapturaSheet extends ConsumerStatefulWidget {
   const CapturaSheet({super.key, this.escuchar = false});
 
@@ -52,9 +49,9 @@ class _CapturaSheetState extends ConsumerState<CapturaSheet> {
   Frecuente? _elegido;
   String _fecha = hoyYmd();
 
-  static const _ejemplos = ['almuerzo 25 mil', 'me pagaron 2 millones', 'cita con Ana mañana 3pm', 'cumpleaños de mamá 12 de marzo'];
+  static const _ejemplos = ['almuerzo 25 mil', 'taxi 15 mil', 'mercado 120 mil', 'me pagaron 2 millones'];
 
-  Interpretacion? get _resultado => interpretarFrase(_texto.text, DateTime.now());
+  MovimientoCapturado? get _resultado => interpretarFrase(_texto.text, DateTime.now());
 
   @override
   void initState() {
@@ -94,7 +91,7 @@ class _CapturaSheetState extends ConsumerState<CapturaSheet> {
   /// Sin el módulo activo tampoco se sugiere lo suyo.
   List<Frecuente> _visibles(List<Frecuente> lista) {
     final activos = ref.read(modulosActivosProvider);
-    return lista.where((f) => activos.contains(f.esEvento ? AppModule.eventos : AppModule.finanzas)).toList();
+    return activos.contains(AppModule.finanzas) ? lista : const [];
   }
 
   void _elegir(Frecuente f) {
@@ -112,25 +109,11 @@ class _CapturaSheetState extends ConsumerState<CapturaSheet> {
   Cuenta? _cuentaDe(Frecuente f) => (ref.read(cuentasProvider).value ?? const <Cuenta>[]).where((c) => c.id == f.cuentaId).firstOrNull;
 
   bool get _puedeGuardar {
-    final f = _elegido;
-    if (f == null) return _resultado != null;
-    return (f.esEvento && f.tipoEvento == 'ninguno') || parseMonto(_monto.text) > 0;
+    return _elegido == null ? _resultado != null : parseMonto(_monto.text) > 0;
   }
 
   Future<String> _guardarElegido(Frecuente f) async {
     final monto = parseMonto(_monto.text);
-    if (f.esEvento) {
-      final conDinero = f.tipoEvento != 'ninguno';
-      await ref.read(eventsRepoProvider).crear(EventoInput(
-            titulo: f.titulo,
-            fecha: _fecha,
-            hora: f.hora,
-            categoria: f.categoria,
-            costo: conDinero ? monto : 0,
-            tipoTransaccion: f.tipoEvento,
-          ));
-      return 'Evento guardado: ${f.titulo}';
-    }
     final ingreso = f.clase == ClaseFrecuente.ingreso;
     final cuenta = _cuentaDe(f);
     final esTarjeta = cuenta != null && esCredito(cuenta.tipo) && !ingreso;
@@ -147,31 +130,15 @@ class _CapturaSheetState extends ConsumerState<CapturaSheet> {
     return '${ingreso ? 'Ingreso' : 'Gasto'} guardado: ${cop(monto)}';
   }
 
-  Future<String> _guardarFrase(Interpretacion r) async {
-    switch (r) {
-      case MovimientoCapturado m:
-        await ref.read(financeRepoProvider).crearTransaccion(TransaccionInput(
-              tipo: m.ingreso ? 'ingreso' : 'gasto',
-              monto: m.monto,
-              descripcion: m.descripcion,
-              fecha: m.fecha,
-              categoria: _categoriaDe(m),
-            ));
-        return '${m.ingreso ? 'Ingreso' : 'Gasto'} guardado: ${cop(m.monto)}';
-      case EventoCapturado e:
-        await ref.read(eventsRepoProvider).crear(EventoInput(
-              titulo: e.titulo,
-              fecha: e.fecha,
-              hora: e.hora,
-              categoria: e.categoria,
-              costo: e.monto ?? 0,
-              tipoTransaccion: e.monto == null ? 'ninguno' : 'gasto',
-            ));
-        return 'Evento guardado: ${e.titulo}';
-      case CumpleCapturado c:
-        await ref.read(eventsRepoProvider).crearCumple(CumpleInput(nombre: c.nombre, fecha: c.fecha));
-        return 'Cumpleaños guardado: ${c.nombre}';
-    }
+  Future<String> _guardarFrase(MovimientoCapturado m) async {
+    await ref.read(financeRepoProvider).crearTransaccion(TransaccionInput(
+          tipo: m.ingreso ? 'ingreso' : 'gasto',
+          monto: m.monto,
+          descripcion: m.descripcion,
+          fecha: m.fecha,
+          categoria: _categoriaDe(m),
+        ));
+    return '${m.ingreso ? 'Ingreso' : 'Gasto'} guardado: ${cop(m.monto)}';
   }
 
   Future<void> _alternarVoz() async {
@@ -233,21 +200,10 @@ class _CapturaSheetState extends ConsumerState<CapturaSheet> {
     final cuenta = f == null ? null : _cuentaDe(f);
     Navigator.pop(context);
     if (f != null) {
-      if (f.esEvento) {
-        abrirFormularioEvento(padre, fecha: _fecha, categoriaInicial: f.categoria, tituloInicial: f.titulo, horaInicial: f.hora, montoInicial: f.tipoEvento == 'ninguno' ? null : monto);
-      } else {
-        abrirTransaccion(padre, fecha: _fecha, tipo: f.clase == ClaseFrecuente.ingreso ? 'ingreso' : 'gasto', monto: monto, descripcion: f.titulo, categoria: f.categoria, cuentaId: cuenta?.id);
-      }
+      abrirTransaccion(padre, fecha: _fecha, tipo: f.clase == ClaseFrecuente.ingreso ? 'ingreso' : 'gasto', monto: monto, descripcion: f.titulo, categoria: f.categoria, cuentaId: cuenta?.id);
       return;
     }
-    switch (r!) {
-      case MovimientoCapturado m:
-        abrirTransaccion(padre, fecha: m.fecha, tipo: m.ingreso ? 'ingreso' : 'gasto', monto: m.monto, descripcion: m.descripcion, categoria: _categoriaDe(m));
-      case EventoCapturado e:
-        abrirFormularioEvento(padre, fecha: e.fecha, categoriaInicial: e.categoria, tituloInicial: e.titulo, horaInicial: e.hora, montoInicial: e.monto);
-      case CumpleCapturado c:
-        abrirFormularioEvento(padre, fecha: c.fecha, categoriaInicial: 'cumpleanos', tituloInicial: c.nombre);
-    }
+    abrirTransaccion(padre, fecha: r!.fecha, tipo: r.ingreso ? 'ingreso' : 'gasto', monto: r.monto, descripcion: r.descripcion, categoria: _categoriaDe(r));
   }
 
   @override
@@ -258,11 +214,11 @@ class _CapturaSheetState extends ConsumerState<CapturaSheet> {
     final frecuentes = ref.watch(frecuentesProvider);
     ref.watch(modulosActivosProvider);
     final lista = _visibles(frecuentes.value ?? const []);
-    final escrito = normalizarRegistro(_texto.text);
+    final escrito = normalizarRegistro(r?.descripcion ?? _texto.text);
     final parecidos = escrito.length < 2 ? const <Frecuente>[] : lista.where((x) => normalizarRegistro(x.titulo).contains(escrito)).take(3).toList();
     return SheetScaffold(
       title: 'Registrar rápido',
-      subtitle: f == null ? 'Escríbelo o dilo como se lo contarías a alguien' : 'Revisa y guarda',
+      subtitle: f == null ? 'Escribe o di un gasto o un ingreso' : 'Revisa y guarda',
       icon: Icons.bolt_rounded,
       primaryLabel: 'Guardar',
       onPrimary: _puedeGuardar ? _guardar : null,
@@ -283,6 +239,7 @@ class _CapturaSheetState extends ConsumerState<CapturaSheet> {
             },
             decoration: InputDecoration(
               hintText: _escuchando ? 'Te escucho…' : 'Ej.: almuerzo 25 mil',
+              helperText: r == null && !_escuchando && _texto.text.trim().isNotEmpty ? 'Falta el monto. Por ejemplo: taxi 15 mil' : null,
               suffixIcon: Semantics(
                 liveRegion: true,
                 child: IconButton(
@@ -307,19 +264,21 @@ class _CapturaSheetState extends ConsumerState<CapturaSheet> {
                   alQuitar: () => setState(() => _elegido = null),
                 )
               : r != null
-                  ? _VistaPrevia(key: ValueKey(r.runtimeType), resultado: r, categoria: r is MovimientoCapturado ? _categoriaDe(r) : null)
+                  ? _VistaPrevia(key: const ValueKey('vista'), resultado: r, categoria: _categoriaDe(r))
                   : frecuentes.isLoading && !frecuentes.hasValue
                       ? const _FrecuentesCargando(key: ValueKey('cargando'))
-                      : lista.isNotEmpty
-                          ? _ListaFrecuentes(key: const ValueKey('frecuentes'), titulo: 'Lo que más registras', subtitulo: 'Toca uno para repetirlo', lista: lista, alElegir: _elegir)
-                          : Wrap(
-                              key: const ValueKey('ejemplos'),
-                              spacing: Gap.xs,
-                              runSpacing: Gap.xs,
-                              children: [
-                                for (final e in _ejemplos) ActionChip(label: Text(e), onPressed: () => _fijar(e)),
-                              ],
-                            ),
+                      : parecidos.isNotEmpty
+                          ? _ListaFrecuentes(key: const ValueKey('parecidos'), titulo: '¿Es uno de estos?', lista: parecidos, alElegir: _elegir)
+                          : lista.isNotEmpty
+                              ? _ListaFrecuentes(key: const ValueKey('frecuentes'), titulo: 'Lo que más registras', subtitulo: 'Toca uno para repetirlo', lista: lista, alElegir: _elegir)
+                              : Wrap(
+                                  key: const ValueKey('ejemplos'),
+                                  spacing: Gap.xs,
+                                  runSpacing: Gap.xs,
+                                  children: [
+                                    for (final e in _ejemplos) ActionChip(label: Text(e), onPressed: () => _fijar(e)),
+                                  ],
+                                ),
         ),
         if (f == null && r != null && parecidos.isNotEmpty) ...[
           const VGap.md(),
@@ -341,12 +300,7 @@ class _FrecuentesCargando extends StatelessWidget {
 }
 
 ({IconData icono, Color color, String categoria}) _aspecto(BuildContext context, Frecuente f, List<CategoriaFinanzas> categorias) {
-  final p = context.palette;
-  if (f.esEvento) {
-    final c = categoriaEvento(f.categoria);
-    return (icono: c.icon, color: c.colorDe(context), categoria: c.label);
-  }
-  if (f.clase == ClaseFrecuente.ingreso) return (icono: Icons.north_east_rounded, color: p.success, categoria: 'Ingreso');
+  if (f.clase == ClaseFrecuente.ingreso) return (icono: Icons.north_east_rounded, color: context.palette.success, categoria: 'Ingreso');
   final c = categorias.where((x) => x.valor == f.categoria).firstOrNull;
   return (icono: iconoPorNombre(c?.icono), color: colorCategoria(context, f.categoria), categoria: c?.label ?? 'Otros');
 }
@@ -383,11 +337,7 @@ class _FilaFrecuente extends StatelessWidget {
     final f = frecuente;
     final a = _aspecto(context, f, categorias);
     final ingreso = f.clase == ClaseFrecuente.ingreso;
-    final detalle = [
-      a.categoria,
-      if (f.esEvento && f.hora != null) hora12(f.hora),
-      '${f.veces} veces',
-    ].join(' · ');
+    final detalle = '${a.categoria} · ${f.veces} veces';
     final valor = f.monto > 0 ? '${ingreso ? '+' : ''}${cop(f.monto)}' : null;
     return Pressable(
       onTap: () => alElegir(f),
@@ -432,14 +382,12 @@ class _FrecuenteElegido extends ConsumerWidget {
     final f = frecuente;
     final a = _aspecto(context, f, ref.watch(categoriasFinProvider).value ?? const []);
     final hoy = hoyYmd();
-    // Un gasto suele ser de ayer; un evento, de mañana.
-    final vecino = sumarDiasYmd(hoy, f.esEvento ? 1 : -1);
-    final otra = fecha != hoy && fecha != vecino;
+    final ayer = sumarDiasYmd(hoy, -1);
+    final otra = fecha != hoy && fecha != ayer;
     final tarjeta = cuenta != null && esCredito(cuenta!.tipo);
     final detalle = [
       a.categoria,
-      if (f.esEvento) f.hora == null ? 'Todo el día' : hora12(f.hora),
-      if (!f.esEvento) cuenta?.nombre ?? 'Sin cuenta',
+      cuenta?.nombre ?? 'Sin cuenta',
       if (tarjeta && f.clase == ClaseFrecuente.gasto && f.cuotas > 1) '${f.cuotas} cuotas',
     ].join(' · ');
 
@@ -465,14 +413,12 @@ class _FrecuenteElegido extends ConsumerWidget {
           ),
           TextButton(onPressed: alQuitar, child: const Text('Cambiar')),
         ]),
-        if (!f.esEvento || f.tipoEvento != 'ninguno') ...[
-          const VGap.md(),
-          MoneyField(controller: monto, label: 'Monto', big: true),
-        ],
+        const VGap.md(),
+        MoneyField(controller: monto, label: 'Monto', big: true),
         const VGap.sm(),
         Wrap(spacing: Gap.xs, runSpacing: Gap.xs, children: [
           dia('Hoy', fecha == hoy, () => alCambiarFecha(hoy)),
-          dia(f.esEvento ? 'Mañana' : 'Ayer', fecha == vecino, () => alCambiarFecha(vecino)),
+          dia('Ayer', fecha == ayer, () => alCambiarFecha(ayer)),
           dia(otra ? fechaConDia(fecha) : 'Otro día', otra, () async {
             final d = await showDatePicker(context: context, initialDate: parseYmd(fecha), firstDate: DateTime(2000), lastDate: DateTime(2100), locale: const Locale('es', 'CO'));
             if (d != null) alCambiarFecha(ymd(d));
@@ -486,34 +432,23 @@ class _FrecuenteElegido extends ConsumerWidget {
 /// Lo que la app entendió, antes de guardarlo.
 class _VistaPrevia extends ConsumerWidget {
   const _VistaPrevia({super.key, required this.resultado, this.categoria});
-  final Interpretacion resultado;
+  final MovimientoCapturado resultado;
   final String? categoria;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final categorias = ref.watch(categoriasFinProvider).value ?? const [];
-    final (IconData icono, Color color, String tipo, String titulo, String detalle) = switch (resultado) {
-      MovimientoCapturado m => (
-          m.ingreso ? Icons.north_east_rounded : Icons.south_east_rounded,
-          m.ingreso ? p.success : p.danger,
-          m.ingreso ? 'Ingreso' : 'Gasto',
-          cop(m.monto),
-          [
-            m.descripcion,
-            if (!m.ingreso) categorias.where((c) => c.valor == categoria).firstOrNull?.label ?? 'Otros',
-            fechaRelativa(m.fecha),
-          ].join(' · '),
-        ),
-      EventoCapturado e => (
-          categoriaEvento(e.categoria).icon,
-          categoriaEvento(e.categoria).colorDe(context),
-          'Evento',
-          e.titulo,
-          [fechaRelativa(e.fecha), e.hora == null ? 'Todo el día' : hora12(e.hora), if (e.monto != null) cop(e.monto!)].join(' · '),
-        ),
-      CumpleCapturado c => (Icons.cake_rounded, categoriaEvento('cumpleanos').colorDe(context), 'Cumpleaños', c.nombre, fechaConDia(c.fecha)),
-    };
+    final m = resultado;
+    final icono = m.ingreso ? Icons.north_east_rounded : Icons.south_east_rounded;
+    final color = m.ingreso ? p.success : p.danger;
+    final tipo = m.ingreso ? 'Ingreso' : 'Gasto';
+    final titulo = cop(m.monto);
+    final detalle = [
+      m.descripcion,
+      if (!m.ingreso) categorias.where((c) => c.valor == categoria).firstOrNull?.label ?? 'Otros',
+      fechaRelativa(m.fecha),
+    ].join(' · ');
     return Semantics(
       liveRegion: true,
       label: 'Se guardará como $tipo: $titulo. $detalle',

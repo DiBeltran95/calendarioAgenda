@@ -168,7 +168,7 @@ void main() {
 
     testWidgets(timeout: const Timeout(Duration(minutes: 2)), 'escribir un gasto: vista previa y guardar', (t) async {
       final (backend, _) = await abrir(t);
-      await t.tap(find.text('Escribe o di lo que quieras registrar…'));
+      await t.tap(find.text('Escribe o di un gasto o ingreso…'));
       await esperar(t);
       expect(find.text('Registrar rápido'), findsOneWidget);
 
@@ -186,35 +186,49 @@ void main() {
       await salir(t);
     });
 
-    testWidgets(timeout: const Timeout(Duration(minutes: 2)), 'un evento dicho en voz alta queda en el calendario', (t) async {
+    testWidgets(timeout: const Timeout(Duration(minutes: 2)), 'un gasto dicho en voz alta queda registrado', (t) async {
       final voz = VozFalsa();
       final (backend, _) = await abrir(t, voz: voz);
       await t.tap(find.byTooltip('Dictar'));
       await esperar(t);
-      voz.alTexto!('cita con Ana mañana 3pm');
+      voz.alTexto!('taxi 15 mil');
       await esperar(t, 4);
-      expect(find.text('Evento'), findsOneWidget);
-      expect(find.text('Cita con Ana'), findsOneWidget);
+      expect(find.text('Gasto'), findsOneWidget);
       voz.alTerminar!();
       await esperar(t, 2);
 
       await t.tap(find.text('Guardar'));
       await esperar(t);
-      final e = backend.eventos.single;
-      expect((e['titulo'], e['fecha'], '${e['hora']}'.substring(0, 5)), ('Cita con Ana', sumarDiasYmd(hoyYmd(), 1), '15:00'));
+      final tx = backend.transacciones.single;
+      expect((tx['descripcion'], tx['tipo'], double.parse('${tx['monto']}')), ('Taxi', 'gasto', 15000.0));
+      await salir(t);
+    });
+
+    testWidgets(timeout: const Timeout(Duration(minutes: 2)), 'lo que no dice cuánto fue pide el monto y no se guarda', (t) async {
+      final (backend, _) = await abrir(t);
+      await t.tap(find.text('Escribe o di un gasto o ingreso…'));
+      await esperar(t);
+      await t.enterText(find.byType(TextField).last, 'cita con Ana mañana 3pm');
+      await esperar(t, 4);
+      expect(find.text('Falta el monto. Por ejemplo: taxi 15 mil'), findsOneWidget);
+      await t.tap(find.text('Guardar'));
+      await esperar(t, 4);
+      expect(find.text('Registrar rápido'), findsOneWidget);
+      expect(backend.eventos, isEmpty);
+      expect(backend.transacciones, isEmpty);
       await salir(t);
     });
 
     testWidgets(timeout: const Timeout(Duration(minutes: 2)), '"Editar" pasa lo entendido al formulario completo', (t) async {
       await abrir(t);
-      await t.tap(find.text('Escribe o di lo que quieras registrar…'));
+      await t.tap(find.text('Escribe o di un gasto o ingreso…'));
       await esperar(t);
-      await t.enterText(find.byType(TextField).last, 'dentista mañana a las 10');
+      await t.enterText(find.byType(TextField).last, 'taxi 15 mil');
       await esperar(t, 4);
       await t.tap(find.text('Editar'));
       await esperar(t);
       expect(find.text('Registrar rápido'), findsNothing);
-      expect(find.widgetWithText(TextFormField, 'Dentista'), findsOneWidget);
+      expect(find.widgetWithText(TextFormField, 'Taxi'), findsOneWidget);
       await salir(t);
     });
 
@@ -243,11 +257,11 @@ void main() {
     testWidgets(timeout: const Timeout(Duration(minutes: 2)), 'lo más registrado sale abajo y se repite con su cuenta, categoría y monto', (t) async {
       final (backend, _) = await conHistorial(t);
       final antes = backend.transacciones.length;
-      await t.tap(find.text('Escribe o di lo que quieras registrar…'));
+      await t.tap(find.text('Escribe o di un gasto o ingreso…'));
       await esperar(t, 8);
       expect(find.text('Lo que más registras'), findsOneWidget);
       expect(find.text('Almuerzo'), findsOneWidget);
-      expect(find.text('Clase de inglés'), findsOneWidget);
+      expect(find.text('Clase de inglés'), findsNothing, reason: 'aquí solo van gastos e ingresos');
       expect(find.text('almuerzo 25 mil'), findsNothing);
       // Sin teclado encima, para que la lista se vea.
       expect(t.testTextInput.isVisible, isFalse);
@@ -269,30 +283,13 @@ void main() {
       await salir(t);
     });
 
-    testWidgets(timeout: const Timeout(Duration(minutes: 2)), 'un evento frecuente conserva su hora y se puede agendar para mañana', (t) async {
-      final (backend, _) = await conHistorial(t);
-      await t.tap(find.text('Escribe o di lo que quieras registrar…'));
-      await esperar(t, 8);
-      await t.tap(find.text('Clase de inglés'));
-      await esperar(t, 6);
-      expect(find.widgetWithText(TextFormField, 'Monto'), findsNothing);
-      await t.tap(find.text('Mañana'));
-      await esperar(t, 2);
-      await t.tap(find.text('Guardar'));
-      await esperar(t);
-      final e = backend.eventos.last;
-      expect((e['titulo'], e['fecha'], '${e['hora']}'.substring(0, 5)), ('Clase de inglés', sumarDiasYmd(hoyYmd(), 1), '18:30'));
-      await salir(t);
-    });
-
     testWidgets(timeout: const Timeout(Duration(minutes: 2)), 'al escribir propone lo que coincide, y se puede volver a la lista', (t) async {
       await conHistorial(t);
-      await t.tap(find.text('Escribe o di lo que quieras registrar…'));
+      await t.tap(find.text('Escribe o di un gasto o ingreso…'));
       await esperar(t, 8);
       await t.enterText(find.byType(TextField).last, 'alm');
       await esperar(t, 4);
       expect(find.text('¿Es uno de estos?'), findsOneWidget);
-      expect(find.text('Clase de inglés'), findsNothing);
       await t.tap(find.text('Almuerzo'));
       await esperar(t, 6);
       expect(find.text('Revisa y guarda'), findsOneWidget);
@@ -304,7 +301,7 @@ void main() {
 
     testWidgets(timeout: const Timeout(Duration(minutes: 2)), 'sin historial muestra los ejemplos y abre el teclado', (t) async {
       await abrir(t);
-      await t.tap(find.text('Escribe o di lo que quieras registrar…'));
+      await t.tap(find.text('Escribe o di un gasto o ingreso…'));
       await esperar(t, 8);
       expect(find.text('Lo que más registras'), findsNothing);
       expect(find.text('almuerzo 25 mil'), findsOneWidget);
@@ -316,17 +313,17 @@ void main() {
       final (_, c) = await conHistorial(t);
       await t.runAsync(() => c.read(ajustesRepoProvider).setModulos({AppModule.eventos}));
       await esperar(t, 6);
-      await t.tap(find.text('Escribe o di lo que quieras registrar…'));
+      c.read(routerProvider).go('/capturar');
       await esperar(t, 8);
+      expect(find.text('Registrar rápido'), findsOneWidget);
       expect(find.text('Almuerzo'), findsNothing);
-      expect(find.text('Clase de inglés'), findsOneWidget);
       await salir(t);
     });
 
     testWidgets(timeout: const Timeout(Duration(minutes: 2)), 'si el servidor no responde, la captura sigue funcionando', (t) async {
       final (backend, _) = await conHistorial(t);
       backend.caido = true;
-      await t.tap(find.text('Escribe o di lo que quieras registrar…'));
+      await t.tap(find.text('Escribe o di un gasto o ingreso…'));
       await esperar(t, 8);
       expect(find.text('Registrar rápido'), findsOneWidget);
       expect(find.text('almuerzo 25 mil'), findsOneWidget);

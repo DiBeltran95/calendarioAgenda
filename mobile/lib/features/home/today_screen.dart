@@ -102,8 +102,10 @@ class TodayScreen extends ConsumerWidget {
                       children: [
                         _Cabecera(usuario: usuario),
                         const _AvisoPermiso(),
-                        const _BarraCaptura(),
-                        const VGap.sm(),
+                        if (conFinanzas) ...[
+                          const _BarraCaptura(),
+                          const VGap.sm(),
+                        ],
                         Entrance(index: i++, child: _Acciones(conAgenda: conAgenda, conFinanzas: conFinanzas, conCiclo: conCiclo, conCitas: conCitas)),
                         const VGap.md(),
                         if (fallo) ...[
@@ -603,7 +605,7 @@ class _BarraCaptura extends StatelessWidget {
         Expanded(
           child: Pressable(
             onTap: () => abrirCaptura(context),
-            semanticLabel: 'Registrar algo rápido escribiéndolo',
+            semanticLabel: 'Registrar un gasto o un ingreso escribiéndolo',
             scale: 0.99,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(Gap.md, Gap.md, Gap.xs, Gap.md),
@@ -611,7 +613,7 @@ class _BarraCaptura extends StatelessWidget {
                 Icon(Icons.bolt_rounded, color: p.accent, size: IconSizes.md),
                 const HGap.sm(),
                 Expanded(
-                  child: Text('Escribe o di lo que quieras registrar…', maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodyMedium?.copyWith(color: p.textSecondary)),
+                  child: Text('Escribe o di un gasto o ingreso…', maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodyMedium?.copyWith(color: p.textSecondary)),
                 ),
               ]),
             ),

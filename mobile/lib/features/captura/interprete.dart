@@ -1,13 +1,8 @@
-/// Convierte una frase en español colombiano en un registro de la app:
-/// "almuerzo 25 mil", "me pagaron 2 millones", "cita con Ana mañana 3pm",
-/// "cumpleaños de mamá 12 de marzo". No usa red ni servicios externos.
+/// Convierte una frase en español colombiano en un gasto o un ingreso:
+/// "almuerzo 25 mil", "me pagaron 2 millones". No usa red ni servicios externos.
 library;
 
-sealed class Interpretacion {
-  const Interpretacion();
-}
-
-class MovimientoCapturado extends Interpretacion {
+class MovimientoCapturado {
   const MovimientoCapturado({required this.ingreso, required this.monto, required this.descripcion, required this.fecha});
   final bool ingreso;
   final double monto;
@@ -15,87 +10,29 @@ class MovimientoCapturado extends Interpretacion {
   final String fecha;
 }
 
-class EventoCapturado extends Interpretacion {
-  const EventoCapturado({required this.titulo, required this.fecha, this.hora, required this.categoria, this.monto});
-  final String titulo;
-  final String fecha;
-
-  /// HH:mm, o null si es de todo el día.
-  final String? hora;
-  final String categoria;
-  final double? monto;
-}
-
-class CumpleCapturado extends Interpretacion {
-  const CumpleCapturado({required this.nombre, required this.fecha});
-  final String nombre;
-  final String fecha;
-}
-
-/// Interpreta [frase] a partir del instante [ahora]. Devuelve null si no hay
-/// nada que registrar.
-Interpretacion? interpretarFrase(String frase, DateTime ahora) {
+/// Interpreta [frase] a partir del instante [ahora]. Devuelve null si no dice
+/// cuánto fue.
+MovimientoCapturado? interpretarFrase(String frase, DateTime ahora) {
   final t = _Texto(frase);
   if (t.vacio) return null;
-  final hora = _extraerHora(t);
+  // La hora no se guarda: se quita para que no quede en la descripción.
+  _extraerHora(t);
   final fecha = _extraerFecha(t, ahora);
   final monto = _extraerMonto(t);
+  if (monto == null) return null;
   final hoy = DateTime(ahora.year, ahora.month, ahora.day);
-
-  // Cumpleaños.
-  if (RegExp(r'\bcumple(anos)?\b').hasMatch(t.norm) && fecha != null) {
-    final nombre = t.limpio(quitarAlInicio: _inicioEvento)
-        .replaceFirst(RegExp(r'^(el\s+)?cumple(años|anos)?(\s+de)?\s*', caseSensitive: false), '')
-        .trim();
-    if (nombre.isNotEmpty) return CumpleCapturado(nombre: _capital(nombre), fecha: _ymd(fecha.dia(hoy, futuro: true)));
-  }
-
-  // Dinero sin hora: es un movimiento.
-  if (monto != null && hora == null) {
-    final ingreso = _palabrasIngreso.hasMatch(t.norm);
-    final desc = ingreso ? t.limpio() : t.limpio(quitarAlInicio: _inicioGasto);
-    return MovimientoCapturado(
-      ingreso: ingreso,
-      monto: monto,
-      descripcion: desc.isEmpty ? (ingreso ? 'Ingreso' : 'Gasto') : _capital(desc),
-      fecha: _ymd(fecha?.dia(hoy, futuro: false) ?? hoy),
-    );
-  }
-
-  final titulo = t.limpio(quitarAlInicio: _inicioEvento);
-  if (titulo.isEmpty) return null;
-  return EventoCapturado(
-    titulo: _capital(titulo),
-    fecha: _ymd(fecha?.dia(hoy, futuro: true) ?? hoy),
-    hora: hora,
-    categoria: _categoriaEvento(t.norm),
+  final ingreso = _palabrasIngreso.hasMatch(t.norm);
+  final desc = ingreso ? t.limpio() : t.limpio(quitarAlInicio: _inicioGasto);
+  return MovimientoCapturado(
+    ingreso: ingreso,
     monto: monto,
+    descripcion: desc.isEmpty ? (ingreso ? 'Ingreso' : 'Gasto') : _capital(desc),
+    fecha: _ymd(fecha?.dia(hoy) ?? hoy),
   );
 }
 
 final _palabrasIngreso = RegExp(r'\b(me pagaron|me consignaron|me transfirieron|me depositaron|me enviaron|me llego|recibi|cobre|ingreso|salario|sueldo|nomina|vendi)\b');
 final _inicioGasto = RegExp(r'^((me\s+)?(gaste|pague|compre|costo|valio|salio)|gasto|pago|compra|en|de|del|por|un|una|el|la|los|las|para|y)\b\s*', caseSensitive: false);
-final _inicioEvento = RegExp(r'^(tengo|agendar|agenda|agendame|crear|crea|nuevo|nueva|recuerdame|recordarme|recordar|evento|para|el|la|que)\b\s*', caseSensitive: false);
-
-String _categoriaEvento(String n) {
-  for (final (patron, categoria) in const [
-    (r'\b(dentista|odontolog\w*|muela)\b', 'dentista'),
-    (r'\b(doctor|doctora|medico|medica|eps|examen(es)?)\b', 'doctor'),
-    (r'\b(pastilla|medicamento|medicina)s?\b', 'medicamentos'),
-    (r'\baceite\b', 'aceite_moto'),
-    (r'\b(mecanico|mecanica|taller)\b', 'mecanica'),
-    (r'\bmoto\b', 'moto'),
-    (r'\b(carro|tecnomecanica)\b', 'carro'),
-    (r'\barriendo\b', 'arriendo'),
-    (r'\b(servicios|luz|agua|internet)\b', 'servicios'),
-    (r'\baniversario\b', 'aniversario'),
-    (r'\bmatrimonio\b', 'matrimonio'),
-    (r'\bmesiversario\b', 'mesiversario'),
-  ]) {
-    if (RegExp(patron).hasMatch(n)) return categoria;
-  }
-  return 'reunion';
-}
 
 // ─────────────────────────── Texto ───────────────────────────
 
@@ -204,8 +141,8 @@ String? _extraerHora(_Texto t) {
 const _meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const _dias = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
-/// Fecha dicha en la frase. Si no trae año, [dia] decide si se refiere a la
-/// próxima vez (un evento) o a la más reciente (un gasto ya hecho).
+/// Fecha dicha en la frase. Si no trae año, [dia] toma la vez más reciente:
+/// lo que se registra normalmente ya pasó.
 class _Fecha {
   const _Fecha.exacta(DateTime d) : _exacta = d, _mes = null, _dia = null;
   const _Fecha.sinAnio(int mes, int dia) : _exacta = null, _mes = mes, _dia = dia;
@@ -215,18 +152,14 @@ class _Fecha {
   final int? _mes;
   final int? _dia;
 
-  DateTime dia(DateTime hoy, {required bool futuro}) {
+  DateTime dia(DateTime hoy) {
     if (_exacta != null) return _exacta;
     if (_mes != null) {
       final d = DateTime(hoy.year, _mes, _dia!);
-      if (futuro && d.isBefore(hoy)) return DateTime(hoy.year + 1, _mes, _dia);
-      if (!futuro && d.isAfter(hoy)) return DateTime(hoy.year - 1, _mes, _dia);
-      return d;
+      return d.isAfter(hoy) ? DateTime(hoy.year - 1, _mes, _dia) : d;
     }
     final d = DateTime(hoy.year, hoy.month, _dia!);
-    if (futuro && d.isBefore(hoy)) return DateTime(hoy.year, hoy.month + 1, _dia);
-    if (!futuro && d.isAfter(hoy)) return DateTime(hoy.year, hoy.month - 1, _dia);
-    return d;
+    return d.isAfter(hoy) ? DateTime(hoy.year, hoy.month - 1, _dia) : d;
   }
 }
 
@@ -272,8 +205,7 @@ _Fecha? _extraerFecha(_Texto t, DateTime ahora) {
   final dia = RegExp('\\b(?:(?:el|este|proximo|el proximo) )?(${_dias.join('|')})\\b').firstMatch(t.norm);
   if (dia != null) {
     final objetivo = _dias.indexOf(dia.group(1)!) + 1;
-    final falta = (objetivo - hoy.weekday) % 7;
-    return exacta(dia, falta == 0 ? 7 : falta);
+    return exacta(dia, -((hoy.weekday - objetivo) % 7));
   }
 
   final delMes = RegExp(r'\bel (\d{1,2})(?!\d|[:.,]|\s*(mil|millon|k\b|lucas?|palos?))\b').firstMatch(t.norm);

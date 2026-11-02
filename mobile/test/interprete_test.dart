@@ -9,25 +9,11 @@ final _ahora = DateTime(2026, 10, 30, 9);
 void main() {
   void movimiento(String frase, {required double monto, bool ingreso = false, String? desc, String fecha = '2026-10-30'}) {
     test('"$frase"', () {
-      final r = interpretarFrase(frase, _ahora);
-      expect(r, isA<MovimientoCapturado>());
-      r as MovimientoCapturado;
+      final r = interpretarFrase(frase, _ahora)!;
       expect(r.monto, monto);
       expect(r.ingreso, ingreso);
       expect(r.fecha, fecha);
       if (desc != null) expect(r.descripcion, desc);
-    });
-  }
-
-  void evento(String frase, {required String titulo, String fecha = '2026-10-30', String? hora, String categoria = 'reunion'}) {
-    test('"$frase"', () {
-      final r = interpretarFrase(frase, _ahora);
-      expect(r, isA<EventoCapturado>());
-      r as EventoCapturado;
-      expect(r.titulo, titulo);
-      expect(r.fecha, fecha);
-      expect(r.hora, hora);
-      expect(r.categoria, categoria);
     });
   }
 
@@ -48,6 +34,9 @@ void main() {
     movimiento('zapatos cien mil pesos', monto: 100000, desc: 'Zapatos');
     movimiento('ayer almuerzo 25 mil', monto: 25000, desc: 'Almuerzo', fecha: '2026-10-29');
     movimiento('mercado 80 mil el 15', monto: 80000, desc: 'Mercado', fecha: '2026-10-15');
+    movimiento('el lunes almuerzo 25 mil', monto: 25000, desc: 'Almuerzo', fecha: '2026-10-26');
+    movimiento('regalo 80 mil el 12 de diciembre', monto: 80000, desc: 'Regalo', fecha: '2025-12-12');
+    movimiento('peluquería 4pm 60 mil', monto: 60000, desc: 'Peluquería');
   });
 
   group('ingresos', () {
@@ -57,45 +46,9 @@ void main() {
     movimiento('vendí la bicicleta en 400 mil', monto: 400000, ingreso: true);
   });
 
-  group('eventos', () {
-    evento('cita con Ana mañana 3pm', titulo: 'Cita con Ana', fecha: '2026-10-31', hora: '15:00');
-    evento('reunión con el contador el lunes a las 10', titulo: 'Reunión con el contador', fecha: '2026-11-02', hora: '10:00');
-    evento('dentista el 12 de noviembre a las 3 de la tarde', titulo: 'Dentista', fecha: '2026-11-12', hora: '15:00', categoria: 'dentista');
-    evento('doctor mañana a las 8:30 am', titulo: 'Doctor', fecha: '2026-10-31', hora: '08:30', categoria: 'doctor');
-    evento('llamar a mamá a las 7 de la noche', titulo: 'Llamar a mamá', hora: '19:00');
-    evento('cambiar aceite pasado mañana', titulo: 'Cambiar aceite', fecha: '2026-11-01', categoria: 'aceite_moto');
-    evento('tengo taller de la moto el viernes', titulo: 'Taller de la moto', fecha: '2026-11-06', categoria: 'mecanica');
-    evento('almuerzo con Laura a las 12:30 p. m.', titulo: 'Almuerzo con Laura', hora: '12:30');
-    evento('reunión 15/11 a las 16:00', titulo: 'Reunión', fecha: '2026-11-15', hora: '16:00');
-    evento('pagar el SOAT el 5', titulo: 'Pagar el SOAT', fecha: '2026-11-05');
-    evento('entrevista en enero 20 de enero', titulo: 'Entrevista en enero', fecha: '2027-01-20');
-    evento('comprar leche', titulo: 'Comprar leche');
-    evento('Reunión a mediodía', titulo: 'Reunión', hora: '12:00');
-    test('evento con hora y costo', () {
-      final r = interpretarFrase('peluquería mañana 4pm 60 mil', _ahora)! as EventoCapturado;
-      expect((r.titulo, r.hora, r.monto), ('Peluquería', '16:00', 60000.0));
-    });
-  });
-
-  group('cumpleaños', () {
-    test('"cumpleaños de mamá 12 de marzo"', () {
-      final r = interpretarFrase('cumpleaños de mamá 12 de marzo', _ahora)! as CumpleCapturado;
-      expect((r.nombre, r.fecha), ('Mamá', '2027-03-12'));
-    });
-    test('sin fecha no se confunde: queda como evento', () {
-      expect(interpretarFrase('cumpleaños de mamá', _ahora), isA<EventoCapturado>());
-    });
-  });
-
-  group('sin nada que registrar', () {
-    for (final f in ['', '   ', 'el', 'mañana']) {
+  group('sin monto no hay nada que registrar', () {
+    for (final f in ['', '   ', 'el', 'mañana', 'almuerzo', 'cita con Ana mañana 3pm', 'cumpleaños de mamá 12 de marzo', 'reunión con 5 personas']) {
       test('"$f"', () => expect(interpretarFrase(f, _ahora), isNull));
     }
-  });
-
-  test('números pequeños no son dinero', () {
-    final r = interpretarFrase('reunión con 5 personas', _ahora)! as EventoCapturado;
-    expect(r.monto, isNull);
-    expect(r.titulo, 'Reunión con 5 personas');
   });
 }
