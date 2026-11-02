@@ -68,6 +68,7 @@ void main() {
       for (final f in fechas) ...[
         tx('Rendimientos Nu', f, categoria: 'rendimientos', tipo: 'ingreso'),
         tx('Intereses de Ana', f, categoria: 'intereses_prestamo', tipo: 'ingreso'),
+        tx('Rendimiento diario CDT: Nu (ID: 5)', f, categoria: 'ahorro', tipo: 'ingreso'),
         tx('Cobro: Salario', f, tipo: 'ingreso'),
         tx('Abono de deuda: Cuota 1/3: Celular', f, tipo: 'ingreso'),
         tx('Sueldo', f, tipo: 'ingreso', plan: 4),

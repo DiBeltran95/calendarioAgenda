@@ -677,7 +677,7 @@ async function checkCDTYields() {
 
         // Fetch active CDTs for verified users
         const [cdts] = await connection.query(
-            `SELECT c.id, c.user_id, c.nombre, c.saldo, c.interes_tasa, DATE_FORMAT(c.fecha_inicio, '%Y-%m-%d') as fecha_inicio, c.plazo_dias, u.whatsapp 
+            `SELECT c.id, c.user_id, c.nombre, c.saldo, c.interes_tasa, DATE_FORMAT(c.fecha_inicio, '%Y-%m-%d') as fecha_inicio, c.plazo_dias, c.ganancias_desde, u.whatsapp
              FROM finanzas_cuentas c 
              JOIN usuarios u ON c.user_id = u.id 
              WHERE c.tipo = 'cdt' AND c.interes_tasa > 0 AND c.fecha_inicio <= ? AND u.verificado = true`,
@@ -700,8 +700,9 @@ async function checkCDTYields() {
                     isExpired = (todayStr > endStr);
                 }
 
-                // If not expired (or if it's a Cajita with no maturity), calculate and register interest yield for today
-                if (!isExpired) {
+                // If not expired (or if it's a Cajita with no maturity), calculate and register interest yield for today.
+                // Con ganancias_desde, las suma el backend (lib/finanzas/ganancias.ts): pagarlo aquí sería doble.
+                if (!isExpired && !c.ganancias_desde) {
                     const txDesc = `Rendimiento diario CDT: ${c.nombre} (ID: ${c.id})`;
                     // Check if yield transaction already exists for today
                     const [existing] = await connection.query(

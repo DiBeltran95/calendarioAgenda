@@ -41,11 +41,12 @@ const coloresDolares = [Color(0xFF263447), Color(0xFF0B1220)];
 const categoriaRendimientos = 'rendimientos';
 const categoriaIntereses = 'intereses_prestamo';
 
-bool esGanancia(Transaccion t) => t.categoria == categoriaRendimientos || t.categoria == categoriaIntereses;
+/// Los CDT que aún paga el servicio de avisos llegan con esta descripción y sin categoría propia.
+bool esGanancia(Transaccion t) => t.categoria == categoriaRendimientos || t.categoria == categoriaIntereses || t.descripcion.startsWith('Rendimiento diario CDT:');
 
 /// Lo que una cuenta ganó sola en esos movimientos.
 double gananciaDelMes(List<Transaccion> tx, int cuentaId) =>
-    tx.where((t) => t.categoria == categoriaRendimientos && t.cuentaId == cuentaId).fold(0, (s, t) => s + t.monto);
+    tx.where((t) => esGanancia(t) && t.cuentaId == cuentaId).fold(0, (s, t) => s + t.monto);
 
 TipoCuenta tipoCuenta(String v) => tiposCuenta.firstWhere((t) => t.value == v, orElse: () => tiposCuenta.last);
 

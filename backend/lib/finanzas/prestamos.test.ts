@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import Fastify, { type FastifyInstance } from 'fastify';
 import jwt from '@fastify/jwt';
 import mysql, { type Pool } from 'mysql2/promise';
-import { activarCuentaNu, hoyColombia, interesDiario, migrarGanancias, olvidarRevision, ponerUsuarioAlDia, quitarGananciasDeCuenta, registrarGanancias, rendimientoDiario, sumarDias } from './ganancias';
+import { activarCuentaNu, hoyColombia, interesDiario, migrarGanancias, olvidarRevision, ponerUsuarioAlDia, quitarGananciasDeCuenta, quitarRendimientosRepetidos, registrarGanancias, rendimientoDiario, sumarDias } from './ganancias';
 import { efectoPrestamo, migrarPrestamos, normalizarMovimientoPrestamo, normalizarPrestamo, registrarPrestamos } from './prestamos';
 
 describe('cuentas', () => {
@@ -346,6 +346,54 @@ describe('rutas', { skip: omitir }, () => {
             const [r]: any = await pool.query("INSERT INTO finanzas_cuentas (user_id, nombre, tipo, saldo, fecha_inicio, plazo_dias) VALUES (1, 'CDT', 'cdt', 1000000, ?, 2)", [haceDias(5)]);
             await api('PUT', `/api/finanzas/cuentas/${r.insertId}/ganancias`, { tasa: 9, desde: haceDias(5) });
             assert.equal((await ganancias(r.insertId)).length, 2);
+        });
+
+        describe('un CDT que también paga el cron', () => {
+            const cdt = async (nombre: string) =>
+                ((await pool.query("INSERT INTO finanzas_cuentas (user_id, nombre, tipo, saldo, interes_tasa, fecha_inicio) VALUES (1, ?, 'cdt', 1000000, 9, ?)", [nombre, haceDias(30)])) as any)[0].insertId as number;
+            const delCron = async (c: number, nombre: string, fecha: string, monto = 240) => {
+                await pool.query("INSERT INTO finanzas_transacciones (user_id, cuenta_id, tipo, monto, descripcion, fecha, categoria) VALUES (1, ?, 'ingreso', ?, ?, ?, 'ahorro')", [c, monto, `Rendimiento diario CDT: ${nombre} (ID: ${c})`, fecha]);
+                await pool.query('UPDATE finanzas_cuentas SET saldo = saldo + ? WHERE id = ?', [monto, c]);
+            };
+            const delCronQuedan = async (c: number) =>
+                ((await pool.query("SELECT DATE_FORMAT(fecha, '%Y-%m-%d') AS f FROM finanzas_transacciones WHERE cuenta_id = ? AND descripcion LIKE 'Rendimiento diario CDT:%' ORDER BY fecha", [c])) as any)[0].map((x: any) => x.f);
+
+            test('un día pagado por los dos queda una sola vez, y el saldo devuelve lo de más', async () => {
+                const c = await cdt('Doble');
+                await delCron(c, 'Doble', haceDias(3)); // Antes de activar: se queda.
+                await delCron(c, 'Doble', haceDias(1));
+                await delCron(c, 'Doble', hoy);
+                await api('PUT', `/api/finanzas/cuentas/${c}/ganancias`, { tasa: 9, desde: haceDias(2) });
+                const propias = await ganancias(c);
+                assert.equal(propias.length, 2);
+                const conDoble = await saldo(c);
+
+                await quitarRendimientosRepetidos(pool);
+
+                assert.deepEqual(await delCronQuedan(c), [haceDias(3)]);
+                assert.equal((await ganancias(c)).length, 2);
+                assert.equal(await saldo(c), conDoble - 480);
+                // Repetirlo no quita nada más.
+                assert.equal(await quitarRendimientosRepetidos(pool), 0);
+                assert.equal(await saldo(c), conDoble - 480);
+            });
+
+            test('no toca el rendimiento de un CDT que solo paga el cron', async () => {
+                const c = await cdt('Solo cron');
+                await delCron(c, 'Solo cron', hoy);
+                await quitarRendimientosRepetidos(pool);
+                assert.deepEqual(await delCronQuedan(c), [hoy]);
+                assert.equal(await saldo(c), 1000240);
+            });
+
+            test('apagarlas también le quita la tasa que usa el cron', async () => {
+                const c = await cdt('Apagar CDT');
+                await api('PUT', `/api/finanzas/cuentas/${c}/ganancias`, { tasa: 9, desde: haceDias(2) });
+                const tasa = async () => Number(((await pool.query('SELECT interes_tasa FROM finanzas_cuentas WHERE id = ?', [c])) as any)[0][0].interes_tasa);
+                assert.equal(await tasa(), 9, 'encendidas la conserva');
+                await api('PUT', `/api/finanzas/cuentas/${c}/ganancias`, { desde: null });
+                assert.equal(await tasa(), 0);
+            });
         });
 
         test('la cuenta Nu pedida se activa solo para esa persona', async () => {

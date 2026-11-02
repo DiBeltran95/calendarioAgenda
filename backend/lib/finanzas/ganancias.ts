@@ -242,6 +242,30 @@ export async function intentarPonerAlDia(pool: Pool, uid: number, log: Pick<Log,
     }
 }
 
+/**
+ * El cron paga por su cuenta el rendimiento de los CDT. Si un día quedó pagado por
+ * los dos, se queda la ganancia de aquí (se puede quitar y se reconoce como tal) y
+ * el saldo devuelve lo del cron. Repetirlo no quita nada más.
+ */
+export async function quitarRendimientosRepetidos(pool: Pool): Promise<number> {
+    const [filas]: any = await pool.query(
+        `SELECT t.id, t.user_id, t.cuenta_id, t.monto
+         FROM finanzas_ganancias g
+         JOIN finanzas_transacciones t ON t.user_id = g.user_id AND t.cuenta_id = g.origen_id AND t.fecha = g.fecha
+         WHERE g.origen = 'cuenta' AND t.descripcion LIKE 'Rendimiento diario CDT:%'`
+    );
+    let quitados = 0;
+    for (const f of filas) {
+        quitados += await atomica(pool, async (conn) => {
+            const [b]: any = await conn.execute('DELETE FROM finanzas_transacciones WHERE id = ?', [f.id]);
+            if (!b.affectedRows) return 0;
+            await conn.execute('UPDATE finanzas_cuentas SET saldo = saldo - ? WHERE id = ? AND user_id = ?', [f.monto, f.cuenta_id, f.user_id]);
+            return 1;
+        });
+    }
+    return quitados;
+}
+
 /** Revisa cada hora, para que todo quede al día aunque nadie abra la app. */
 export function iniciarGanancias(pool: Pool, log: Pick<Log, 'error'>) {
     const revisar = async () => {
@@ -251,6 +275,7 @@ export function iniciarGanancias(pool: Pool, log: Pick<Log, 'error'>) {
                  UNION SELECT user_id FROM finanzas_prestamos WHERE tasa_mensual > 0 AND interes_desde IS NOT NULL`
             );
             for (const f of filas) await intentarPonerAlDia(pool, f.user_id, log);
+            await quitarRendimientosRepetidos(pool);
         } catch (e) {
             log.error(e, '[Ganancias] Falló la revisión');
         }
@@ -287,6 +312,8 @@ export function registrarGanancias(server: FastifyInstance, { pool }: { pool: Po
             const borrar = desde === null ? b.quitar === true : b.recalcular === true;
             const q = borrar ? await quitarGanancias(conn, uid, 'cuenta', id) : 0;
             await conn.execute('UPDATE finanzas_cuentas SET ganancias_tasa = ?, ganancias_desde = ? WHERE id = ? AND user_id = ?', [tasa, desde, id, uid]);
+            // Apagadas de verdad: con interes_tasa el cron volvería a pagar el CDT.
+            if (desde === null) await conn.execute('UPDATE finanzas_cuentas SET interes_tasa = 0 WHERE id = ? AND user_id = ?', [id, uid]);
             await ponerCuentaAlDia(conn, uid, id, hoyColombia());
             return q;
         });

@@ -305,9 +305,12 @@ class _Metrica extends StatelessWidget {
 
 /// Lo que está ganando la cuenta, o por qué aún no.
 class _LineaGanancia extends StatelessWidget {
-  const _LineaGanancia({required this.cuenta, required this.ganadoMes});
+  const _LineaGanancia({required this.cuenta, required this.ganadoMes, this.conDiario = true});
   final Cuenta cuenta;
   final double ganadoMes;
+
+  /// La tarjeta de un CDT ya dice cuánto rinde al día: aquí solo va lo ganado.
+  final bool conDiario;
 
   @override
   Widget build(BuildContext context) {
@@ -318,17 +321,21 @@ class _LineaGanancia extends StatelessWidget {
         : c.gananciasDesde!.compareTo(hoyYmd()) >= 0
             ? 'Empieza a sumar ${c.gananciasDesde == hoyYmd() ? 'mañana' : 'después del ${fechaCorta(c.gananciasDesde!)}'}'
             : [
-                '+${_copJunto(rendimientoDiarioCdt(c.saldo, c.gananciasTasa))} al día',
-                if (ganadoMes > 0) '+${_copJunto(ganadoMes)} en $mes',
+                if (conDiario) '+${_copJunto(rendimientoDiarioCdt(c.saldo, c.gananciasTasa))} al día',
+                if (ganadoMes > 0) '+${_copJunto(ganadoMes)} ${conDiario ? '' : 'ganados '}en $mes',
               ].join(' · ');
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(
-        padding: const EdgeInsets.only(top: 1),
-        child: Icon(c.generaGanancias ? Icons.trending_up_rounded : Icons.info_outline_rounded, size: IconSizes.sm, color: _blanco),
-      ),
-      const SizedBox(width: Gap.xxs),
-      Expanded(child: Text(texto, style: context.text.labelMedium?.copyWith(color: _blanco))),
-    ]);
+    if (texto.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: Gap.xs),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(c.generaGanancias ? Icons.trending_up_rounded : Icons.info_outline_rounded, size: IconSizes.sm, color: _blanco),
+        ),
+        const SizedBox(width: Gap.xxs),
+        Expanded(child: Text(texto, style: context.text.labelMedium?.copyWith(color: _blanco))),
+      ]),
+    );
   }
 }
 
@@ -357,10 +364,7 @@ class _TarjetaSaldo extends StatelessWidget {
           Text(t.corto, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.labelSmall?.copyWith(color: _suave, letterSpacing: 0)),
           const VGap.xs(),
           _Monto(c.saldo, estilo: context.text.headlineSmall),
-          if (c.tieneGanancias) ...[
-            const VGap.xs(),
-            _LineaGanancia(cuenta: c, ganadoMes: ganadoMes),
-          ],
+          if (c.tieneGanancias) _LineaGanancia(cuenta: c, ganadoMes: ganadoMes),
         ],
       ),
     );
@@ -465,10 +469,7 @@ class _TarjetaCdt extends StatelessWidget {
               style: context.text.labelMedium?.copyWith(color: _suave),
             ),
           ],
-          if (c.tieneGanancias) ...[
-            const VGap.xs(),
-            _LineaGanancia(cuenta: c, ganadoMes: ganadoMes),
-          ],
+          if (c.tieneGanancias) _LineaGanancia(cuenta: c, ganadoMes: ganadoMes, conDiario: false),
         ],
       ),
     );

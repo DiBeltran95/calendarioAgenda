@@ -237,7 +237,7 @@ class TxTile extends ConsumerWidget {
                   Text(
                     [
                       if (!ingreso) cat?.label ?? tx.categoria,
-                      if (tx.categoria == categoriaIntereses) 'Se suma a lo que te deben' else if (tx.categoria == categoriaRendimientos) 'Ganancia del día · ${cuenta?.nombre ?? 'Sin cuenta'}' else cuenta?.nombre ?? 'Sin cuenta',
+                      if (tx.categoria == categoriaIntereses) 'Se suma a lo que te deben' else if (esGanancia(tx)) 'Ganancia del día · ${cuenta?.nombre ?? 'Sin cuenta'}' else cuenta?.nombre ?? 'Sin cuenta',
                       if (tx.cuotas > 1) '${tx.cuotas} cuotas',
                     ].join(' · '),
                     style: context.text.bodySmall,

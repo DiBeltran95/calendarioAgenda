@@ -349,6 +349,27 @@ void main() {
       await salir(t);
     });
 
+    testWidgets(timeout: const Timeout(Duration(minutes: 3)), 'la tarjeta de un CDT dice una sola vez lo que rinde al día', (t) async {
+      final backend = FakeBackend();
+      final hoy = hoyYmd();
+      await t.runAsync(() async {
+        final c = ProviderContainer(overrides: overridesDePrueba(backend: backend, db: dbEnMemoria()));
+        c.listen(cuentasProvider, (_, _) {});
+        final fi = c.read(financeRepoProvider);
+        final id = await fi.crearCuenta(CuentaInput(nombre: 'NU', tipo: 'cdt', saldo: 5000000, interesTasa: 9.3, fechaInicio: sumarDiasYmd(hoy, -30)));
+        await fi.activarGanancias(id, tasa: 9.3, desde: sumarDiasYmd(hoy, -3));
+        c.dispose();
+      });
+      await abrirCuentas(t, backend, tamano: const Size(390, 844));
+      final lista = find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down).last;
+      await t.scrollUntilVisible(find.text('Rinde al día'), 200, scrollable: lista, maxScrolls: 60);
+      await esperar(t, 4);
+      expect(find.text('Rinde al día'), findsOneWidget);
+      expect(find.textContaining(RegExp(r'^\+.* al día')), findsNothing);
+      expect(find.textContaining('ganados en'), findsOneWidget);
+      await salir(t);
+    });
+
     testWidgets(timeout: const Timeout(Duration(minutes: 3)), 'crear un préstamo con intereses desde la pantalla', (t) async {
       final backend = FakeBackend();
       await abrirCuentas(t, backend, tamano: const Size(390, 844));
