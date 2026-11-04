@@ -72,9 +72,11 @@ class PlanCiclo {
   double get porDiaDesdeManana => diasRestantes <= 1 ? 0 : math.max(0.0, libre - gastadoLibre) / (diasRestantes - 1);
 
   Ritmo get ritmo {
-    final esperado = math.max(0.0, libre) * diasTranscurridos / diasTotales;
+    // Los primeros días no se juzgan: una compra el día de pago no es ir rápido.
+    final esperado = math.max(0.0, libre) * math.min(diasTotales, math.max(diasTranscurridos, 3)) / diasTotales;
     if (gastadoLibre <= esperado) return Ritmo.bien;
-    if (esperado > 0 && gastadoLibre <= esperado * 1.15) return Ritmo.pocoRapido;
+    // Al empezar el ciclo un gasto grande pesa mucho: el margen evita alarmar de más.
+    if (esperado > 0 && gastadoLibre <= esperado * 1.3) return Ritmo.pocoRapido;
     return Ritmo.rapido;
   }
 }
@@ -119,6 +121,10 @@ List<(int, int)> mesesEntre(String inicio, String fin) {
   if (antes.isEmpty || despues.isEmpty) return (ymd(DateTime(h.year, h.month)), despues.isEmpty ? finDeMes : sumarDiasYmd(despues, -1));
   return (antes, sumarDiasYmd(despues, -1));
 }
+
+/// Categorías de cuentas que llegan cada mes, se agenden o no.
+const categoriasFijas = {'servicios', 'arriendo', 'alquiler', 'vivienda', 'administracion', 'agua', 'luz', 'energia', 'gas', 'internet', 'celular', 'seguros'};
+const _categoriasAhorro = {'ahorro', 'ahorros', 'inversion', 'inversiones'};
 
 String _clave(String s) => s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
@@ -180,6 +186,13 @@ PlanCiclo calcularPlanCiclo({
     final pendientes = pagosDeFijos[clave] ?? 0;
     if (pendientes > 0) {
       pagosDeFijos[clave] = pendientes - 1;
+      continue;
+    }
+    // Lo que se manda a ahorrar no es gasto del día a día.
+    if (_categoriasAhorro.contains(t.categoria)) continue;
+    // Agua, luz o internet son fijos aunque no estén agendados en Eventos.
+    if (categoriasFijas.contains(t.categoria)) {
+      fijosPagados += t.monto;
       continue;
     }
     if (t.fecha == hoy) {

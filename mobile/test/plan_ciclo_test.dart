@@ -106,6 +106,15 @@ void main() {
     expect((p.fijosPagados, p.fijosPendientes, p.gastadoLibre), (1200000.0, 90000.0, 50000.0));
   });
 
+  test('agua, luz e internet son fijos aunque no estén agendados; lo que se ahorra no es gasto', () {
+    final p = plan(tx: [
+      Transaccion(id: 90, tipo: 'gasto', monto: 36442, fecha: '2026-11-02', descripcion: 'Agua', categoria: 'servicios', cuentaId: 1),
+      Transaccion(id: 91, tipo: 'gasto', monto: 300000, fecha: '2026-11-02', descripcion: 'A la cajita', categoria: 'ahorro', cuentaId: 1),
+      gasto('2026-11-03', 24000, desc: 'Almuerzo'),
+    ]);
+    expect((p.fijosPagados, p.gastadoLibre), (36442.0, 24000.0));
+  });
+
   test('una compra con tarjeta no sale de lo libre; su cuota entra como fijo', () {
     final p = plan(
       eventos: [fijo('Cobro tarjeta: Celular', '2026-11-15', 300000, tarjeta: 2)],
@@ -131,6 +140,8 @@ void main() {
     expect(plan(tx: [gasto('2026-11-01', 500000)]).ritmo, Ritmo.bien);
     expect(plan(tx: [gasto('2026-11-01', 580000)]).ritmo, Ritmo.pocoRapido);
     expect(plan(tx: [gasto('2026-11-01', 700000)]).ritmo, Ritmo.rapido);
+    // El día de pago, una compra grande todavía no es ir rápido.
+    expect(plan(tx: [gasto('2026-10-30', 169124)], hoy: '2026-10-30').ritmo, Ritmo.bien);
   });
 
   test('sin sueldo planificado cuenta los ingresos registrados del mes', () {
