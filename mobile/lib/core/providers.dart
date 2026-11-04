@@ -73,6 +73,7 @@ class Preferencias {
     this.permisoPedido = false,
     this.modulos,
     this.bloqueo = false,
+    this.ahorroPct = 10,
   });
 
   final ThemeMode themeMode;
@@ -98,6 +99,9 @@ class Preferencias {
   /// Pedir Face ID, huella o código del teléfono para entrar.
   final bool bloqueo;
 
+  /// Porcentaje del sueldo que se aparta apenas llega («págate primero»).
+  final int ahorroPct;
+
   static Preferencias fromMap(Map<String, String> m) => Preferencias(
         themeMode: switch (m['tema']) {
           'light' => ThemeMode.light,
@@ -111,6 +115,7 @@ class Preferencias {
         resumenDiario: m['resumen'] != '0',
         permisoPedido: m['permiso_pedido'] == '1',
         bloqueo: m['bloqueo'] == '1',
+        ahorroPct: int.tryParse(m['ahorro_pct'] ?? '') ?? 10,
         modulos: m['modulos'] == null ? null : {for (final n in m['modulos']!.split(',')) ...AppModule.values.where((x) => x.name == n)},
       );
 }
@@ -166,6 +171,7 @@ class AjustesRepo {
   Future<void> setAviso30(bool v) => set('aviso30', v ? '1' : '0');
   Future<void> setResumenDiario(bool v) => set('resumen', v ? '1' : '0');
   Future<void> setBloqueo(bool v) => set('bloqueo', v ? '1' : '0');
+  Future<void> setAhorroPct(int v) => set('ahorro_pct', '$v');
   Future<void> marcarPermisoPedido() => set('permiso_pedido', '1');
   Future<void> setModulos(Set<AppModule> m) => set('modulos', m.where((x) => x != AppModule.inicio).map((x) => x.name).join(','));
 }

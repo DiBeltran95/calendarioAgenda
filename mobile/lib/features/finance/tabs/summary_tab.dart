@@ -10,10 +10,7 @@ import '../../../core/motion.dart';
 import '../../../core/widgets/ui.dart';
 import '../finance_logic.dart';
 import '../finance_providers.dart';
-
-const _cNecesidades = ColorPar(Color(0xFF0369A1), Color(0xFF38BDF8));
-const _cDeseos = ColorPar(Color(0xFFB83D0B), Color(0xFFFB923C));
-const _cAhorro = ColorPar(Color(0xFF047857), Color(0xFF34D399));
+import '../widgets/plan_ciclo_card.dart';
 
 class SummaryTab extends ConsumerWidget {
   const SummaryTab({super.key, required this.mes, required this.dia, required this.txMes, required this.cuentas});
@@ -27,7 +24,9 @@ class SummaryTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final resumen = ResumenFinanciero(cuentas: cuentas, txMes: txMes);
-    final regla = calcular503020(txMes);
+    final ahora = DateTime.now();
+    // El plan va de un pago al siguiente: solo tiene sentido mirando el mes actual.
+    final plan = mes.year == ahora.year && mes.month == ahora.month ? ref.watch(planCicloProvider) : null;
     final nombreCat = ref.watch(nombreCategoriaProvider);
     final consejos = resumen.consejos(nombreCat);
     var i = 0;
@@ -41,6 +40,10 @@ class SummaryTab extends ConsumerWidget {
           if (dia!.compareTo(hoyYmd()) > 0) ...[
             Entrance(index: i++, child: _ProyeccionCdt(fecha: dia!, cuentas: cuentas)),
           ],
+        ],
+        if (plan != null) ...[
+          Entrance(index: i++, child: PlanCicloCard(plan: plan)),
+          const VGap.md(),
         ],
         Entrance(
           index: i++,
@@ -68,8 +71,6 @@ class SummaryTab extends ConsumerWidget {
             ),
           ),
         ),
-        const VGap.md(),
-        Entrance(index: i++, child: _Regla503020Card(regla: regla)),
         const VGap.md(),
         SectionHeader('Consejos del experto económico', icon: Icons.support_agent_rounded),
         for (final c in consejos)
@@ -154,103 +155,6 @@ class _ProyeccionCdt extends StatelessWidget {
               ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _Regla503020Card extends StatelessWidget {
-  const _Regla503020Card({required this.regla});
-  final Regla503020 regla;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final r = regla;
-    Widget estado(Semaforo s) => Icon(
-          switch (s) { Semaforo.ok => Icons.check_circle_rounded, Semaforo.alerta => Icons.warning_amber_rounded, Semaforo.mal => Icons.error_rounded },
-          size: IconSizes.md,
-          color: switch (s) { Semaforo.ok => p.success, Semaforo.alerta => p.warning, Semaforo.mal => p.danger },
-        );
-    Widget fila(String titulo, String sub, String ideal, Color c, double pct, double val, Semaforo s) => Padding(
-          padding: const EdgeInsets.only(top: Gap.sm),
-          child: Row(
-            children: [
-              Container(width: 10, height: 10, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(3))),
-              const HGap.xs(),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(titulo, style: context.text.titleSmall),
-                    Text(sub, style: context.text.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text('${pct.toStringAsFixed(0)}% / $ideal', style: context.text.titleSmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
-                  Text(cop(val), style: context.text.bodySmall),
-                ],
-              ),
-              const HGap.xs(),
-              estado(s),
-            ],
-          ),
-        );
-
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SectionHeader('Regla 50 / 30 / 20', icon: Icons.donut_small_rounded, subtitle: '50% necesidades · 30% deseos · 20% ahorro'),
-          if (!r.hayDatos)
-            Text('Registra ingresos este mes para ver cómo se distribuye tu dinero.', style: context.text.bodyMedium?.copyWith(color: p.textSecondary))
-          else ...[
-            // Barra apilada que crece con animación.
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                height: 14,
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0, end: 1),
-                  duration: Motion.of(context, const Duration(milliseconds: 900)),
-                  curve: Motion.enter,
-                  builder: (_, t, _) {
-                    final n = (r.pctNecesidades * t).clamp(0, 100).toDouble();
-                    final d = (r.pctDeseos * t).clamp(0, 100 - n).toDouble();
-                    final a = (r.pctAhorro.clamp(0, 100) * t).clamp(0, 100 - n - d).toDouble();
-                    return Row(children: [
-                      if (n > 0) Expanded(flex: (n * 10).round().clamp(1, 1000), child: Container(color: context.par(_cNecesidades))),
-                      if (d > 0) Expanded(flex: (d * 10).round().clamp(1, 1000), child: Container(color: context.par(_cDeseos))),
-                      if (a > 0) Expanded(flex: (a * 10).round().clamp(1, 1000), child: Container(color: context.par(_cAhorro))),
-                      if (100 - n - d - a > 0.5) Expanded(flex: ((100 - n - d - a) * 10).round(), child: Container(color: p.surfaceHighest)),
-                    ]);
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              r.ahorro < 0 ? 'Estás gastando más de lo que ingresas' : 'Distribución de ${cop(r.ingresos)} en ingresos',
-              style: context.text.bodySmall?.copyWith(color: r.ahorro < 0 ? p.danger : null),
-            ),
-            fila('Necesidades', 'Vivienda, comida, servicios, salud', '50%', context.par(_cNecesidades), r.pctNecesidades, r.necesidades, r.estadoNecesidades),
-            fila('Deseos', 'Ocio, entretenimiento, antojos', '30%', context.par(_cDeseos), r.pctDeseos, r.deseos, r.estadoDeseos),
-            fila('Ahorro / deuda', 'Lo que no gastas + aportes', '20%', context.par(_cAhorro), r.pctAhorro, r.ahorro, r.estadoAhorro),
-            const VGap.sm(),
-            Container(
-              padding: const EdgeInsets.all(Gap.sm),
-              decoration: BoxDecoration(color: p.surfaceHigh, borderRadius: Radii.rMd),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Icon(Icons.tips_and_updates_rounded, size: IconSizes.md, color: p.gold),
-                const HGap.xs(),
-                Expanded(child: Text(r.diagnostico, style: context.text.bodySmall?.copyWith(color: p.text))),
-              ]),
-            ),
-          ],
-        ],
       ),
     );
   }

@@ -62,6 +62,7 @@ Future<void> _sembrar(FakeBackend backend) async {
   await fi.crearTransaccion(TransaccionInput(tipo: 'ingreso', monto: 4500000, descripcion: 'Salario', fecha: hoy, cuentaId: ah));
   await fi.crearTransaccion(TransaccionInput(tipo: 'gasto', monto: 350000, descripcion: 'Mercado', fecha: hoy, cuentaId: ah, categoria: 'comida'));
   await fi.crearTransaccion(TransaccionInput(tipo: 'gasto', monto: 900000, descripcion: 'Celular', fecha: hoy, cuentaId: tc, cuotas: 3));
+  await fi.crearPlan(descripcion: 'Salario', monto: 4500000, frecuencia: 'mensual', fechaInicio: sumarDiasYmd(hoy, -40), cuentaId: ah);
   await fi.crearMeta(const MetaInput(nombre: 'Viaje', montoObjetivo: 2000000, montoActual: 500000));
   // Lo de siempre, para la lista de "Registrar rápido".
   for (final (desc, monto, categoria, veces) in const [('Almuerzo', 25000.0, 'comida', 9), ('Tinto', 3500.0, 'comida', 7), ('Gasolina moto', 40000.0, 'transporte', 5), ('Mercado', 350000.0, 'comida', 2)]) {
@@ -184,11 +185,21 @@ void main() {
         await foto(nombre);
       }
 
+      final desplazable = find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down);
+      // Lo que se puede gastar hoy: en Resumen y en Hoy.
+      for (final (nombre, ruta, ancla) in const [('plan_ciclo', '/finanzas', 'Hasta tu próximo pago'), ('hoy_finanzas', '/hoy', 'Puedes gastar hoy')]) {
+        router.go(ruta);
+        await esperar();
+        await t.scrollUntilVisible(find.text(ancla), 200, scrollable: desplazable.last, maxScrolls: 40);
+        Scrollable.ensureVisible(t.element(find.text(ancla)), alignment: 0.1);
+        await esperar(6);
+        await foto(nombre);
+      }
+
       // Cuentas por secciones: la pantalla es larga.
       c.read(finTabProvider.notifier).set(FinTab.cuentas);
       router.go('/finanzas');
       await esperar();
-      final desplazable = find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down);
       for (final (k, ancla) in const ['Efectivo y bancos', 'Tarjetas y créditos', 'Inversiones', 'Préstamos que hiciste', 'Transferencias'].indexed) {
         await t.scrollUntilVisible(find.text(ancla), 200, scrollable: desplazable.last, maxScrolls: 40);
         await esperar(2);

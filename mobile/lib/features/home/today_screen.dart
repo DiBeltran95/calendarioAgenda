@@ -32,6 +32,8 @@ import '../events/widgets/event_form_sheet.dart';
 import '../events/widgets/event_tiles.dart';
 import '../events/widgets/pago_evento_sheet.dart';
 import '../finance/finance_logic.dart';
+import '../finance/finance_providers.dart';
+import '../finance/widgets/plan_ciclo_card.dart';
 import '../finance/inversiones/inversiones_repository.dart';
 import '../finance/prestamos/prestamos_repository.dart';
 import '../finance/pagos/pagos_repository.dart';
@@ -480,16 +482,17 @@ class _Pagos extends ConsumerWidget {
 
 // ─────────────────────────── Finanzas y ciclo ───────────────────────────
 
-class _FinanzasMini extends StatelessWidget {
+class _FinanzasMini extends ConsumerWidget {
   const _FinanzasMini({required this.cuentas, required this.tx, required this.inversiones});
   final List<Cuenta> cuentas;
   final List<Transaccion> tx;
   final double inversiones;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final r = ResumenFinanciero(cuentas: cuentas, txMes: tx, inversiones: inversiones);
+    final plan = ref.watch(planCicloProvider);
     final usoGastos = r.ingresosMes > 0 ? r.gastosMes / r.ingresosMes : (r.gastosMes > 0 ? 1.0 : 0.0);
     return AppCard(
       onTap: () => context.go('/finanzas'),
@@ -507,17 +510,25 @@ class _FinanzasMini extends StatelessWidget {
           Text('Patrimonio', style: context.text.bodySmall),
           AnimatedMoney(r.patrimonio, style: context.text.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
           const VGap.sm(),
-          Row(children: [
-            Expanded(child: _Dato('Ingresos', r.ingresosMes, p.success)),
-            Expanded(child: _Dato('Gastos', r.gastosMes, p.danger)),
-          ]),
-          const VGap.xs(),
-          ProgressBar(value: usoGastos, color: usoGastos > 1 ? p.danger : (usoGastos > 0.8 ? p.warning : p.success), height: 6),
-          const SizedBox(height: 4),
-          Text(
-            r.ingresosMes > 0 ? 'Has gastado el ${(usoGastos * 100).toStringAsFixed(0)}% de lo que ingresó' : 'Registra tus ingresos para ver tu balance',
-            style: context.text.bodySmall,
-          ),
+          if (plan != null && plan.ingresos > 0) ...[
+            _Dato('Puedes gastar hoy', plan.puedesHoy, context.legible(aspectoRitmo(context, plan).color)),
+            const VGap.xs(),
+            ProgressBar(value: plan.libre > 0 ? plan.gastadoLibre / plan.libre : 1, color: aspectoRitmo(context, plan).color, height: 6),
+            const SizedBox(height: 4),
+            Text('${aspectoRitmo(context, plan).texto} · ${faltanParaElPago(plan)}', style: context.text.bodySmall),
+          ] else ...[
+            Row(children: [
+              Expanded(child: _Dato('Ingresos', r.ingresosMes, p.success)),
+              Expanded(child: _Dato('Gastos', r.gastosMes, p.danger)),
+            ]),
+            const VGap.xs(),
+            ProgressBar(value: usoGastos, color: usoGastos > 1 ? p.danger : (usoGastos > 0.8 ? p.warning : p.success), height: 6),
+            const SizedBox(height: 4),
+            Text(
+              plan != null ? 'Agrega tu sueldo para saber cuánto puedes gastar al día' : 'Has gastado el ${(usoGastos * 100).toStringAsFixed(0)}% de lo que ingresó',
+              style: context.text.bodySmall,
+            ),
+          ],
         ],
       ),
     );

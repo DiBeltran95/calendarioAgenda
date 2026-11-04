@@ -125,6 +125,7 @@ void main() {
       expect(find.text('Hoy'), findsWidgets);
       expect(find.text('SOAT de la moto'), findsWidgets);
       expect(find.text('Registrar gasto'), findsOneWidget);
+      await verEn(t, find.text('Puedes gastar hoy'));
 
       // ── Eventos ──
       await t.tap(find.text('Eventos').last);
@@ -157,7 +158,7 @@ void main() {
         await t.tap(find.text(tab).first);
         await esperar(t);
       }
-      await verEn(t, find.text('Regla 50 / 30 / 20'));
+      await verEn(t, find.text('Hasta tu próximo pago'));
 
       // ── Ciclo ──
       await t.tap(find.text('Ciclo').last);

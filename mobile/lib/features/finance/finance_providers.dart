@@ -1,8 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/dates.dart';
+import '../../core/providers.dart';
 import '../../data/models.dart';
 import '../../data/sync.dart';
 import 'finance_logic.dart';
+import 'plan_ciclo.dart';
 
 // Vistas derivadas de las cargas del servidor (bootstrap / mes). Devuelven
 // AsyncValue para que la interfaz pueda distinguir "cargando" de "vacío".
@@ -44,6 +47,31 @@ final ocurrenciasMesProvider = Provider.autoDispose.family<List<OcurrenciaIngres
   final planes = ref.watch(planesProvider).value ?? const [];
   final verifs = ref.watch(verificacionesProvider).value ?? const [];
   return ocurrenciasMes(planes, verifs, k.$1, k.$2);
+});
+
+/// El ciclo de pago actual; null mientras llegan los meses que toca.
+final planCicloProvider = Provider.autoDispose<PlanCiclo?>((ref) {
+  final b = ref.watch(bootstrapProvider).value;
+  if (b == null) return null;
+  final hoy = hoyYmd();
+  final (inicio, fin) = cicloDePago(b.planes, hoy);
+  final transacciones = <Transaccion>[];
+  final eventos = <Evento>[];
+  for (final k in mesesEntre(inicio, fin)) {
+    final m = ref.watch(monthProvider(k)).value;
+    if (m == null) return null;
+    transacciones.addAll(m.transacciones);
+    eventos.addAll(m.eventos);
+  }
+  return calcularPlanCiclo(
+    planes: b.planes,
+    verificaciones: b.verificaciones,
+    cuentas: b.cuentas,
+    transacciones: transacciones,
+    eventos: eventos,
+    hoy: hoy,
+    ahorroPct: ref.watch(preferenciasProvider).value?.ahorroPct ?? ahorroPctPorDefecto,
+  );
 });
 
 /// Nombre legible de una categoría de finanzas.
