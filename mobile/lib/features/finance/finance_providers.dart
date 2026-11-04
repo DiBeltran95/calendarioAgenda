@@ -5,6 +5,7 @@ import '../../core/providers.dart';
 import '../../data/models.dart';
 import '../../data/sync.dart';
 import 'finance_logic.dart';
+import 'fijos_sugeridos.dart';
 import 'plan_ciclo.dart';
 
 // Vistas derivadas de las cargas del servidor (bootstrap / mes). Devuelven
@@ -71,6 +72,30 @@ final planCicloProvider = Provider.autoDispose<PlanCiclo?>((ref) {
     eventos: eventos,
     hoy: hoy,
     ahorroPct: ref.watch(preferenciasProvider).value?.ahorroPct ?? ahorroPctPorDefecto,
+  );
+});
+
+/// Pagos de cada mes que todavía no están agendados; vacío mientras cargan los meses.
+final fijosSugeridosProvider = Provider.autoDispose<List<FijoSugerido>>((ref) {
+  final b = ref.watch(bootstrapProvider).value;
+  if (b == null) return const [];
+  final ahora = DateTime.now();
+  final transacciones = <Transaccion>[];
+  final eventos = <Evento>[];
+  // Tres meses atrás para encontrarlos y el siguiente para ver si ya se agendaron.
+  for (var k = -3; k <= 1; k++) {
+    final d = DateTime(ahora.year, ahora.month + k);
+    final mes = ref.watch(monthProvider((d.year, d.month))).value;
+    if (mes == null) return const [];
+    if (k <= 0) transacciones.addAll(mes.transacciones);
+    eventos.addAll(mes.eventos);
+  }
+  return sugerirFijos(
+    transacciones: transacciones,
+    eventos: eventos,
+    cuentas: b.cuentas,
+    descartados: ref.watch(preferenciasProvider).value?.fijosDescartados ?? const {},
+    hoy: hoyYmd(),
   );
 });
 

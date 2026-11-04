@@ -126,7 +126,7 @@ List<(int, int)> mesesEntre(String inicio, String fin) {
 const categoriasFijas = {'servicios', 'arriendo', 'alquiler', 'vivienda', 'administracion', 'agua', 'luz', 'energia', 'gas', 'internet', 'celular', 'seguros'};
 const _categoriasAhorro = {'ahorro', 'ahorros', 'inversion', 'inversiones'};
 
-String _clave(String s) => s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+String claveTexto(String s) => s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
 /// [transacciones] y [eventos] deben cubrir todos los meses del ciclo.
 PlanCiclo calcularPlanCiclo({
@@ -155,7 +155,7 @@ PlanCiclo calcularPlanCiclo({
         continue;
       }
       // Quien anota el sueldo a mano en vez de confirmarlo: ese ingreso es el sueldo, no uno extra.
-      final i = sueltos.indexWhere((t) => _clave(t.descripcion) == _clave(o.plan.descripcion) || t.monto == o.plan.monto);
+      final i = sueltos.indexWhere((t) => claveTexto(t.descripcion) == claveTexto(o.plan.descripcion) || t.monto == o.plan.monto);
       sueldo += i >= 0 ? sueltos.removeAt(i).monto : o.plan.monto;
     }
   }
@@ -164,13 +164,16 @@ PlanCiclo calcularPlanCiclo({
   var fijosPagados = 0.0, fijosPendientes = 0.0;
   // Pagar un fijo con una cuenta crea un gasto con el mismo título y monto: ya está en lo fijo.
   final pagosDeFijos = <String, int>{};
+  // Un fijo agendado que se anotó como gasto sin marcarlo pagado en Eventos.
+  final pendientesPorTitulo = <String, List<double>>{};
   for (final e in eventos) {
     if (e.tipoTransaccion != 'gasto' || e.costo <= 0 || !dentro(e.fecha)) continue;
     if (e.pagado) {
       fijosPagados += e.costo;
-      if (e.tarjetaCreditoId == null) pagosDeFijos.update('${_clave(e.titulo)}|${e.costo}', (n) => n + 1, ifAbsent: () => 1);
+      if (e.tarjetaCreditoId == null) pagosDeFijos.update('${claveTexto(e.titulo)}|${e.costo}', (n) => n + 1, ifAbsent: () => 1);
     } else {
       fijosPendientes += e.costo;
+      if (e.tarjetaCreditoId == null) (pendientesPorTitulo[claveTexto(e.titulo)] ??= []).add(e.costo);
     }
   }
 
@@ -182,10 +185,16 @@ PlanCiclo calcularPlanCiclo({
       conTarjeta += t.monto;
       continue;
     }
-    final clave = '${_clave(t.descripcion)}|${t.monto}';
+    final clave = '${claveTexto(t.descripcion)}|${t.monto}';
     final pendientes = pagosDeFijos[clave] ?? 0;
     if (pendientes > 0) {
       pagosDeFijos[clave] = pendientes - 1;
+      continue;
+    }
+    final agendado = pendientesPorTitulo[claveTexto(t.descripcion)];
+    if (agendado != null && agendado.isNotEmpty) {
+      fijosPendientes -= agendado.removeAt(0);
+      fijosPagados += t.monto;
       continue;
     }
     // Lo que se manda a ahorrar no es gasto del día a día.

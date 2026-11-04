@@ -62,6 +62,7 @@ Future<void> _sembrar(FakeBackend backend) async {
   await fi.crearTransaccion(TransaccionInput(tipo: 'ingreso', monto: 4500000, descripcion: 'Salario', fecha: hoy, cuentaId: ah));
   await fi.crearTransaccion(TransaccionInput(tipo: 'gasto', monto: 350000, descripcion: 'Mercado', fecha: hoy, cuentaId: ah, categoria: 'comida'));
   await fi.crearTransaccion(TransaccionInput(tipo: 'gasto', monto: 900000, descripcion: 'Celular', fecha: hoy, cuentaId: tc, cuotas: 3));
+  await fi.crearTransaccion(TransaccionInput(tipo: 'gasto', monto: 89900, descripcion: 'Internet Claro', fecha: sumarDiasYmd(hoy, -3), cuentaId: ah, categoria: 'servicios'));
   await fi.crearPlan(descripcion: 'Salario', monto: 4500000, frecuencia: 'mensual', fechaInicio: sumarDiasYmd(hoy, -40), cuentaId: ah);
   await fi.crearMeta(const MetaInput(nombre: 'Viaje', montoObjetivo: 2000000, montoActual: 500000));
   // Lo de siempre, para la lista de "Registrar rápido".
@@ -187,7 +188,7 @@ void main() {
 
       final desplazable = find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down);
       // Lo que se puede gastar hoy: en Resumen y en Hoy.
-      for (final (nombre, ruta, ancla) in const [('plan_ciclo', '/finanzas', 'Hasta tu próximo pago'), ('hoy_finanzas', '/hoy', 'Puedes gastar hoy')]) {
+      for (final (nombre, ruta, ancla) in const [('plan_ciclo', '/finanzas', 'Hasta tu próximo pago'), ('hoy_finanzas', '/hoy', 'Puedes gastar hoy'), ('fijos_sugeridos', '/finanzas', '¿Agendamos tus pagos fijos?')]) {
         router.go(ruta);
         await esperar();
         await t.scrollUntilVisible(find.text(ancla), 200, scrollable: desplazable.last, maxScrolls: 40);

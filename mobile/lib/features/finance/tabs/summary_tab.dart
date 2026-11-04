@@ -10,6 +10,7 @@ import '../../../core/motion.dart';
 import '../../../core/widgets/ui.dart';
 import '../finance_logic.dart';
 import '../finance_providers.dart';
+import '../widgets/fijos_sugeridos_card.dart';
 import '../widgets/plan_ciclo_card.dart';
 
 class SummaryTab extends ConsumerWidget {
@@ -44,6 +45,7 @@ class SummaryTab extends ConsumerWidget {
         if (plan != null) ...[
           Entrance(index: i++, child: PlanCicloCard(plan: plan)),
           const VGap.md(),
+          FijosSugeridosCard(sugeridos: ref.watch(fijosSugeridosProvider)),
         ],
         Entrance(
           index: i++,

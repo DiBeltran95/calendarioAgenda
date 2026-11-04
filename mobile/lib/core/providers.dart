@@ -74,6 +74,7 @@ class Preferencias {
     this.modulos,
     this.bloqueo = false,
     this.ahorroPct = 10,
+    this.fijosDescartados = const {},
   });
 
   final ThemeMode themeMode;
@@ -102,6 +103,9 @@ class Preferencias {
   /// Porcentaje del sueldo que se aparta apenas llega («págate primero»).
   final int ahorroPct;
 
+  /// Pagos que la persona dijo que no son fijos: ya no se proponen para agendar.
+  final Set<String> fijosDescartados;
+
   static Preferencias fromMap(Map<String, String> m) => Preferencias(
         themeMode: switch (m['tema']) {
           'light' => ThemeMode.light,
@@ -116,6 +120,7 @@ class Preferencias {
         permisoPedido: m['permiso_pedido'] == '1',
         bloqueo: m['bloqueo'] == '1',
         ahorroPct: int.tryParse(m['ahorro_pct'] ?? '') ?? 10,
+        fijosDescartados: {...?m['fijos_descartados']?.split('\n').where((x) => x.isNotEmpty)},
         modulos: m['modulos'] == null ? null : {for (final n in m['modulos']!.split(',')) ...AppModule.values.where((x) => x.name == n)},
       );
 }
@@ -172,6 +177,7 @@ class AjustesRepo {
   Future<void> setResumenDiario(bool v) => set('resumen', v ? '1' : '0');
   Future<void> setBloqueo(bool v) => set('bloqueo', v ? '1' : '0');
   Future<void> setAhorroPct(int v) => set('ahorro_pct', '$v');
+  Future<void> setFijosDescartados(Set<String> v) => set('fijos_descartados', v.join('\n'));
   Future<void> marcarPermisoPedido() => set('permiso_pedido', '1');
   Future<void> setModulos(Set<AppModule> m) => set('modulos', m.where((x) => x != AppModule.inicio).map((x) => x.name).join(','));
 }
